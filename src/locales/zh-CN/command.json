@@ -1,0 +1,23 @@
+{
+  "palette": {
+    "title": "命令面板",
+    "placeholder": "搜索命令或输入新命令...",
+    "search_commands": "输入以搜索命令历史",
+    "press_enter_execute": "按 Enter 执行",
+    "execute": "执行",
+    "cancel": "取消",
+    "linked": "笔记"
+  },
+  "tags": {
+    "dangerous": "危险",
+    "pipe": "管道",
+    "redirect": "重定向",
+    "background": "后台"
+  },
+  "danger_dialog": {
+    "title": "危险命令",
+    "warning": "此命令可能会对您的系统造成不可逆的损害：",
+    "confirm": "您确定要执行此命令吗？",
+    "execute_anyway": "仍然执行"
+  }
+}

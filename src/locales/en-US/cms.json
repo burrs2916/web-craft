@@ -1,0 +1,12 @@
+{
+  "sites": {
+    "title": "Sites",
+    "subtitle": "Manage your personal websites: content creation, local builds and one-click deploy",
+    "empty_title": "No sites yet",
+    "empty_hint": "Site management is coming in M1: create a site, write content, preview locally and deploy to your server in one click",
+    "step_create": "Create site",
+    "step_build": "Build & preview",
+    "step_deploy": "One-click deploy",
+    "step_separator": "→"
+  }
+}

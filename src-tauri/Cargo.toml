@@ -1,0 +1,81 @@
+[package]
+name = "web-craft"
+version = "0.6.2"
+description = "WebCraft - Personal Website CMS"
+authors = ["Biosphere Team"]
+edition = "2021"
+
+[lib]
+name = "web_craft_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+base64 = "0.22"
+aes-gcm = "0.10"
+getrandom = "0.2"
+regex = "1"
+encoding_rs = "0.8"
+
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tokio-tungstenite = "0.24"
+futures = "0.3"
+bytes = "1"
+
+rusqlite = { version = "0.37", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+async-trait = "0.1"
+dirs-next = "2.0"
+hostname = "0.4"
+portable-pty = "0.8"
+anyhow = "1"
+chrono = "0.4"
+tauri-plugin-dialog = "2.7.1"
+tauri-plugin-clipboard-manager = "2.3.2"
+
+# Windows.Services.Store API (Microsoft Store IAP) — Windows-only.
+# Pinned to windows 0.61 to align with the transitive `windows-core 0.61.2`
+# pulled in elsewhere; mixing 0.62 caused trait-bound mismatches in CI
+# (`HSTRING: RuntimeType` not satisfied because of two `windows-core` copies).
+# windows 0.61 keeps `IIterable` in the standalone `windows-collections 0.2`
+# crate (it is NOT re-exported from `windows::Foundation::Collections`),
+# so we must depend on it explicitly. windows 0.61 itself depends on
+# windows-collections 0.2 internally, so this stays single-version.
+#
+# Win32_* features here are for the dedicated `store-ui-thread` we spin up to
+# host the WinRT UI thread:
+#   * Win32_System_Com      — CoInitializeEx / CoUninitialize
+#   * Win32_System_WinRT    — RoInitialize / RoUninitialize
+#   * Win32_UI_WindowsAndMessaging — PeekMessageW / DispatchMessageW
+#   * Win32_UI_Shell        — IInitializeWithWindow (associate StoreContext
+#                             with the app's main HWND so unpackaged desktop
+#                             apps stop getting 0x80070578)
+#   * Win32_Foundation      — HANDLE / HRESULT / BOOL / HWND
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Services_Store",
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_WinRT",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+windows-core = "0.61"
+windows-collections = "0.2"
+
+[workspace]

@@ -1,0 +1,327 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  PNPM_VERSION: '10'
+
+jobs:
+  # ============================================================
+  # TypeScript type-check (frontend quality gate)
+  # ============================================================
+  typecheck:
+    name: TypeScript Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tsc type-check
+        run: pnpm exec tsc
+
+  # ============================================================
+  # Rust check (backend quality gate, Windows-only since Win is the only release target)
+  # ============================================================
+  cargo-check:
+    name: Cargo Check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\Users\runneradmin\.cargo\registry
+            C:\Users\runneradmin\.cargo\git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run cargo check
+        run: cargo check
+        working-directory: src-tauri
+
+  # ============================================================
+  # Tauri Build Matrix (macOS / Windows / Linux)
+  # ============================================================
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: [typecheck, cargo-check]
+    permissions:
+      contents: write
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ⚠️ macOS / Linux 当前未上架对应商店，CI 暂不构建。
+          # 待 Apple App Store / Snap Store 上架后再恢复以下两段配置。
+          # --- macOS (Apple Silicon; Intel Macs use Rosetta 2) ---
+          # - platform: macos-latest
+          #   target: aarch64-apple-darwin
+          #   artifact_name: macos-arm64
+
+          # --- Windows ---
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: windows-x64
+
+          # --- Linux ---
+          # - platform: ubuntu-latest
+          #   target: x86_64-unknown-linux-gnu
+          #   artifact_name: linux-x64
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Node.js + pnpm ----
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ---- Rust ----
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo registry (macOS / Linux)
+        if: runner.os != 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Cache Cargo registry (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\Users\runneradmin\.cargo\registry
+            C:\Users\runneradmin\.cargo\git
+            src-tauri\target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      # ---- Linux system deps ----
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev
+
+      # ---- Build & Bundle with tauri-action ----
+      # macOS signing (optional): set APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD,
+      # APPLE_SIGNING_IDENTITY in repo secrets. For notarization also add APPLE_ID,
+      # APPLE_PASSWORD, APPLE_TEAM_ID — do NOT add those three unless configured,
+      # empty values trigger notarization and fail the build.
+      - name: Build Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Apple signing disabled for testing phase (tauri.conf.json has signingIdentity: "-")
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        with:
+          # tagName: v__VERSION__ (auto when pushing tags)
+          releaseName: 'Biosphere Terminal v__VERSION__'
+          releaseBody: |
+            ## Install
+
+            | Platform | Download | Notes |
+            |----------|----------|-------|
+            | Windows (signed installer) | NSIS `.exe` or `.msi` in **windows-x64** | Requires code signing for distribution |
+            | Windows (unsigned test) | **windows-standalone-exe** or **windows-portable** | Needs [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) pre-installed |
+
+            ⚠️ macOS / Linux builds are temporarily disabled until those stores are configured.
+
+            See CHANGELOG for details.
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+      # ---- Build MSIX (Windows only) ----
+      - name: Prepare exe for MSIX
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exeDir = "src-tauri/target/x86_64-pc-windows-msvc/release"
+          Write-Host "=== Listing all exe files in $exeDir ==="
+          Get-ChildItem -Path $exeDir -Filter "*.exe" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Name }
+          
+          # Copy exe with correct name for MSIX
+          $sourceExe = Join-Path $exeDir "biosphere-terminal-app.exe"
+          $targetExe = Join-Path $exeDir "biosphere-ai-terminal.exe"
+          
+          if (Test-Path $sourceExe) {
+            Copy-Item -Path $sourceExe -Destination $targetExe -Force
+            Write-Host "✓ Copied 'biosphere-terminal-app.exe' to 'biosphere-ai-terminal.exe'"
+          } else {
+            Write-Host "✗ Source exe not found: $sourceExe"
+            exit 1
+          }
+
+      - name: Install msixbundle-cli
+        if: runner.os == 'Windows'
+        run: cargo install msixbundle-cli 2>&1 || echo "msixbundle-cli install skipped, will be auto-installed by tauri-windows-bundle"
+
+      - name: Build MSIX package
+        if: runner.os == 'Windows'
+        run: npx @choochmeque/tauri-windows-bundle@latest build --runner pnpm 2>&1
+
+      - name: List MSIX output
+        if: runner.os == 'Windows'
+        run: |
+          echo "=== Searching for MSIX files ==="
+          Get-ChildItem -Path "src-tauri/target" -Recurse -Include "*.msix","*.msixbundle" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+          echo "=== Done ==="
+        shell: pwsh
+
+      # ---- Upload build artifacts ----
+      # ⚠️ macOS / Linux 暂未上架，相关上传步骤已注释。
+      # macOS: DMG only — uploading raw .app via Actions zip corrupts Framework symlinks
+      # - name: Upload artifacts (macOS)
+      #   if: matrix.artifact_name == 'macos-arm64'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: ${{ matrix.artifact_name }}
+      #     path: src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+
+      - name: Upload artifacts (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+
+      # Portable unsigned build for local testing (no installer / no code signing).
+      # Frontend is embedded in the exe; WebView2 Runtime must already be installed on the machine.
+      - name: Prepare Windows portable package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $releaseDir = "src-tauri/target/x86_64-pc-windows-msvc/release"
+          $portableDir = "src-tauri/target/windows-portable"
+          New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+
+          Write-Host "=== Release directory contents ==="
+          Get-ChildItem -Path $releaseDir -File | ForEach-Object { Write-Host $_.Name }
+
+          $exe = Join-Path $releaseDir "biosphere-terminal-app.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Host "✗ biosphere-terminal-app.exe not found"
+            exit 1
+          }
+
+          Copy-Item -Path $exe -Destination (Join-Path $portableDir "biosphere-terminal-app.exe") -Force
+          Get-ChildItem -Path $releaseDir -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination $portableDir -Force
+            Write-Host "✓ bundled dll: $($_.Name)"
+          }
+
+          @"
+          Biosphere Terminal — Windows portable (unsigned test build)
+
+          Run: biosphere-terminal-app.exe
+
+          Requirements:
+          - Microsoft Edge WebView2 Runtime must be installed
+            https://developer.microsoft.com/microsoft-edge/webview2/
+          - Visual C++ Redistributable (usually already present on Windows 10/11)
+
+          Logs (after running):
+          - %LOCALAPPDATA%\BURRS.biosphere-ai-terminal\debug.log
+          - %APPDATA%\BURRS.biosphere-ai-terminal\logs\biosphere.log
+
+          Note: NSIS/MSI installers can bootstrap WebView2 automatically; this portable
+          exe does not. If you see a white screen, install WebView2 first, then check logs.
+          "@ | Set-Content -Path (Join-Path $portableDir "README.txt") -Encoding UTF8
+
+          Compress-Archive -Path (Join-Path $portableDir "*") -DestinationPath "src-tauri/target/windows-portable.zip" -Force
+          Write-Host "✓ Created windows-portable.zip"
+
+      - name: Upload standalone EXE (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-standalone-exe
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/biosphere-terminal-app.exe
+
+      - name: Upload portable ZIP (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: src-tauri/target/windows-portable.zip
+
+      - name: Upload MSIX artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msix
+          path: |
+            src-tauri/target/**/*.msix
+            src-tauri/target/**/*.msixbundle
+          if-no-files-found: warn
+
+      - name: Upload artifacts (Linux) [DISABLED]
+        if: false
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage

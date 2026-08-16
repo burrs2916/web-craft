@@ -1,0 +1,12 @@
+{
+  "sites": {
+    "title": "站点",
+    "subtitle": "管理你的个人网站：内容创作、本地构建与一键部署",
+    "empty_title": "暂无站点",
+    "empty_hint": "站点管理即将上线（M1）：创建站点、撰写内容、本地预览、一键部署到你的服务器",
+    "step_create": "创建站点",
+    "step_build": "构建预览",
+    "step_deploy": "一键部署",
+    "step_separator": "→"
+  }
+}
