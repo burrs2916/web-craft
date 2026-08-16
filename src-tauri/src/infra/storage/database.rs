@@ -77,8 +77,12 @@ impl Database {
             let conn = db.conn.lock().map_err(|e| Error::Internal(format!("DB lock poisoned: {}", e)))?;
             conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
         }
-        db.initialize()?;
-        db.migrate()?;
+        // 版本化迁移：v1 = 版本化机制引入前的存量建表/修补逻辑收编；v2 起按
+        // docs/cms-database-design.md §3 追加新版本步骤（只追加、不修改）。
+        {
+            let mut conn = db.conn.lock().map_err(|e| Error::Internal(format!("DB lock poisoned: {}", e)))?;
+            super::migrations::run_migrations(&mut conn)?;
+        }
         // 迁移完成后才开启 FK 强制，避免迁移中的 DROP TABLE 等操作被 FK 拦截
         // （迁移代码内部已处理孤儿数据和 FK 一致性，不需要 SQLite 层面的实时校验）
         {
@@ -89,8 +93,9 @@ impl Database {
         Ok(db)
     }
 
-    fn initialize(&self) -> crate::core::error::Result<()> {
-        let conn = self.conn.lock().map_err(|e| Error::Internal(format!("DB lock poisoned: {}", e)))?;
+    /// v1 基线：版本化迁移机制引入（docs/cms-database-design.md §3）前的全部建表逻辑。
+    /// 由 migrations::run_migrations 在 user_version < 1 时调用（全新安装与历史库共用，全部幂等）。
+    pub(super) fn v1_initialize(conn: &Connection) -> crate::core::error::Result<()> {
 
         // WAL mode 用于更好的并发读性能（MSIX 沙盒可能不可用，静默回退 DELETE）
         match conn.execute_batch("PRAGMA journal_mode = WAL;") {
@@ -362,8 +367,9 @@ impl Database {
         self.conn.lock().unwrap()
     }
 
-    fn migrate(&self) -> crate::core::error::Result<()> {
-        let mut conn = self.conn.lock().map_err(|e| Error::Internal(format!("DB lock poisoned: {}", e)))?;
+    /// v1 基线：版本化迁移机制引入前的列修补/表重建链（幂等，兼容所有历史库形态）。
+    /// 内部含自管理事务（note_tags 对账），因此 run_migrations 不对 v1 包外层事务。
+    pub(super) fn v1_migrate(conn: &mut Connection) -> crate::core::error::Result<()> {
 
         let has_group_id: bool = {
             let stmt = conn.prepare("SELECT group_id FROM notes LIMIT 1");
