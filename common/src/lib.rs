@@ -59,6 +59,12 @@ pub fn parse_config(toml_str: &str) -> Result<ServerConfig, String> {
     Ok(config)
 }
 
+/// 序列化 ServerConfig 为 server.toml 文本（部署端生成配置用，产物回验 parse_config）。
+pub fn render_config(config: &ServerConfig) -> Result<String, String> {
+    validate(config)?;
+    toml::to_string_pretty(config).map_err(|e| format!("server.toml 序列化失败: {e}"))
+}
+
 fn validate(config: &ServerConfig) -> Result<(), String> {
     if config.server.port == 0 {
         return Err("[server] port 不能为 0".into());

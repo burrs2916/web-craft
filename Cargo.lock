@@ -5715,6 +5715,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "uuid",
+ "webcraft-common",
  "windows",
  "windows-collections",
  "windows-core 0.61.2",

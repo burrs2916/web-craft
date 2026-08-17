@@ -31,6 +31,7 @@ import {
   PushPinIcon,
   FileTextIcon,
   GlobeIcon,
+  RocketIcon,
 } from '@phosphor-icons/react';
 import {
   getSite,
@@ -48,6 +49,7 @@ import { spawnTerminal } from '../core/services/terminal.service';
 import { ensureServerEnvSetupAgent } from '../core/services/agent.service';
 import { openAiCopilotWindow } from '../core/services/window.service';
 import { useConnectIntent } from '../features/terminal/connectIntent';
+import { DeployDialog } from '../features/cms/DeployDialog';
 import type { Site, Content, ContentListFilter, ContentType, ContentStatus, SshConnectionInfo, PtyConfig } from '../proto';
 import type { ConnectionConfig } from '../proto';
 import {
@@ -75,6 +77,7 @@ export function SiteDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deployOpen, setDeployOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -106,6 +109,13 @@ export function SiteDetailPage() {
       })
       .catch((e) => setError(String(e)));
   }, [siteId, navigate]);
+
+  // 部署成功后刷新站点（last_deployed_at 变化）
+  const refreshSite = useCallback(() => {
+    getSite(siteId)
+      .then((s) => s && setSite(s))
+      .catch(() => undefined);
+  }, [siteId]);
 
   // 解析绑定服务器的 SSH 信息（终端/SFTP 联动用）
   useEffect(() => {
@@ -294,6 +304,18 @@ export function SiteDetailPage() {
             >
               {envBusy ? <CircularProgress size={16} /> : null}
               {t('contents.prepare_env')}
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title={sshInfo ? t('contents.deploy_hint') : t('contents.no_server')}>
+          <span>
+            <Button
+              variant="outlined"
+              startIcon={<RocketIcon size={16} weight="bold" />}
+              onClick={() => setDeployOpen(true)}
+              disabled={!sshInfo}
+            >
+              {t('contents.deploy')}
             </Button>
           </span>
         </Tooltip>
@@ -487,6 +509,14 @@ export function SiteDetailPage() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <DeployDialog
+        open={deployOpen}
+        onClose={() => setDeployOpen(false)}
+        site={site}
+        sshInfo={sshInfo}
+        onDeployed={refreshSite}
+      />
 
       <Snackbar
         open={!!toast}

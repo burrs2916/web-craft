@@ -145,3 +145,32 @@ export interface Deployment {
   error_summary: string;
   manifest_json: string;
 }
+
+/// M-x3 部署步骤标识，与 Rust deploy_service STEP_* 常量对齐。
+export type DeployStep = 'validate' | 'detect' | 'config' | 'upload' | 'install' | 'verify' | 'done';
+
+export interface DeployProgress {
+  step: DeployStep;
+  message: string;
+  percent: number;
+}
+
+/// deploy-progress 事件负载（含站点 ID，供多站点过滤）。
+export interface DeployProgressEvent {
+  siteId: string;
+  step: DeployStep;
+  message: string;
+  percent: number;
+}
+
+/// site_deploy 返回的一次性部署结果（camelCase，与 Rust DeployOutcome 对齐）。
+export interface DeployOutcome {
+  deploymentId: string;
+  baseUrl: string;
+  healthzUrl: string;
+  token: string;
+  uploadedCount: number;
+  totalBytes: number;
+  durationMs: number;
+  log: string[];
+}

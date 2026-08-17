@@ -642,11 +642,11 @@ async fn handle_ws_connection(stream: TcpStream, target_addr: &str) -> Result<()
     Ok(())
 }
 
-fn run_ssh_command(ssh: &SshConnectionInfo, command: &str) -> Result<String, String> {
+pub(crate) fn run_ssh_command(ssh: &SshConnectionInfo, command: &str) -> Result<String, String> {
     run_ssh_command_with_timeout(ssh, command, 30)
 }
 
-fn run_ssh_command_with_timeout(ssh: &SshConnectionInfo, command: &str, timeout_secs: u64) -> Result<String, String> {
+pub(crate) fn run_ssh_command_with_timeout(ssh: &SshConnectionInfo, command: &str, timeout_secs: u64) -> Result<String, String> {
     tracing::info!("[remote-desktop-setup] run_ssh_command: {}@{}:{} -> '{}'", ssh.username, ssh.host, ssh.port, command);
 
     let pty_system = native_pty_system();

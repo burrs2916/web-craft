@@ -1,5 +1,15 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Site, SiteSummary, Content, ContentListFilter } from '../../proto';
+import { listen } from '@tauri-apps/api/event';
+import type {
+  Site,
+  SiteSummary,
+  Content,
+  ContentListFilter,
+  Deployment,
+  DeployOutcome,
+  DeployProgress,
+  DeployProgressEvent,
+} from '../../proto';
 
 /// CMS 站点/内容命令封装，与 interface/commands/cms.rs 一一对应。
 /// 字段命名遵循 proto/cms.ts 契约（snake_case），Rust 侧同名字段直传。
@@ -72,4 +82,23 @@ export async function purgeContent(id: string): Promise<void> {
 
 export async function setContentPinned(id: string, pinned: boolean): Promise<void> {
   return invoke('content_set_pinned', { id, pinned });
+}
+
+/// M-x3 一键部署：SSG 产物 + webcraft-server 二进制 → systemd --user 拉起 → healthz 验证。
+/// 进度经 `deploy-progress` 事件流推送（onDeployProgress 订阅）。
+export async function deploySite(siteId: string): Promise<DeployOutcome> {
+  return invoke('site_deploy', { siteId });
+}
+
+export async function listDeployments(siteId: string): Promise<Deployment[]> {
+  return invoke('deployment_list', { siteId });
+}
+
+export function onDeployProgress(
+  siteId: string,
+  cb: (p: DeployProgress) => void,
+): Promise<() => void> {
+  return listen<DeployProgressEvent>('deploy-progress', (e) => {
+    if (e.payload.siteId === siteId) cb(e.payload);
+  });
 }

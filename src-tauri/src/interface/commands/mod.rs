@@ -6,6 +6,7 @@ pub mod connection;
 pub mod notebook;
 pub mod cms;
 pub mod agent;
+pub mod deploy;
 pub mod environment;
 pub mod icon;
 pub mod remote_desktop;

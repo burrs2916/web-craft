@@ -866,6 +866,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::licensing::extend_trial,
             interface::commands::licensing::get_pro_product_id,
             interface::commands::cms::site_create,
+            interface::commands::deploy::site_deploy,
+            interface::commands::deploy::deployment_list,
             interface::commands::cms::site_list,
             interface::commands::cms::site_get,
             interface::commands::cms::site_update,
