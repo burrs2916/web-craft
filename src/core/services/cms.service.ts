@@ -9,6 +9,7 @@ import type {
   DeployOutcome,
   DeployProgress,
   DeployProgressEvent,
+  PreviewInfo,
 } from '../../proto';
 
 /// CMS 站点/内容命令封装，与 interface/commands/cms.rs 一一对应。
@@ -97,6 +98,19 @@ export async function listDeployments(siteId: string): Promise<Deployment[]> {
 /// 探测站点部署服务的 /healthz（健康徽标）。code=200 即在线。
 export async function checkSiteHealthz(siteId: string): Promise<{ code: number | null; url?: string; error?: string }> {
   return invoke('site_healthz', { siteId });
+}
+
+/// 启动（或重启）站点的本地预览；返回预览地址与端口。
+export async function previewStart(siteId: string): Promise<PreviewInfo> {
+  return invoke('site_preview_start', { siteId });
+}
+
+export async function previewStop(siteId: string): Promise<void> {
+  return invoke('site_preview_stop', { siteId });
+}
+
+export async function previewList(): Promise<PreviewInfo[]> {
+  return invoke('site_preview_list');
 }
 
 export function onDeployProgress(

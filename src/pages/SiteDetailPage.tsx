@@ -50,12 +50,16 @@ import { ensureServerEnvSetupAgent } from '../core/services/agent.service';
 import { openAiCopilotWindow } from '../core/services/window.service';
 import { useConnectIntent } from '../features/terminal/connectIntent';
 import { DeployDialog } from '../features/cms/DeployDialog';
+import { previewStart, previewStop } from '../core/services/cms.service';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import type { Site, Content, ContentListFilter, ContentType, ContentStatus, SshConnectionInfo, PtyConfig } from '../proto';
 import type { ConnectionConfig } from '../proto';
 import {
   TerminalIcon,
   FolderOpenIcon as RemoteFolderIcon,
   WrenchIcon,
+  PlayIcon,
+  StopIcon,
 } from '@phosphor-icons/react';
 
 /// 站点详情页（FR-C1/C2/C8 的列表侧）：内容列表 + 类型/状态筛选 + 回收站。
@@ -78,6 +82,9 @@ export function SiteDetailPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [deployOpen, setDeployOpen] = useState(false);
+  /// 本地预览当前会话；非空即运行中（含地址与端口）
+  const [preview, setPreview] = useState<{ baseUrl: string; port: number } | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -207,6 +214,28 @@ export function SiteDetailPage() {
     refresh();
   }, [refresh]);
 
+  // 本地预览：启动并打开浏览器；再次点击停止。不依赖 SSH 服务器。
+  const togglePreview = useCallback(async () => {
+    if (previewBusy) return;
+    setPreviewBusy(true);
+    setError(null);
+    try {
+      if (preview) {
+        await previewStop(siteId);
+        setPreview(null);
+        setToast(t('contents.preview_stopped'));
+      } else {
+        const info = await previewStart(siteId);
+        setPreview({ baseUrl: info.baseUrl, port: info.port });
+        await openUrl(info.baseUrl).catch(() => undefined);
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPreviewBusy(false);
+    }
+  }, [preview, previewBusy, siteId, t]);
+
   const run = useCallback(
     async (action: () => Promise<unknown>, message?: string) => {
       setBusy(true);
@@ -304,6 +333,20 @@ export function SiteDetailPage() {
             >
               {envBusy ? <CircularProgress size={16} /> : null}
               {t('contents.prepare_env')}
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title={t('contents.preview_hint')}>
+          <span>
+            <Button
+              variant={preview ? 'contained' : 'outlined'}
+              color={preview ? 'success' : 'primary'}
+              startIcon={preview ? <StopIcon size={16} weight="bold" /> : <PlayIcon size={16} weight="bold" />}
+              onClick={togglePreview}
+              disabled={previewBusy}
+            >
+              {previewBusy ? <CircularProgress size={16} /> : null}
+              {preview ? t('contents.preview_stop') : t('contents.preview')}
             </Button>
           </span>
         </Tooltip>

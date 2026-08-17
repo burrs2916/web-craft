@@ -8,6 +8,7 @@ pub mod cms;
 pub mod agent;
 pub mod deploy;
 pub mod environment;
+pub mod preview;
 pub mod icon;
 pub mod remote_desktop;
 pub mod sftp;

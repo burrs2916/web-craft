@@ -106,6 +106,10 @@
     "deploy_copied": "已复制",
     "deploy_show_log": "部署日志",
     "deploy_close": "关闭",
-    "deploy_retry": "重试部署"
+    "deploy_retry": "重试部署",
+    "preview": "本地预览",
+    "preview_stop": "停止预览",
+    "preview_stopped": "本地预览已停止",
+    "preview_hint": "用本机 webcraft-server 加载构建产物并打开浏览器预览（不依赖服务器）"
   }
 }

@@ -106,6 +106,10 @@
     "deploy_copied": "Copied",
     "deploy_show_log": "Deploy log",
     "deploy_close": "Close",
-    "deploy_retry": "Retry deploy"
+    "deploy_retry": "Retry deploy",
+    "preview": "Preview",
+    "preview_stop": "Stop preview",
+    "preview_stopped": "Local preview stopped",
+    "preview_hint": "Serve the built dist/ via a local webcraft-server and open in browser (no server needed)"
   }
 }

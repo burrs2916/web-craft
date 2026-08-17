@@ -17,6 +17,7 @@ use app::plugin_service::PluginService;
 use app::linker_service::LinkerService;
 use app::icon_service::IconService;
 use app::remote_desktop_service::RemoteDesktopService;
+use app::preview_service::PreviewService;
 use app::sftp_service::SftpService;
 use app::licensing::LicensingService;
 use domain::command::executor::CommandExecutor;
@@ -642,6 +643,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             let icon_service = Arc::new(IconService::new(db_arc.clone(), icons_dir));
             let remote_desktop_service = Arc::new(RemoteDesktopService::new());
             let sftp_service = Arc::new(SftpService::new());
+            let preview_service = Arc::new(PreviewService::new());
             let licensing_service = Arc::new(LicensingService::new(effective_data_dir.clone()));
             let _ = write_debug_log_all(&debug_paths, "[setup] all services initialized");
 
@@ -666,6 +668,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             app_handle.manage(icon_service);
             app_handle.manage(remote_desktop_service);
             app_handle.manage(sftp_service);
+            app_handle.manage(preview_service);
             app_handle.manage(licensing_service);
             let _ = write_debug_log_all(&debug_paths, "[setup] all services registered with app_handle");
 
@@ -869,6 +872,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::deploy::site_deploy,
             interface::commands::deploy::deployment_list,
             interface::commands::deploy::site_healthz,
+            interface::commands::preview::site_preview_start,
+            interface::commands::preview::site_preview_stop,
+            interface::commands::preview::site_preview_list,
             interface::commands::cms::site_list,
             interface::commands::cms::site_get,
             interface::commands::cms::site_update,

@@ -163,7 +163,14 @@ export interface DeployProgressEvent {
   percent: number;
 }
 
-/// site_deploy 返回的一次性部署结果（camelCase，与 Rust DeployOutcome 对齐）。
+/// 本地预览运行态（site_preview_* 返回，camelCase 对齐 PreviewInfo）。
+export interface PreviewInfo {
+  siteId: string;
+  baseUrl: string;
+  healthzUrl: string;
+  port: number;
+  alive: boolean;
+}
 export interface DeployOutcome {
   deploymentId: string;
   baseUrl: string;
