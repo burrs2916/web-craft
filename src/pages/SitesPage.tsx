@@ -27,7 +27,7 @@ import {
 } from '@phosphor-icons/react';
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { useNavigate } from 'react-router-dom';
-import { createSite, listSites, archiveSite, updateSite } from '../core/services/cms.service';
+import { createSite, listSites, archiveSite, updateSite, checkSiteHealthz } from '../core/services/cms.service';
 import { listConnections, testConnection } from '../core/services/connection.service';
 import type { SiteSummary, Site, SshConnectionInfo } from '../proto';
 import type { ConnectionConfig } from '../proto';
@@ -44,6 +44,8 @@ export function SitesPage() {
   const [toast, setToast] = useState<string | null>(null);
   /// 绑定服务器的连通状态：connectionId -> checking/ok/fail，页面层去重后探测
   const [connStatus, setConnStatus] = useState<Record<string, 'checking' | 'ok' | 'fail'>>({});
+  /// 已部署站点的 /healthz 状态：siteId -> checking/ok/fail
+  const [healthzStatus, setHealthzStatus] = useState<Record<string, 'checking' | 'ok' | 'fail'>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -82,6 +84,20 @@ export function SitesPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summaries, connections]);
+
+  // 已部署站点的服务健康探测（/healthz，3s 超时，去重）
+  useEffect(() => {
+    if (!summaries) return;
+    for (const s of summaries) {
+      if (!s.connection_id || !s.last_deployed_at) continue;
+      if (healthzStatus[s.id] && healthzStatus[s.id] !== 'fail') continue;
+      setHealthzStatus((prev) => ({ ...prev, [s.id]: 'checking' }));
+      checkSiteHealthz(s.id)
+        .then((r) => setHealthzStatus((prev) => ({ ...prev, [s.id]: r.code === 200 ? 'ok' : 'fail' })))
+        .catch(() => setHealthzStatus((prev) => ({ ...prev, [s.id]: 'fail' })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summaries]);
 
   const handleArchive = useCallback(
     async (site: Site) => {
@@ -188,7 +204,7 @@ export function SitesPage() {
       ) : (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 2 }}>
           {active.map((s) => (
-            <SiteCard key={s.id} summary={s} connStatus={s.connection_id ? connStatus[s.connection_id] : undefined} onArchive={handleArchive} />
+            <SiteCard key={s.id} summary={s} connStatus={s.connection_id ? connStatus[s.connection_id] : undefined} healthz={s.connection_id && s.last_deployed_at ? healthzStatus[s.id] : undefined} onArchive={handleArchive} />
           ))}
         </Box>
       )}
@@ -200,7 +216,7 @@ export function SitesPage() {
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 2 }}>
             {archived.map((s) => (
-              <SiteCard key={s.id} summary={s} connStatus={s.connection_id ? connStatus[s.connection_id] : undefined} onRestore={handleRestore} />
+              <SiteCard key={s.id} summary={s} connStatus={s.connection_id ? connStatus[s.connection_id] : undefined} healthz={s.connection_id && s.last_deployed_at ? healthzStatus[s.id] : undefined} onRestore={handleRestore} />
             ))}
           </Box>
         </Box>
@@ -232,17 +248,34 @@ function formatTime(ts: number | null): string {
 function SiteCard({
   summary,
   connStatus,
+  healthz,
   onArchive,
   onRestore,
 }: {
   summary: SiteSummary;
   connStatus?: 'checking' | 'ok' | 'fail';
+  /// 已部署站点的 /healthz 状态；有值时优先于 connStatus 展示
+  healthz?: 'checking' | 'ok' | 'fail';
   onArchive?: (site: Site) => void;
   onRestore?: (site: Site) => void;
 }) {
   const { t } = useTranslation('cms');
   const navigate = useNavigate();
   const archived = summary.status === 'archived';
+
+  // 已部署站点显示服务健康；否则显示服务器连通
+  const dotStatus = healthz ?? connStatus;
+  const dotTooltip = healthz
+    ? healthz === 'ok'
+      ? t('sites.health_ok')
+      : healthz === 'checking'
+        ? t('sites.health_checking')
+        : t('sites.health_fail')
+    : connStatus === 'ok'
+      ? t('sites.server_ok')
+      : connStatus === 'checking'
+        ? t('sites.server_checking')
+        : t('sites.server_fail');
 
   return (
     <Paper
@@ -256,15 +289,9 @@ function SiteCard({
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-        {connStatus ? (
+        {dotStatus ? (
           <Tooltip
-            title={
-              connStatus === 'ok'
-                ? t('sites.server_ok')
-                : connStatus === 'checking'
-                  ? t('sites.server_checking')
-                  : t('sites.server_fail')
-            }
+            title={dotTooltip}
           >
             <Box
               sx={{
@@ -273,12 +300,12 @@ function SiteCard({
                 borderRadius: '50%',
                 flexShrink: 0,
                 bgcolor:
-                  connStatus === 'ok'
+                  dotStatus === 'ok'
                     ? 'success.main'
-                    : connStatus === 'checking'
+                    : dotStatus === 'checking'
                       ? 'text.disabled'
                       : 'error.main',
-                animation: connStatus === 'checking' ? 'pulse 1.2s ease-in-out infinite' : undefined,
+                animation: dotStatus === 'checking' ? 'pulse 1.2s ease-in-out infinite' : undefined,
                 '@keyframes pulse': {
                   '0%, 100%': { opacity: 0.4 },
                   '50%': { opacity: 1 },

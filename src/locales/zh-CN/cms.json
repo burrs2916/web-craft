@@ -28,7 +28,10 @@
     "form_pick_dir": "选择站点工作目录",
     "server_ok": "服务器连接正常",
     "server_checking": "正在探测服务器连通性…",
-    "server_fail": "服务器无法连接"
+    "server_fail": "服务器无法连接",
+    "health_ok": "站点服务在线（healthz 通过）",
+    "health_checking": "正在检测站点服务健康…",
+    "health_fail": "站点服务未在线（健康检查失败）"
   },
   "contents": {
     "action_new_post": "新建文章",

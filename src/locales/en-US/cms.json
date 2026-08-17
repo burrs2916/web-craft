@@ -28,7 +28,10 @@
     "form_pick_dir": "Choose site working directory",
     "server_ok": "Server reachable",
     "server_checking": "Checking server connectivity…",
-    "server_fail": "Server unreachable"
+    "server_fail": "Server unreachable",
+    "health_ok": "Site service online (healthz OK)",
+    "health_checking": "Checking site service health…",
+    "health_fail": "Site service offline (healthz failed)"
   },
   "contents": {
     "action_new_post": "New Post",

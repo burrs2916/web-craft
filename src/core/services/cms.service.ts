@@ -94,6 +94,11 @@ export async function listDeployments(siteId: string): Promise<Deployment[]> {
   return invoke('deployment_list', { siteId });
 }
 
+/// 探测站点部署服务的 /healthz（健康徽标）。code=200 即在线。
+export async function checkSiteHealthz(siteId: string): Promise<{ code: number | null; url?: string; error?: string }> {
+  return invoke('site_healthz', { siteId });
+}
+
 export function onDeployProgress(
   siteId: string,
   cb: (p: DeployProgress) => void,

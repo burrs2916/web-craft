@@ -47,7 +47,7 @@ pub struct DeployOutcome {
 
 pub struct DeployService;
 
-const DEFAULT_SERVER_PORT: u16 = 18080;
+pub const DEFAULT_SERVER_PORT: u16 = 18080;
 
 impl DeployService {
     /// 一键部署：校验 → 探测架构 → 生成 server.toml/unit → SFTP 上传
