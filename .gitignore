@@ -4,7 +4,8 @@ node_modules/
 # Build output
 dist/
 
-# Rust build artifacts
+# Rust build artifacts (workspace target lives at repo root)
+/target/
 src-tauri/target/
 
 # Database files (users get clean DB on first launch)

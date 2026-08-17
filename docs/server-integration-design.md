@@ -17,7 +17,7 @@
 | 维度 | 理由 |
 |------|------|
 | 现状 | src-tauri 单 crate（`[workspace]` 为空表），分层 app/core/domain/infra/interface 与 edge-conductor 的 DDD 分层同构 |
-| 目标 | 根 workspace：`web-craft/src-tauri`（桌面端）+ `server`（webcraft-server）+ `common`（共享契约） |
+| 目标 | workspace 根 = **web-craft 仓库根**（server/common 必须与桌面端同仓库进版本控制）：members = `src-tauri`（桌面端）+ `server`（webcraft-server）+ `common`（共享契约） |
 | 契约单点 | SSG 数据格式、server.toml schema、API DTO 只定义一次（`common`），桌面端与服务端引用同一份 serde 定义，永不漂移 |
 | 不学全套 | edge-conductor 拆 8 crate 是边缘网关复杂度使然；我们 3 个够用，抽取起点为 `src-tauri/src/core/types.rs` 的 CMS 类型 |
 
@@ -64,12 +64,13 @@ edge-conductor 用 glibc 动态链接（老系统缺库），且目标机需人�
 ## 3. Workspace 结构与共享契约
 
 ```
-GITHUB_PRO/
-├── Cargo.toml            # workspace 根：members = ["web-craft/src-tauri", "server", "common"]
-├── web-craft/            # 桌面端（现有，src-tauri 加入 members）
+web-craft/                # workspace 根 = git 仓库根（保证 server/common 进版本控制）
+├── Cargo.toml            # [workspace] members = ["src-tauri", "server", "common"]
+├── src-tauri/            # 桌面端（成员，[workspace] 空表已移除）
 ├── server/               # webcraft-server：axum 单二进制
+│   └── src/main.rs       #   路由表构建 / Bearer 鉴权 / 静态托管 / 优雅关闭
 └── common/               # 共享契约
-    └── src/lib.rs        #   serde 类型：Site/Content 摘要、ServerConfig、路由表、DDL（M2+）
+    └── src/lib.rs        #   ServerConfig / RouteEntry serde 类型 + 校验（schema 见 §4）
 ```
 
 **迁移注意**：workspace 化后 Tauri 与服务端共享 target 目录，冷编译变慢；现有测试/CI 命令需加 `--package` 限定（如 `cargo test -p web-craft --lib`）。属一次性成本，越晚做迁移成本越高，故排在 M-x2 首步。
@@ -77,9 +78,9 @@ GITHUB_PRO/
 **架构图**（部署数据流）：
 
 ```
-┌─ GITHUB_PRO workspace ─────────────────────────────┐
-│  web-craft ──path──▶ common ◀──path── server       │
-│  (桌面端·SSH/SFTP/agent/CMS)   (契约)   (axum 服务端)│
+┌─ web-craft workspace（仓库根）──────────────────────┐
+│  src-tauri ──path──▶ common ◀──path── server        │
+│  (桌面端·SSH/SFTP/agent/CMS)   (契约)   (axum 服务端) │
 └──────────────┬─────────────────────────▲───────────┘
    交叉编译 musl│                         │ curl /healthz 周期探测
                ▼                         │
@@ -101,7 +102,7 @@ static_dir = "dist"           # SSG 构建产物目录
 
 [auth]
 token = "<部署时随机生成注入>"
-allowed_roles = ["admin", "editor"]
+allowed_roles = ["admin", "editor", "visitor"]  # 角色全集；路由 roles 必须 ⊆ 此列表
 
 # 可配置路由表：路径前缀 → handler 类型 + 允许角色
 # 约束：未列出的路径走静态文件；未声明 roles 的路由一律要求 admin（默认拒绝）
