@@ -34,6 +34,9 @@ pub enum Error {
     #[error("Config error: {0}")]
     Config(String),
 
+    #[error("CMS error: {0}")]
+    Cms(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }

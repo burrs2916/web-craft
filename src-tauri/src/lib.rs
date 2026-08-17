@@ -864,6 +864,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::licensing::reset_license,
             interface::commands::licensing::extend_trial,
             interface::commands::licensing::get_pro_product_id,
+            interface::commands::cms::site_create,
+            interface::commands::cms::site_list,
+            interface::commands::cms::site_get,
+            interface::commands::cms::site_update,
+            interface::commands::cms::site_archive,
+            interface::commands::cms::content_create,
+            interface::commands::cms::content_list,
+            interface::commands::cms::content_get,
+            interface::commands::cms::content_save,
+            interface::commands::cms::content_publish,
+            interface::commands::cms::content_unpublish,
+            interface::commands::cms::content_delete,
+            interface::commands::cms::content_restore,
+            interface::commands::cms::content_purge,
+            interface::commands::cms::content_set_pinned,
         ])
         .run(tauri::generate_context!());
 

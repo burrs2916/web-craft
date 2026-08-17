@@ -4,6 +4,7 @@ pub mod command;
 pub mod profile;
 pub mod connection;
 pub mod notebook;
+pub mod cms;
 pub mod agent;
 pub mod environment;
 pub mod icon;

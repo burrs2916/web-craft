@@ -1,5 +1,7 @@
 pub mod database;
 pub mod migrations;
+pub mod site_repo;
+pub mod content_repo;
 pub mod session_repo;
 pub mod command_repo;
 pub mod profile_repo;

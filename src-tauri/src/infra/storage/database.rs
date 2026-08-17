@@ -367,6 +367,14 @@ impl Database {
         self.conn.lock().unwrap()
     }
 
+    /// 测试专用：由已迁移好的连接直接构造（如 in-memory 库跑 migrations 后）。
+    #[cfg(test)]
+    pub fn from_connection(conn: Connection) -> Self {
+        Database {
+            conn: Mutex::new(conn),
+        }
+    }
+
     /// v1 基线：版本化迁移机制引入前的列修补/表重建链（幂等，兼容所有历史库形态）。
     /// 内部含自管理事务（note_tags 对账），因此 run_migrations 不对 v1 包外层事务。
     pub(super) fn v1_migrate(conn: &mut Connection) -> crate::core::error::Result<()> {
