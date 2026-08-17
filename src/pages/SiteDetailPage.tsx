@@ -42,7 +42,14 @@ import {
   purgeContent,
   setContentPinned,
 } from '../core/services/cms.service';
-import type { Site, Content, ContentListFilter, ContentType, ContentStatus } from '../proto';
+import { listConnections } from '../core/services/connection.service';
+import { useConnectIntent } from '../features/terminal/connectIntent';
+import type { Site, Content, ContentListFilter, ContentType, ContentStatus, SshConnectionInfo } from '../proto';
+import type { ConnectionConfig } from '../proto';
+import {
+  TerminalIcon,
+  FolderOpenIcon as RemoteFolderIcon,
+} from '@phosphor-icons/react';
 
 /// 站点详情页（FR-C1/C2/C8 的列表侧）：内容列表 + 类型/状态筛选 + 回收站。
 /// 内容编辑器（TipTap）下一步接入；本页先完成状态机操作闭环。
@@ -53,6 +60,9 @@ export function SiteDetailPage() {
 
   const [site, setSite] = useState<Site | null>(null);
   const [contents, setContents] = useState<Content[] | null>(null);
+  const [sshInfo, setSshInfo] = useState<SshConnectionInfo | null>(null);
+  const [connectionName, setConnectionName] = useState<string>('');
+  const [remotePath, setRemotePath] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<'' | ContentType>('');
   const [statusFilter, setStatusFilter] = useState<'' | ContentStatus>('');
   const [keyword, setKeyword] = useState('');
@@ -79,10 +89,66 @@ export function SiteDetailPage() {
     getSite(siteId)
       .then((s) => {
         if (!s) navigate('/sites', { replace: true });
-        else setSite(s);
+        else {
+          setSite(s);
+          try {
+            const deploy = JSON.parse(s.deploy_config_json || '{}');
+            if (typeof deploy.remote_path === 'string') setRemotePath(deploy.remote_path);
+          } catch {
+            // 部署配置损坏时忽略，不影响列表功能
+          }
+        }
       })
       .catch((e) => setError(String(e)));
   }, [siteId, navigate]);
+
+  // 解析绑定服务器的 SSH 信息（终端/SFTP 联动用）
+  useEffect(() => {
+    if (!site?.connection_id) {
+      setSshInfo(null);
+      setConnectionName('');
+      return;
+    }
+    listConnections()
+      .then((conns) => {
+        const conn: ConnectionConfig | undefined = conns.find((c) => c.id === site.connection_id);
+        if (!conn) {
+          setSshInfo(null);
+          return;
+        }
+        setConnectionName(conn.name);
+        try {
+          setSshInfo(JSON.parse(conn.config_json));
+        } catch {
+          setSshInfo(null);
+        }
+      })
+      .catch(() => setSshInfo(null));
+  }, [site?.connection_id]);
+
+  const openServerTerminal = useCallback(() => {
+    if (!sshInfo || !site?.connection_id) return;
+    useConnectIntent.getState().set({
+      connectionType: 'ssh',
+      ssh: sshInfo,
+      name: connectionName || `${sshInfo.username}@${sshInfo.host}`,
+      connectionId: site.connection_id,
+    });
+    navigate('/terminal');
+  }, [sshInfo, site?.connection_id, connectionName, navigate]);
+
+  const openServerFiles = useCallback(() => {
+    if (!sshInfo) return;
+    const q = new URLSearchParams({
+      host: sshInfo.host,
+      port: String(sshInfo.port),
+      username: sshInfo.username,
+      authMethod: sshInfo.auth_method,
+    });
+    if (sshInfo.private_key_path) q.set('privateKeyPath', sshInfo.private_key_path);
+    if (sshInfo.password) q.set('password', sshInfo.password);
+    navigate(`/sftp?${q.toString()}`);
+  }, [sshInfo, navigate]);
 
   useEffect(() => {
     refresh();
@@ -151,6 +217,30 @@ export function SiteDetailPage() {
         {site.domain ? (
           <Chip icon={<GlobeIcon size={14} />} label={site.domain} size="small" variant="outlined" />
         ) : null}
+        <Tooltip title={sshInfo ? t('contents.open_server_terminal_hint') : t('contents.no_server')}>
+          <span>
+            <Button
+              variant="outlined"
+              startIcon={<TerminalIcon size={16} weight="bold" />}
+              onClick={openServerTerminal}
+              disabled={!sshInfo}
+            >
+              {t('contents.open_server_terminal')}
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title={sshInfo ? t('contents.open_server_files_hint') : t('contents.no_server')}>
+          <span>
+            <Button
+              variant="outlined"
+              startIcon={<RemoteFolderIcon size={16} weight="bold" />}
+              onClick={openServerFiles}
+              disabled={!sshInfo}
+            >
+              {t('contents.open_server_files')}
+            </Button>
+          </span>
+        </Tooltip>
         <Button
           variant="outlined"
           startIcon={<PlusIcon size={18} weight="bold" />}
@@ -169,7 +259,9 @@ export function SiteDetailPage() {
         </Button>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2, ml: 5 }}>
-        {site.local_workdir}
+        {sshInfo
+          ? `${t('contents.info_local')}: ${site.local_workdir} · ${t('contents.info_server')}: ${sshInfo.username}@${sshInfo.host}${remotePath ? ` → ${remotePath}` : ''}`
+          : `${t('contents.info_local')}: ${site.local_workdir}`}
       </Typography>
 
       <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>

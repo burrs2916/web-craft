@@ -24,12 +24,29 @@ const DEFAULT_DEPLOY_CONFIG: &str = r#"{
   "environments": []
 }"#;
 
+/// 默认部署配置合并可选远程路径（deploy_config_json 契约见 cms-database-design.md §4.1）。
+fn build_deploy_config(remote_path: Option<&str>) -> String {
+    let mut config: serde_json::Value =
+        serde_json::from_str(DEFAULT_DEPLOY_CONFIG).unwrap_or(serde_json::json!({}));
+    if let Some(rp) = remote_path.map(str::trim).filter(|s| !s.is_empty()) {
+        config["remote_path"] = serde_json::Value::String(rp.to_string());
+    }
+    config.to_string()
+}
+
 impl CmsService {
     // ---------- 站点 ----------
 
     /// FR-S1 站点创建。免费版站点数量上限的 Feature Gate 属 M2 门控体系，
     /// M1 单站点即免费形态，此处不拦截（见 PRD 4.10 / M2 验收标准）。
-    pub fn create_site(db: &Database, name: &str, domain: &str, local_workdir: &str, connection_id: Option<&str>) -> Result<Site> {
+    pub fn create_site(
+        db: &Database,
+        name: &str,
+        domain: &str,
+        local_workdir: &str,
+        connection_id: Option<&str>,
+        remote_path: Option<&str>,
+    ) -> Result<Site> {
         let name = name.trim();
         let workdir = local_workdir.trim();
         if name.is_empty() {
@@ -41,6 +58,7 @@ impl CmsService {
         if SiteRepo::workdir_taken(db, workdir, None)? {
             return Err(Error::Cms(format!("工作目录已被其他站点使用: {}", workdir)));
         }
+        let deploy_config_json = build_deploy_config(remote_path);
         let now = now_ms();
         let site = Site {
             id: format!("site-{}", uuid::Uuid::new_v4()),
@@ -48,7 +66,7 @@ impl CmsService {
             domain: domain.trim().to_string(),
             local_workdir: workdir.to_string(),
             connection_id: connection_id.map(|s| s.to_string()),
-            deploy_config_json: DEFAULT_DEPLOY_CONFIG.to_string(),
+            deploy_config_json,
             build_config_json: DEFAULT_BUILD_CONFIG.to_string(),
             theme_id: "craft-blog".to_string(),
             theme_config_json: "{}".to_string(),
@@ -343,7 +361,7 @@ mod tests {
     }
 
     fn seeded(db: &Database) -> String {
-        let site = CmsService::create_site(db, "My Site", "example.com", "/tmp/site", None).unwrap();
+        let site = CmsService::create_site(db, "My Site", "example.com", "/tmp/site", None, None).unwrap();
         site.id
     }
 
@@ -422,10 +440,13 @@ mod tests {
     fn workdir_conflict_rejected() {
         let db = test_db();
         seeded(&db);
-        let err = CmsService::create_site(&db, "Another", "", "/tmp/site", None).unwrap_err();
+        let err = CmsService::create_site(&db, "Another", "", "/tmp/site", None, None).unwrap_err();
         assert!(err.to_string().contains("已被其他站点使用"));
-        // 换目录成功
-        assert!(CmsService::create_site(&db, "Another", "", "/tmp/site2", None).is_ok());
+        // 换目录成功，且远程部署路径落入 deploy_config_json
+        let site = CmsService::create_site(&db, "Another", "", "/tmp/site2", None, Some("/var/www")).unwrap();
+        let deploy: serde_json::Value = serde_json::from_str(&site.deploy_config_json).unwrap();
+        assert_eq!(deploy["remote_path"], "/var/www");
+        assert_eq!(deploy["mode"], "sftp");
     }
 
     #[test]

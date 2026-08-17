@@ -9,6 +9,7 @@ export async function createSite(input: {
   domain: string;
   localWorkdir: string;
   connectionId: string | null;
+  remotePath?: string;
 }): Promise<Site> {
   return invoke('site_create', { input });
 }

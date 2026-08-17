@@ -14,6 +14,7 @@ import {
   Chip,
   Alert,
   Snackbar,
+  Tooltip,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import {
@@ -27,8 +28,8 @@ import {
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { useNavigate } from 'react-router-dom';
 import { createSite, listSites, archiveSite, updateSite } from '../core/services/cms.service';
-import { listConnections } from '../core/services/connection.service';
-import type { SiteSummary, Site } from '../proto';
+import { listConnections, testConnection } from '../core/services/connection.service';
+import type { SiteSummary, Site, SshConnectionInfo } from '../proto';
 import type { ConnectionConfig } from '../proto';
 
 /// CMS 站点管理（FR-S2）：站点列表 + 新建向导（FR-S1 单站点形态）。
@@ -41,6 +42,8 @@ export function SitesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  /// 绑定服务器的连通状态：connectionId -> checking/ok/fail，页面层去重后探测
+  const [connStatus, setConnStatus] = useState<Record<string, 'checking' | 'ok' | 'fail'>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -55,6 +58,30 @@ export function SitesPage() {
     refresh();
     listConnections().then(setConnections).catch(() => setConnections([]));
   }, [refresh]);
+
+  // 对绑定服务器的站点做一次连通探测（去重，8s 超时，结果缓存到 connStatus）
+  useEffect(() => {
+    if (!summaries) return;
+    const ids = Array.from(
+      new Set(summaries.map((s) => s.connection_id).filter((x): x is string => !!x)),
+    );
+    for (const id of ids) {
+      if (connStatus[id] && connStatus[id] !== 'fail') continue;
+      const conn = connections.find((c) => c.id === id);
+      if (!conn) continue;
+      let ssh: SshConnectionInfo;
+      try {
+        ssh = JSON.parse(conn.config_json);
+      } catch {
+        continue;
+      }
+      setConnStatus((prev) => ({ ...prev, [id]: 'checking' }));
+      testConnection(ssh, 8000)
+        .then(() => setConnStatus((prev) => ({ ...prev, [id]: 'ok' })))
+        .catch(() => setConnStatus((prev) => ({ ...prev, [id]: 'fail' })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summaries, connections]);
 
   const handleArchive = useCallback(
     async (site: Site) => {
@@ -161,7 +188,7 @@ export function SitesPage() {
       ) : (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 2 }}>
           {active.map((s) => (
-            <SiteCard key={s.id} summary={s} onArchive={handleArchive} />
+            <SiteCard key={s.id} summary={s} connStatus={s.connection_id ? connStatus[s.connection_id] : undefined} onArchive={handleArchive} />
           ))}
         </Box>
       )}
@@ -173,7 +200,7 @@ export function SitesPage() {
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 2 }}>
             {archived.map((s) => (
-              <SiteCard key={s.id} summary={s} onRestore={handleRestore} />
+              <SiteCard key={s.id} summary={s} connStatus={s.connection_id ? connStatus[s.connection_id] : undefined} onRestore={handleRestore} />
             ))}
           </Box>
         </Box>
@@ -204,10 +231,12 @@ function formatTime(ts: number | null): string {
 
 function SiteCard({
   summary,
+  connStatus,
   onArchive,
   onRestore,
 }: {
   summary: SiteSummary;
+  connStatus?: 'checking' | 'ok' | 'fail';
   onArchive?: (site: Site) => void;
   onRestore?: (site: Site) => void;
 }) {
@@ -226,7 +255,38 @@ function SiteCard({
         opacity: archived ? 0.65 : 1,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+        {connStatus ? (
+          <Tooltip
+            title={
+              connStatus === 'ok'
+                ? t('sites.server_ok')
+                : connStatus === 'checking'
+                  ? t('sites.server_checking')
+                  : t('sites.server_fail')
+            }
+          >
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                flexShrink: 0,
+                bgcolor:
+                  connStatus === 'ok'
+                    ? 'success.main'
+                    : connStatus === 'checking'
+                      ? 'text.disabled'
+                      : 'error.main',
+                animation: connStatus === 'checking' ? 'pulse 1.2s ease-in-out infinite' : undefined,
+                '@keyframes pulse': {
+                  '0%, 100%': { opacity: 0.4 },
+                  '50%': { opacity: 1 },
+                },
+              }}
+            />
+          </Tooltip>
+        ) : null}
         <Typography sx={{ fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {summary.name}
         </Typography>
@@ -304,6 +364,7 @@ function CreateSiteDialog({
   const [domain, setDomain] = useState('');
   const [workdir, setWorkdir] = useState('');
   const [connectionId, setConnectionId] = useState<string>('');
+  const [remotePath, setRemotePath] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -313,6 +374,7 @@ function CreateSiteDialog({
       setDomain('');
       setWorkdir('');
       setConnectionId('');
+      setRemotePath('');
       setFormError(null);
       setSubmitting(false);
     }
@@ -334,6 +396,7 @@ function CreateSiteDialog({
         domain: domain.trim(),
         localWorkdir: workdir.trim(),
         connectionId: connectionId || null,
+        remotePath: connectionId ? remotePath.trim() : undefined,
       });
       onCreated(site);
     } catch (e) {
@@ -382,9 +445,14 @@ function CreateSiteDialog({
           select
           label={t('sites.form_connection')}
           value={connectionId}
-          onChange={(e) => setConnectionId(e.target.value)}
+          onChange={(e) => {
+            const id = e.target.value;
+            setConnectionId(id);
+            if (id && !remotePath) {
+              setRemotePath(domain.trim() ? `/var/www/${domain.trim()}` : '/var/www/');
+            }
+          }}
           fullWidth
-          defaultValue=""
         >
           <MenuItem value="">{t('sites.form_connection_local')}</MenuItem>
           {connections.map((c) => (
@@ -393,6 +461,15 @@ function CreateSiteDialog({
             </MenuItem>
           ))}
         </TextField>
+        {connectionId ? (
+          <TextField
+            label={t('sites.form_remote_path')}
+            value={remotePath}
+            onChange={(e) => setRemotePath(e.target.value)}
+            placeholder="/var/www/example.com"
+            fullWidth
+          />
+        ) : null}
         {formError && <Alert severity="error">{formError}</Alert>}
       </DialogContent>
       <DialogActions>

@@ -15,6 +15,9 @@ pub struct CreateSiteInput {
     pub domain: String,
     pub local_workdir: String,
     pub connection_id: Option<String>,
+    /// 部署远程目录，写入 deploy_config_json.remote_path；未绑定服务器时忽略
+    #[serde(default)]
+    pub remote_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,8 +44,15 @@ pub fn site_create(
     app: AppHandle,
     db: State<'_, Arc<Database>>,
 ) -> Result<Site, String> {
-    let site = CmsService::create_site(&db, &input.name, &input.domain, &input.local_workdir, input.connection_id.as_deref())
-        .map_err(|e| e.to_string())?;
+    let site = CmsService::create_site(
+        &db,
+        &input.name,
+        &input.domain,
+        &input.local_workdir,
+        input.connection_id.as_deref(),
+        input.remote_path.as_deref(),
+    )
+    .map_err(|e| e.to_string())?;
     emit(&app, "sites-changed");
     Ok(site)
 }

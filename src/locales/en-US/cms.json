@@ -24,7 +24,11 @@
     "form_workdir_placeholder": "Site root (content, media and build output)",
     "form_connection": "Target server",
     "form_connection_local": "Local only (can bind a server later)",
-    "form_pick_dir": "Choose site working directory"
+    "form_remote_path": "Remote deploy path",
+    "form_pick_dir": "Choose site working directory",
+    "server_ok": "Server reachable",
+    "server_checking": "Checking server connectivity…",
+    "server_fail": "Server unreachable"
   },
   "contents": {
     "action_new_post": "New Post",
@@ -63,6 +67,13 @@
     "toast_unpublished": "Unpublished back to draft",
     "toast_deleted": "Moved to trash",
     "toast_restored": "Restored",
-    "toast_purged": "Permanently deleted"
+    "toast_purged": "Permanently deleted",
+    "open_server_terminal": "Server Terminal",
+    "open_server_terminal_hint": "Open a terminal session on the server",
+    "open_server_files": "Server Files",
+    "open_server_files_hint": "Browse the server file system",
+    "no_server": "No server bound to this site. Pick a target server when creating the site to enable",
+    "info_local": "Local directory",
+    "info_server": "Server"
   }
 }

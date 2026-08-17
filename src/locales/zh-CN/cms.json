@@ -24,7 +24,11 @@
     "form_workdir_placeholder": "站点根目录（存放内容、媒体与构建产物）",
     "form_connection": "目标服务器",
     "form_connection_local": "仅本地（稍后可绑定服务器）",
-    "form_pick_dir": "选择站点工作目录"
+    "form_remote_path": "远程部署路径",
+    "form_pick_dir": "选择站点工作目录",
+    "server_ok": "服务器连接正常",
+    "server_checking": "正在探测服务器连通性…",
+    "server_fail": "服务器无法连接"
   },
   "contents": {
     "action_new_post": "新建文章",
@@ -63,6 +67,13 @@
     "toast_unpublished": "已撤回到草稿",
     "toast_deleted": "已移入回收站",
     "toast_restored": "已恢复",
-    "toast_purged": "已彻底删除"
+    "toast_purged": "已彻底删除",
+    "open_server_terminal": "服务器终端",
+    "open_server_terminal_hint": "打开服务器终端会话",
+    "open_server_files": "服务器文件",
+    "open_server_files_hint": "浏览服务器文件系统",
+    "no_server": "站点未绑定服务器，新建站点时选择目标服务器即可启用",
+    "info_local": "本地目录",
+    "info_server": "服务器"
   }
 }
