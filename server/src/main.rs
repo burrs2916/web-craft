@@ -5,8 +5,6 @@
 use std::net::SocketAddr;
 
 use axum::{
-    body::Body,
-    extract::Request,
     http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
@@ -131,6 +129,8 @@ async fn shutdown_signal() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::Body;
+    use axum::extract::Request;
     use axum::http::Request as HttpRequest;
     use http_body_util::BodyExt;
     use tower::ServiceExt;

@@ -156,7 +156,7 @@ handler = "health"
 | 阶段 | 内容 | 依赖 | 验收标准 |
 |------|------|------|----------|
 | M-x1 | AI agent 环境剧本（探测→确认→安装→偏差重试，覆盖 nginx/systemd/防火墙/端口） | 现有 agent+终端管道，零新增服务端代码 | 干净 Ubuntu 上剧本化装好 nginx 并通过探测 |
-| M-x2 | workspace 化 + webcraft-server（静态托管 / healthz / server.toml 加载含路由表与角色 / 优雅关闭 / musl 交叉编译） | common 契约 crate 抽取 | musl 产物在 linux 直接运行，错误配置拒绝启动 |
+| M-x2 | workspace 化 + webcraft-server（静态托管 / healthz / server.toml 加载含路由表与角色 / 优雅关闭 / musl 交叉编译） | common 契约 crate 抽取 | musl 产物为静态 ELF（macOS 侧经 `scripts/build-server.sh` 产出，实机运行验证并入 M-x3）；错误配置拒绝启动 |
 | M-x3 | 部署闭环（SFTP 三件套 + systemd 拉起 + 健康徽标 + deploy_config_json→server.toml 生成器 + 本地预览 sidecar） | M-x1 + M-x2 | 一键从站点页部署到 healthz 通过，徽标变绿 |
 
 M-x1 与 M-x2 无相互依赖，可并行。
