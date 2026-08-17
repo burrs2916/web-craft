@@ -122,3 +122,8 @@ export async function updateAgentAllowedTools(agentId: string, alwaysAllowedTool
 export async function ensureRemoteDesktopSetupAgent(modelId?: string, lang?: string): Promise<string> {
   return invoke('ensure_remote_desktop_setup_agent', { modelId: modelId ?? null, lang: lang ?? null });
 }
+
+/// 确保「服务器环境安装助手」专用 Agent 存在（后端幂等播种），返回其固定 id。
+export async function ensureServerEnvSetupAgent(modelId?: string, lang?: string): Promise<string> {
+  return invoke('ensure_server_env_setup_agent', { modelId: modelId ?? null, lang: lang ?? null });
+}

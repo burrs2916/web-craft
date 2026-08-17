@@ -73,6 +73,9 @@
     "open_server_files": "Server Files",
     "open_server_files_hint": "Browse the server file system",
     "no_server": "No server bound to this site. Pick a target server when creating the site to enable",
+    "prepare_env": "Prepare Server Env",
+    "prepare_env_hint": "AI assistant probes and installs the deploy environment (nginx, systemd auto-start, firewall rules)",
+    "env_ready_toast": "Server environment ready",
     "info_local": "Local directory",
     "info_server": "Server"
   }

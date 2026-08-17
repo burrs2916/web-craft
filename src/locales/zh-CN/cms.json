@@ -73,6 +73,9 @@
     "open_server_files": "服务器文件",
     "open_server_files_hint": "浏览服务器文件系统",
     "no_server": "站点未绑定服务器，新建站点时选择目标服务器即可启用",
+    "prepare_env": "准备服务器环境",
+    "prepare_env_hint": "AI 助手探测并安装部署环境（nginx、systemd 自启、防火墙放行）",
+    "env_ready_toast": "服务器环境已就绪",
     "info_local": "本地目录",
     "info_server": "服务器"
   }

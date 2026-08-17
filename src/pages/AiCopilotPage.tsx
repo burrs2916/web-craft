@@ -71,13 +71,21 @@ export function AiCopilotPage() {
 
   const [searchParams] = useSearchParams();
   const urlAgentId = searchParams.get('agentId');
+  const scene = searchParams.get('scene');
   const rdSessionId = searchParams.get('sessionId');
   const rdHost = searchParams.get('host');
   const rdUsername = searchParams.get('username');
   const rdInstallMode = searchParams.get('installMode') || 'basic';
+  const siteName = searchParams.get('siteName');
+  const srvRemotePath = searchParams.get('remotePath');
+  // 两种安装场景共用本窗口：'srvEnv'=站点服务器环境安装，缺省=远程桌面（VNC）安装。
+  const isSrvEnvScene = scene === 'srvEnv';
   const hasRdContext = !!rdSessionId;
   // 远程桌面安装流程状态：null=未检测 / 'installed'=已装 / 'not_installed'=未装待用户确认
   const [rdStatus, setRdStatus] = useState<null | 'installed' | 'not_installed'>(null);
+  // 服务器环境安装流程状态：null=未检测 / ready=就绪 / partial=已装未就绪 / missing=未安装
+  const [srvEnvStatus, setSrvEnvStatus] = useState<null | 'ready' | 'partial' | 'missing'>(null);
+  // 两场景互斥（由窗口 URL 决定），共用一个同意标记即可。
   const userConsentedRef = useRef(false);
 
   const storedAgentId = getTerminalCopilotAgentId();
@@ -92,8 +100,11 @@ export function AiCopilotPage() {
   // lang 字段让后端按用户界面语言选择提示词版本（智能体提示词国际化）。
   const buildRdMetadata = useCallback((): Record<string, unknown> | undefined => {
     if (!hasRdContext) return undefined;
+    if (isSrvEnvScene) {
+      return { srvEnvSetup: { sessionId: rdSessionId as string, host: rdHost ?? '', username: rdUsername ?? '', siteName: siteName ?? '', remotePath: srvRemotePath ?? '', lang: i18n.language || 'zh-CN' } };
+    }
     return { rdSetup: { sessionId: rdSessionId as string, host: rdHost ?? '', username: rdUsername ?? '', installMode: rdInstallMode, lang: i18n.language || 'zh-CN' } };
-  }, [hasRdContext, rdSessionId, rdHost, rdUsername, rdInstallMode, i18n.language]);
+  }, [hasRdContext, isSrvEnvScene, rdSessionId, rdHost, rdUsername, rdInstallMode, siteName, srvRemotePath, i18n.language]);
 
   const createConversationWithContext = useCallback(async (agentId: string, title: string): Promise<ConversationDto> => {
     // 所有会话都带界面语言（lang），后端据此锁定输出语言（对自定义 prompt 的智能体同样生效）；
@@ -220,10 +231,10 @@ export function AiCopilotPage() {
             }
           }
         } catch (err) { console.error('AiCopilotPage: operation failed', err); }
-        // 远程桌面安装助手：同意过安装的会话结束时，通知设置指南窗口自动刷新 VNC 状态，
-        // 省去用户手动点「重新检查」。
+        // 安装助手：同意过安装的会话结束时，通知发起窗口刷新状态，
+        // 省去用户手动点「重新检查」。事件名按场景区分。
         if (hasRdContext && userConsentedRef.current) {
-          emit('rd-setup-completed', { conversationId }).catch(() => {});
+          emit(isSrvEnvScene ? 'srv-env-setup-completed' : 'rd-setup-completed', { conversationId }).catch(() => {});
         }
         setStreamingContent('');
         setLoading(false);
@@ -369,14 +380,25 @@ export function AiCopilotPage() {
 
   // 解析助手返回的检查结论（RD_STATUS: installed|not_installed），决定何时弹出安装确认。
   useEffect(() => {
-    if (loading || !hasRdContext || userConsentedRef.current) return;
+    if (loading || !hasRdContext || isSrvEnvScene || userConsentedRef.current) return;
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
     if (!lastAssistant || !lastAssistant.content) return;
     const m = lastAssistant.content.match(/RD_STATUS:\s*(installed|not_installed)/i);
     if (m) {
       setRdStatus(m[1].toLowerCase() === 'installed' ? 'installed' : 'not_installed');
     }
-  }, [messages, loading, hasRdContext]);
+  }, [messages, loading, hasRdContext, isSrvEnvScene]);
+
+  // 服务器环境场景：解析 SRV_ENV_STATUS: ready|partial|missing，驱动环境安装确认卡。
+  useEffect(() => {
+    if (loading || !hasRdContext || !isSrvEnvScene || userConsentedRef.current) return;
+    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+    if (!lastAssistant || !lastAssistant.content) return;
+    const m = lastAssistant.content.match(/SRV_ENV_STATUS:\s*(ready|partial|missing)/i);
+    if (m) {
+      setSrvEnvStatus(m[1].toLowerCase() as 'ready' | 'partial' | 'missing');
+    }
+  }, [messages, loading, hasRdContext, isSrvEnvScene]);
 
   const handleAgreeInstall = useCallback(async () => {
     userConsentedRef.current = true;
@@ -388,6 +410,18 @@ export function AiCopilotPage() {
   const handleDeclineInstall = useCallback(async () => {
     setRdStatus(null);
     await sendMessage(t('copilot.rd_decline_message', '好的，暂不安装。等你需要在远程服务器上安装 VNC 时再告诉我。'));
+  }, [sendMessage, t]);
+
+  // 服务器环境场景的同意/拒绝：与 RD 场景同构，文案不同。
+  const handleAgreeEnvInstall = useCallback(async () => {
+    userConsentedRef.current = true;
+    setSrvEnvStatus(null);
+    await sendMessage(t('copilot.srv_consent_message', '用户已确认：请安装并配置部署环境（nginx + systemd 自启 + 防火墙放行 80/443，按标准流程执行，sudo 密码会自动填写）。'));
+  }, [sendMessage, t]);
+
+  const handleDeclineEnvInstall = useCallback(async () => {
+    setSrvEnvStatus(null);
+    await sendMessage(t('copilot.srv_decline_message', '好的，暂不安装。需要准备部署环境时再告诉我。'));
   }, [sendMessage, t]);
 
   const handleStop = async () => {
@@ -512,7 +546,7 @@ export function AiCopilotPage() {
           isDark={isDark}
           conversationId={conversationId ?? undefined}
           emptyIcon={<RobotIcon size={40} weight="duotone" color={agentColor} />}
-          emptyText={hasRdContext ? t('copilot.rd_empty_hint') : t('copilot.empty_hint')}
+          emptyText={hasRdContext ? (isSrvEnvScene ? t('copilot.srv_empty_hint') : t('copilot.rd_empty_hint')) : t('copilot.empty_hint')}
           thinkingText={t('copilot.thinking')}
         />
         <ChatInputArea
@@ -526,12 +560,12 @@ export function AiCopilotPage() {
           agentColor={agentColor}
           userColor={userColor}
           isDark={isDark}
-          placeholder={hasRdContext ? t('copilot.rd_input_placeholder') : t('copilot.input_placeholder')}
+          placeholder={hasRdContext ? (isSrvEnvScene ? t('copilot.srv_input_placeholder') : t('copilot.rd_input_placeholder')) : t('copilot.input_placeholder')}
           onStop={handleStop}
           attachments={attachments}
           onAttachmentsChange={setAttachments}
         />
-        {hasRdContext && !loading && rdStatus === 'not_installed' && (
+        {hasRdContext && !isSrvEnvScene && !loading && rdStatus === 'not_installed' && (
           <Box sx={{
             mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
             border: `1px solid ${agentColor}55`,
@@ -553,7 +587,7 @@ export function AiCopilotPage() {
             </Box>
           </Box>
         )}
-        {hasRdContext && !loading && rdStatus === 'installed' && (
+        {hasRdContext && !isSrvEnvScene && !loading && rdStatus === 'installed' && (
           <Box sx={{
             mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
             border: `1px solid ${mutedBorder}`,
@@ -561,6 +595,41 @@ export function AiCopilotPage() {
           }}>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               {t('copilot.rd_already_installed', '已检测到 VNC 远程桌面，可直接连接使用。')}
+            </Typography>
+          </Box>
+        )}
+        {hasRdContext && isSrvEnvScene && !loading && (srvEnvStatus === 'missing' || srvEnvStatus === 'partial') && (
+          <Box sx={{
+            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
+            border: `1px solid ${agentColor}55`,
+            bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+          }}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+              {srvEnvStatus === 'missing'
+                ? t('copilot.srv_missing_title', '服务器尚未安装 nginx')
+                : t('copilot.srv_partial_title', 'nginx 已安装但尚未就绪（未运行或端口未监听）')}
+            </Typography>
+            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 1 }}>
+              {t('copilot.srv_install_confirm_desc', '是否让 AI 助手安装并配置部署环境（nginx + systemd 自启 + 防火墙放行 80/443）？过程会修改远程服务器。')}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+              <Button size="small" variant="text" onClick={handleDeclineEnvInstall}>
+                {t('copilot.srv_install_decline', '暂不安装')}
+              </Button>
+              <Button size="small" variant="contained" onClick={handleAgreeEnvInstall} sx={{ bgcolor: agentColor }}>
+                {t('copilot.srv_install_agree', '同意，开始安装')}
+              </Button>
+            </Box>
+          </Box>
+        )}
+        {hasRdContext && isSrvEnvScene && !loading && srvEnvStatus === 'ready' && (
+          <Box sx={{
+            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
+            border: `1px solid ${mutedBorder}`,
+            bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+          }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {t('copilot.srv_already_ready', '部署环境已就绪（nginx 运行中），可以开始部署站点。')}
             </Typography>
           </Box>
         )}

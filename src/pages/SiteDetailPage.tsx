@@ -20,6 +20,7 @@ import {
   Alert,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { listen } from '@tauri-apps/api/event';
 import {
   ArrowLeftIcon,
   PlusIcon,
@@ -43,12 +44,16 @@ import {
   setContentPinned,
 } from '../core/services/cms.service';
 import { listConnections } from '../core/services/connection.service';
+import { spawnTerminal } from '../core/services/terminal.service';
+import { ensureServerEnvSetupAgent } from '../core/services/agent.service';
+import { openAiCopilotWindow } from '../core/services/window.service';
 import { useConnectIntent } from '../features/terminal/connectIntent';
-import type { Site, Content, ContentListFilter, ContentType, ContentStatus, SshConnectionInfo } from '../proto';
+import type { Site, Content, ContentListFilter, ContentType, ContentStatus, SshConnectionInfo, PtyConfig } from '../proto';
 import type { ConnectionConfig } from '../proto';
 import {
   TerminalIcon,
   FolderOpenIcon as RemoteFolderIcon,
+  WrenchIcon,
 } from '@phosphor-icons/react';
 
 /// 站点详情页（FR-C1/C2/C8 的列表侧）：内容列表 + 类型/状态筛选 + 回收站。
@@ -56,7 +61,7 @@ import {
 export function SiteDetailPage() {
   const { siteId = '' } = useParams();
   const navigate = useNavigate();
-  const { t } = useTranslation('cms');
+  const { t, i18n } = useTranslation('cms');
 
   const [site, setSite] = useState<Site | null>(null);
   const [contents, setContents] = useState<Content[] | null>(null);
@@ -150,6 +155,44 @@ export function SiteDetailPage() {
     navigate(`/sftp?${q.toString()}`);
   }, [sshInfo, navigate]);
 
+  // M-x1 环境剧本入口：建安装用 SSH 终端会话 → 播种环境安装助手 → 打开独立 AI 窗口。
+  // AI 探测（nginx/systemd/端口/防火墙）→ 汇报征求同意 → 同意后安装，全程驱动该终端会话。
+  const [envBusy, setEnvBusy] = useState(false);
+  const prepareServerEnv = useCallback(async () => {
+    if (!sshInfo || !site || envBusy) return;
+    setEnvBusy(true);
+    setError(null);
+    try {
+      const sessionId = `srv-env-${Date.now()}`;
+      const config: PtyConfig = { rows: 24, cols: 80, connection_type: 'ssh', ssh: sshInfo };
+      await spawnTerminal(sessionId, config);
+      const agentId = await ensureServerEnvSetupAgent(undefined, i18n.language || 'zh-CN');
+      await openAiCopilotWindow({
+        scene: 'srvEnv',
+        agentId,
+        sessionId,
+        host: sshInfo.host,
+        username: sshInfo.username,
+        siteName: site.name,
+        remotePath: remotePath || undefined,
+      });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setEnvBusy(false);
+    }
+  }, [sshInfo, site, remotePath, envBusy, i18n.language]);
+
+  // AI 窗口安装完成事件：提示环境已就绪（窗口关闭重开均不重复触发，事件是即时的）。
+  useEffect(() => {
+    const un = listen('srv-env-setup-completed', () => {
+      setToast(t('contents.env_ready_toast'));
+    });
+    return () => {
+      un.then((fn) => fn());
+    };
+  }, [t]);
+
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -238,6 +281,19 @@ export function SiteDetailPage() {
               disabled={!sshInfo}
             >
               {t('contents.open_server_files')}
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title={sshInfo ? t('contents.prepare_env_hint') : t('contents.no_server')}>
+          <span>
+            <Button
+              variant="outlined"
+              startIcon={<WrenchIcon size={16} weight="bold" />}
+              onClick={prepareServerEnv}
+              disabled={!sshInfo || envBusy}
+            >
+              {envBusy ? <CircularProgress size={16} /> : null}
+              {t('contents.prepare_env')}
             </Button>
           </span>
         </Tooltip>
