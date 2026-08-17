@@ -60,6 +60,15 @@ export interface SiteSummary extends Site {
   connection_online: boolean | null;
 }
 
+/// content_list 过滤参数；全部可选，null 表示不过滤。与 Rust ContentListFilter 对齐。
+export interface ContentListFilter {
+  type?: ContentType;
+  status?: ContentStatus;
+  keyword?: string;
+  /// true = 回收站视图（deleted_at 非空）；默认 false = 正常内容
+  include_deleted?: boolean;
+}
+
 export interface Content {
   id: string;
   site_id: string;

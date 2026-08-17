@@ -5,7 +5,7 @@
   "identifier": "com.webcraft.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1501",
+    "devUrl": "http://localhost:1521",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
