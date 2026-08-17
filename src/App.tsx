@@ -10,6 +10,7 @@ import { useSettingsStore } from './engine';
 import i18n from './core/i18n';
 import { TerminalPage } from './pages/TerminalPage';
 import { SitesPage } from './pages/SitesPage';
+import { SiteDetailPage } from './pages/SiteDetailPage';
 import { CommandPage } from './pages/CommandPage';
 import { ConnectionPage } from './pages/ConnectionPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -75,6 +76,7 @@ function AppLayout() {
           >
             <Routes>
               <Route path="/sites" element={<SitesPage />} />
+              <Route path="/sites/:siteId" element={<SiteDetailPage />} />
               <Route path="/commands" element={<CommandPage />} />
               <Route path="/notebook" element={<NotebookPage />} />
               <Route path="/agent" element={<AgentPage />} />

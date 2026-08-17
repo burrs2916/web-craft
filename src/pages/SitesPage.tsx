@@ -22,8 +22,10 @@ import {
   FolderOpenIcon,
   ArchiveIcon,
   ArrowClockwiseIcon,
+  FileTextIcon,
 } from '@phosphor-icons/react';
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
+import { useNavigate } from 'react-router-dom';
 import { createSite, listSites, archiveSite, updateSite } from '../core/services/cms.service';
 import { listConnections } from '../core/services/connection.service';
 import type { SiteSummary, Site } from '../proto';
@@ -210,6 +212,7 @@ function SiteCard({
   onRestore?: (site: Site) => void;
 }) {
   const { t } = useTranslation('cms');
+  const navigate = useNavigate();
   const archived = summary.status === 'archived';
 
   return (
@@ -262,14 +265,23 @@ function SiteCard({
             {t('sites.action_restore')}
           </Button>
         ) : (
-          <Button
-            size="small"
-            color="inherit"
-            startIcon={<ArchiveIcon size={16} weight="bold" />}
-            onClick={() => onArchive?.(summary)}
-          >
-            {t('sites.action_archive')}
-          </Button>
+          <>
+            <Button
+              size="small"
+              startIcon={<FileTextIcon size={16} weight="bold" />}
+              onClick={() => navigate(`/sites/${summary.id}`)}
+            >
+              {t('sites.action_contents')}
+            </Button>
+            <Button
+              size="small"
+              color="inherit"
+              startIcon={<ArchiveIcon size={16} weight="bold" />}
+              onClick={() => onArchive?.(summary)}
+            >
+              {t('sites.action_archive')}
+            </Button>
+          </>
         )}
       </Box>
     </Paper>
