@@ -1,0 +1,9 @@
+<footer class="site-footer">
+  <div class="container">
+    {% if settings.footer_text %}
+      <p>{{ settings.footer_text | safe }}</p>
+    {% else %}
+      <p>使用 <a href="https://webcraft.app" target="_blank" rel="noopener">WebCraft</a> 构建 · 网络工匠工作台</p>
+    {% endif %}
+  </div>
+</footer>

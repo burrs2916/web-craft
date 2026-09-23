@@ -1,0 +1,18 @@
+{
+  "id": "craft-docs",
+  "name": "Craft Docs",
+  "version": "2.0.0",
+  "type": "docs",
+  "license": "free",
+  "description": "文档型主题（v2）：侧边导航 + 阅读排版 + 深色模式，适合手册与知识库",
+  "supports": ["tags", "category", "archive"],
+  "settings": [
+    { "key": "tagline", "label": "站点标语", "type": "text", "default": "" },
+    { "key": "accent_color", "label": "强调色", "type": "color", "default": "#0284C7" },
+    { "key": "dark_mode", "label": "深色模式", "type": "select", "default": "auto", "options": [
+      { "value": "auto", "label": "跟随系统" },
+      { "value": "light", "label": "始终浅色" },
+      { "value": "dark", "label": "始终深色" }
+    ]}
+  ]
+}

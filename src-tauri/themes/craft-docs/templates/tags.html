@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}标签 - {{ site.name }}{% endblock title %}
+{% block content %}
+<section class="docs-archive">
+  <h1 class="docs-h1">标签</h1>
+  <ul class="docs-list">
+    {% for tag in tags %}
+    <li><a href="/tags/{{ tag.name }}/index.html">{{ tag.name }}</a> ({{ tag.count }})</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock content %}

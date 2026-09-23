@@ -1,0 +1,10 @@
+<section class="wc-block wc-block-image wc-container" {% if block.id %}id="{{ block.id }}"{% endif %}>
+  {% if block.heading %}<h2 class="wc-block-image__heading">{{ block.heading }}</h2>{% endif %}
+  <figure class="wc-block-image__figure">
+    {% if block.media_url %}
+    <img src="{{ block.media_url | safe }}" alt="{{ block.alt | default(value=block.caption | default(value="")) }}"
+         loading="lazy" {% if block.width %}width="{{ block.width }}"{% endif %}>
+    {% endif %}
+    {% if block.caption %}<figcaption class="wc-block-image__caption">{{ block.caption }}</figcaption>{% endif %}
+  </figure>
+</section>

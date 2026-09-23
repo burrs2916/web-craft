@@ -1,0 +1,21 @@
+<section class="wc-block wc-block-gallery wc-container" {% if block.id %}id="{{ block.id }}"{% endif %}>
+  {% if block.heading %}<h2 class="wc-block-gallery__heading">{{ block.heading }}</h2>{% endif %}
+  <div class="wc-block-gallery__grid wc-block-gallery--cols-{{ block.columns | default(value=2) }}"
+       style="gap:{{ block.gap | default(value="16px") }}">
+    {% for item in block.items %}
+    <figure class="wc-block-gallery__item">
+      {% if item.media_url %}
+      <img src="{{ item.media_url }}" alt="{{ item.title | default(value="") }}" loading="lazy">
+      {% endif %}
+      {% if item.title or item.description %}
+      <figcaption class="wc-block-gallery__caption">
+        {% if item.link %}<a href="{{ item.link }}">{% endif %}
+        {% if item.title %}<strong>{{ item.title }}</strong>{% endif %}
+        {% if item.description %} {{ item.description }}{% endif %}
+        {% if item.link %}</a>{% endif %}
+      </figcaption>
+      {% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+</section>

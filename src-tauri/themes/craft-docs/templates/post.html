@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ post.seo_title | default(value=post.title) }} - {{ site.name }}{% endblock title %}
+{% block content %}
+<article class="doc-article">
+  <h1 class="doc-article-title">{{ post.title }}</h1>
+  <div class="doc-meta">
+    <time datetime="{{ post.published_at_iso }}">{{ post.published_at }}</time>
+    {% if post.category %}<span class="doc-category">{{ post.category }}</span>{% endif %}
+    {% if post.tags %}<span class="doc-tags">{% for t in post.tags %}<a href="/tags/{{ t }}/index.html">#{{ t }}</a>{% if not loop.last %} {% endif %}{% endfor %}</span>{% endif %}
+  </div>
+  <div class="doc-content">
+    {{ post.content_html | safe }}
+  </div>
+</article>
+{% endblock content %}

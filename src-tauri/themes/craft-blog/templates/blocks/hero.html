@@ -1,0 +1,18 @@
+<section class="wc-block wc-block-hero"
+  style="{% if block.bg_color %}background-color:{{ block.bg_color }};{% endif %}{% if block.bg_image_url %}background-image:url('{{ block.bg_image_url | safe }}'){% endif %}">
+  {% if block.bg_image_url and block.bg_overlay %}
+  <div class="wc-block-hero__overlay" style="opacity:{{ block.bg_overlay }}"></div>
+  {% endif %}
+  <div class="wc-block-hero__inner wc-container wc-block-hero--{{ block.align | default(value="center") }}"
+       style="min-height:{{ block.height | default(value="60vh") }}">
+    <h1 class="wc-block-hero__title">{{ block.title }}</h1>
+    {% if block.subtitle %}<p class="wc-block-hero__subtitle">{{ block.subtitle }}</p>{% endif %}
+    {% if block.buttons %}
+    <div class="wc-block-hero__buttons">
+      {% for btn in block.buttons %}
+      <a href="{{ btn.link }}" class="wc-btn wc-btn--{{ btn.variant | default(value="primary") }}">{{ btn.text }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>

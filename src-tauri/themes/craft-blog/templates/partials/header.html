@@ -1,0 +1,28 @@
+<header class="site-header">
+  <div class="container header-inner">
+    <a href="/" class="site-brand">
+      {% if settings.logo_url %}
+        <img class="brand-logo" src="{{ settings.logo_url }}" alt="{{ site.name }}">
+      {% else %}
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 18 L8 6 L12 15 L16 6 L20 18"/>
+        </svg>
+      </span>
+      {% endif %}
+      <span class="site-title">{{ site.name }}</span>
+    </a>
+    {% if settings.show_tagline and settings.tagline %}<span class="site-tagline">{{ settings.tagline }}</span>{% endif %}
+    <nav class="site-nav">
+      {% if settings.nav_links and settings.nav_links | length > 0 %}
+        {% for item in settings.nav_links %}
+          <a href="{{ item.href }}">{{ item.label }}</a>
+        {% endfor %}
+      {% else %}
+      <a href="/">首页</a>
+      <a href="/archive/index.html">归档</a>
+      <a href="/tags/index.html">标签</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>

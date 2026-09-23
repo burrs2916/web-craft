@@ -1,0 +1,14 @@
+<section class="wc-block wc-block-feature wc-container">
+  {% if block.heading %}<h2 class="wc-block-feature__heading">{{ block.heading }}</h2>{% endif %}
+  {% if block.subheading %}<p class="wc-block-feature__subheading">{{ block.subheading }}</p>{% endif %}
+  <div class="wc-block-feature__grid wc-block-feature--cols-{{ block.columns | default(value=3) }}">
+    {% for item in block.items %}
+    <div class="wc-block-feature__item">
+      {% if item.icon %}<div class="wc-block-feature__icon">{{ item.icon }}</div>{% endif %}
+      <h3 class="wc-block-feature__title">{{ item.title }}</h3>
+      <p class="wc-block-feature__desc">{{ item.description }}</p>
+      {% if item.link %}<a href="{{ item.link }}" class="wc-block-feature__link">了解更多 →</a>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>

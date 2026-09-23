@@ -1,0 +1,109 @@
+[
+  {
+    "type": "hero",
+    "config": {
+      "title": "用代码编织想法",
+      "subtitle": "独立开发者 · 品牌站 · 交互体验",
+      "bg_image": "media_a1b2c3d4-0001-4aaa-8bbb-000000000001",
+      "bg_overlay": 0.45,
+      "height": "60vh",
+      "align": "center",
+      "buttons": [
+        { "text": "查看作品", "link": "/#gallery", "variant": "primary" },
+        { "text": "联系我", "link": "/#contact", "variant": "outline" }
+      ]
+    }
+  },
+  {
+    "type": "spacer",
+    "config": { "height": "48px" }
+  },
+  {
+    "type": "feature",
+    "config": {
+      "heading": "我能做什么",
+      "subheading": "从设计到部署，一个人搞定全链路",
+      "columns": 3,
+      "items": [
+        {
+          "icon": "palette",
+          "title": "品牌视觉",
+          "description": "Logo、配色、排版体系，让你的站点有自己的性格",
+          "link": "/services/brand"
+        },
+        {
+          "icon": "code",
+          "title": "前端开发",
+          "description": "React + Rust + SSG，快到飞起的静态站点，SEO 友好",
+          "link": "/services/dev"
+        },
+        {
+          "icon": "rocket",
+          "title": "部署运维",
+          "description": "Nginx + HTTPS + 自动部署，你只管写内容，剩下的交给我",
+          "link": "/services/deploy"
+        }
+      ]
+    }
+  },
+  {
+    "type": "spacer",
+    "config": { "height": "32px" }
+  },
+  {
+    "type": "gallery",
+    "config": {
+      "id": "gallery",
+      "heading": "近期作品",
+      "columns": 2,
+      "gap": "16px",
+      "items": [
+        {
+          "media_id": "media_a1b2c3d4-0001-4aaa-8bbb-000000000010",
+          "title": "Burrs Cloud",
+          "description": "个人云盘前端",
+          "link": "/works/burrs-cloud"
+        },
+        {
+          "media_id": "media_a1b2c3d4-0001-4aaa-8bbb-000000000011",
+          "title": "Linen Notes",
+          "description": "Markdown 笔记应用",
+          "link": "/works/linen-notes"
+        },
+        {
+          "media_id": "media_a1b2c3d4-0001-4aaa-8bbb-000000000013",
+          "title": "WebCraft",
+          "description": "AI 驱动的建站平台",
+          "link": "/works/webcraft"
+        }
+      ]
+    }
+  },
+  {
+    "type": "spacer",
+    "config": { "height": "32px" }
+  },
+  {
+    "type": "text",
+    "config": {
+      "heading": "关于我",
+      "content_md": "做了八年前端，写腻了 SPA 之后开始折腾 Rust 和静态站点生成。**WebCraft** 是我的答案：让不会写代码的人也能拥有一个快、好看、属于自己的网站。\n\n不接外包，只做自己相信的东西。如果你也在做类似的事，[聊聊](/#contact)。"
+    }
+  },
+  {
+    "type": "spacer",
+    "config": { "height": "40px" }
+  },
+  {
+    "type": "cta",
+    "config": {
+      "id": "contact",
+      "title": "有想法？聊聊",
+      "subtitle": "不接外包，但欢迎交流技术和产品",
+      "button_text": "发邮件",
+      "button_link": "mailto:hello@example.com",
+      "bg_color": "var(--primary)",
+      "text_color": "#ffffff"
+    }
+  }
+]

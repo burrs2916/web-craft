@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}分类: {{ category }} - {{ site.name }}{% endblock title %}
+{% block content %}
+<section class="category-page">
+  <h1>分类: {{ category }}</h1>
+  {% for post in posts %}
+  <article class="post-card">
+    {% if post.cover_image %}
+    <a href="/posts/{{ post.slug }}/index.html" class="post-cover-link">
+      <img class="post-cover" src="{{ post.cover_image }}" alt="{{ post.title }}" loading="lazy">
+    </a>
+    {% endif %}
+    <h2><a href="/posts/{{ post.slug }}/index.html">{{ post.title }}</a></h2>
+    <div class="post-meta"><time datetime="{{ post.published_at_iso }}">{{ post.published_at }}</time></div>
+  </article>
+  {% endfor %}
+</section>
+{% if pagination %}
+<nav class="pagination">
+  {% if pagination.prev %}<a href="{{ pagination.prev }}">← 上一页</a>{% endif %}
+  <span>第 {{ pagination.current }} / {{ pagination.total }} 页</span>
+  {% if pagination.next %}<a href="{{ pagination.next }}">下一页 →</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock content %}

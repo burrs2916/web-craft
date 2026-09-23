@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default(value='zh-CN') }}" data-theme="{{ settings.dark_mode | default(value='auto') }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ site.name }}{% endblock title %}</title>
+  {% if page_seo_description %}<meta name="description" content="{{ page_seo_description }}">{% endif %}
+  <meta property="og:type" content="website">
+  {% if page_seo_title %}<meta property="og:title" content="{{ page_seo_title }}">{% endif %}
+  {% if page_seo_description %}<meta property="og:description" content="{{ page_seo_description }}">{% endif %}
+  {% if page_og_image %}<meta property="og:image" content="{{ site.url | default(value='') }}{{ page_og_image }}">{% endif %}
+  <meta name="theme-color" content="#0284C7">
+  <link rel="stylesheet" href="/assets/theme/craft-docs/css/main.css">
+  <link rel="stylesheet" href="/assets/theme/craft-docs/css/blocks.css">
+  <link rel="alternate" type="application/rss+xml" title="{{ site.name }}" href="/feed.xml">
+</head>
+<body>
+  <div class="docs-layout">
+    {% include "partials/header.html" %}
+    <main class="docs-main">
+      <div class="docs-container">
+        {% block content %}{% endblock content %}
+      </div>
+    </main>
+  </div>
+  {% include "partials/footer.html" %}
+</body>
+</html>

@@ -1,0 +1,12 @@
+<section class="wc-block wc-block-cta" {% if block.id %}id="{{ block.id }}"{% endif %}
+  style="background:{{ block.bg_color | default(value="var(--primary)") }};color:{{ block.text_color | default(value="#fff") }}">
+  <div class="wc-container wc-block-cta__inner">
+    <h2 class="wc-block-cta__title">{{ block.title }}</h2>
+    {% if block.subtitle %}<p class="wc-block-cta__subtitle">{{ block.subtitle }}</p>{% endif %}
+    {% if block.button_text %}
+    {% if block.button_link %}
+    <a href="{{ block.button_link | safe }}" class="wc-btn wc-btn--outline-light">{{ block.button_text }}</a>
+    {% endif %}
+    {% endif %}
+  </div>
+</section>

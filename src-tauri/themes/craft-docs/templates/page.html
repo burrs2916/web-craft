@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ page.seo_title | default(value=page.title) }} - {{ site.name }}{% endblock title %}
+{% block content %}
+{% if page.blocks_html %}
+{{ page.blocks_html | safe }}
+{% else %}
+<article class="doc-article">
+  <h1 class="doc-article-title">{{ page.title }}</h1>
+  <div class="doc-content">
+    {{ page.content_html | safe }}
+  </div>
+</article>
+{% endif %}
+{% endblock content %}

@@ -1,0 +1,6 @@
+<section class="wc-block wc-block-text wc-container">
+  {% if block.heading %}<h2 class="wc-block-text__heading">{{ block.heading }}</h2>{% endif %}
+  <div class="wc-block-text__content">
+    {{ block.content_html | safe }}
+  </div>
+</section>

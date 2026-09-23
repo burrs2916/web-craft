@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ archive_year }} 年 {{ archive_month }} 月归档 - {{ site.name }}{% endblock title %}
+{% block content %}
+<section class="posts-list">
+  <h1>{{ archive_year }} 年 {{ archive_month }} 月归档</h1>
+  {% for post in posts %}
+  <article class="post-card">
+    <h2 class="post-title"><a href="/posts/{{ post.slug }}/index.html">{{ post.title }}</a></h2>
+    <div class="post-meta">
+      <time datetime="{{ post.published_at_iso }}">{{ post.published_at }}</time>
+      {% if post.category %}<span class="post-category">{{ post.category }}</span>{% endif %}
+    </div>
+    {% if post.summary %}<p class="post-summary">{{ post.summary }}</p>{% endif %}
+  </article>
+  {% endfor %}
+</section>
+<p class="archive-back"><a href="/archive/index.html">← 返回归档总览</a></p>
+{% endblock content %}

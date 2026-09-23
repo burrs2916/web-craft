@@ -1,0 +1,31 @@
+<section class="wc-block wc-block-contact wc-container" {% if block.id %}id="{{ block.id }}"{% endif %}>
+  {% if block.heading %}<h2 class="wc-block-contact__heading">{{ block.heading }}</h2>{% endif %}
+  <div class="wc-block-contact__grid">
+    {% if block.email %}
+    <div class="wc-block-contact__item">
+      <span class="wc-block-contact__label">邮箱</span>
+      <a href="mailto:{{ block.email }}">{{ block.email }}</a>
+    </div>
+    {% endif %}
+    {% if block.phone %}
+    <div class="wc-block-contact__item">
+      <span class="wc-block-contact__label">电话</span>
+      <a href="tel:{{ block.phone }}">{{ block.phone }}</a>
+    </div>
+    {% endif %}
+    {% if block.location %}
+    <div class="wc-block-contact__item">
+      <span class="wc-block-contact__label">地址</span>
+      <span>{{ block.location }}</span>
+    </div>
+    {% endif %}
+    {% if block.social %}
+    <div class="wc-block-contact__item">
+      <span class="wc-block-contact__label">社交</span>
+      {% for link in block.social %}
+      <a href="{{ link.url }}">{{ link.label }}</a>{% if not loop.last %} · {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
