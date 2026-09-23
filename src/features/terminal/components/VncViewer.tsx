@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
 import RFB from '@novnc/novnc';
 import { rdLog, rdShape, registerRdSecret } from '../../../core/remoteDesktopLog';
+import { brand } from '../../../theme/brand';
 
 interface VncViewerProps {
   wsUrl: string;
@@ -249,8 +250,8 @@ export function VncViewer({ wsUrl, vncPassword, onClose }: VncViewerProps) {
     }
   }, []);
 
-  const bgColor = isDark ? '#0d1117' : '#f5f5f5';
-  const textColor = isDark ? '#c9d1d9' : '#24292f';
+  const bgColor = isDark ? brand.dark.background : brand.light.background;
+  const textColor = isDark ? brand.dark.text : brand.light.text;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: bgColor }}>
@@ -264,7 +265,7 @@ export function VncViewer({ wsUrl, vncPassword, onClose }: VncViewerProps) {
           borderBottom: '1px solid',
           borderColor: 'divider',
           minHeight: 36,
-          bgcolor: isDark ? '#161B22' : '#f0f0f0',
+          bgcolor: isDark ? brand.dark.elevated : brand.light.background,
         }}
       >
         <Box
@@ -292,14 +293,14 @@ export function VncViewer({ wsUrl, vncPassword, onClose }: VncViewerProps) {
         {connectionState === 'connected' && (
           <Tooltip title={t('fullscreen')}>
             <IconButton size="small" onClick={handleFullscreen}>
-              <ArrowsOutIcon size={14} color={isDark ? '#8B949E' : '#6B7280'} />
+              <ArrowsOutIcon size={14} color={isDark ? '#8FA3B0' : '#5A6B64'} />
             </IconButton>
           </Tooltip>
         )}
         {onClose && (
           <Tooltip title={t('close')}>
             <IconButton size="small" onClick={onClose}>
-              <XIcon size={14} color={isDark ? '#FF5252' : '#D32F2F'} />
+              <XIcon size={14} color={isDark ? '#F87171' : '#DC2626'} />
             </IconButton>
           </Tooltip>
         )}
@@ -329,7 +330,7 @@ export function VncViewer({ wsUrl, vncPassword, onClose }: VncViewerProps) {
               bgcolor: `${bgColor}ee`,
             }}
           >
-            <CircularProgress size={32} sx={{ color: '#6C63FF' }} />
+            <CircularProgress size={32} sx={{ color: '#60A5FA' }} />
             <Typography variant="body2" sx={{ color: textColor }}>
               {t('connecting_to_vnc')}
             </Typography>
@@ -377,7 +378,7 @@ export function VncViewer({ wsUrl, vncPassword, onClose }: VncViewerProps) {
                   setRetryCount(c => c + 1);
                 }
               }}
-              sx={{ mt: 1, textTransform: 'none', borderColor: isDark ? '#30363d' : '#d0d7de', color: textColor }}
+              sx={{ mt: 1, textTransform: 'none', borderColor: isDark ? brand.dark.border : brand.light.border, color: textColor }}
             >
               Retry
             </Button>
@@ -397,7 +398,7 @@ export function VncViewer({ wsUrl, vncPassword, onClose }: VncViewerProps) {
               bgcolor: `${bgColor}ee`,
             }}
           >
-            <InfoIcon size={40} weight="fill" color="#8B949E" />
+            <InfoIcon size={40} weight="fill" color="#8FA3B0" />
             <Typography variant="body2" sx={{ color: textColor }}>
               {t('disconnected')}
             </Typography>
@@ -462,8 +463,8 @@ export function VncViewer({ wsUrl, vncPassword, onClose }: VncViewerProps) {
                 size="small"
                 onClick={() => submitPendingPassword('submit_button')}
                 sx={{
-                  bgcolor: '#6C63FF',
-                  '&:hover': { bgcolor: '#5a52e0' },
+                  bgcolor: brand.blue400,
+                  '&:hover': { bgcolor: brand.blue600 },
                   color: '#fff',
                   width: 32,
                   height: 32,

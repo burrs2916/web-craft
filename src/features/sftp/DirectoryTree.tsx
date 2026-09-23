@@ -132,7 +132,7 @@ export function DirectoryTree({
   const inflight = useRef<Set<string>>(new Set());
   const activeRef = useRef<HTMLDivElement | null>(null);
 
-  const subtle = isDark ? '#8B949E' : '#6B7280';
+  const subtle = isDark ? '#8FA3B0' : '#5A6B64';
 
   const toChildren = useCallback(
     (base: string, entries: SftpEntry[]): TreeChild[] =>
@@ -495,7 +495,7 @@ const TreeRow = memo(
     },
     ref,
   ) {
-    const subtle = isDark ? '#8B949E' : '#6B7280';
+    const subtle = isDark ? '#8FA3B0' : '#5A6B64';
     const textColor = isDark ? '#C9D1D9' : '#24292F';
     const accent = isDark ? '#58A6FF' : '#0969DA';
     const folderTint = isDark ? '#7D8590' : '#54AEFF';
@@ -588,7 +588,7 @@ const TreeRow = memo(
             minWidth: 0,
             fontSize: 12.5,
             lineHeight: 1.2,
-            color: isActive ? (isDark ? '#E6EDF3' : '#0969DA') : textColor,
+            color: isActive ? (isDark ? '#E8F1EC' : '#0969DA') : textColor,
             fontWeight: isActive ? 600 : 400,
             opacity: isHiddenName(name) ? 0.62 : 1,
             overflow: 'hidden',
@@ -621,7 +621,7 @@ interface TreeMoreRowProps {
 }
 
 const TreeMoreRow = memo(function TreeMoreRow({ depth, label, isDark, onNavigate }: TreeMoreRowProps) {
-  const subtle = isDark ? '#8B949E' : '#6B7280';
+  const subtle = isDark ? '#8FA3B0' : '#5A6B64';
   return (
     <Box
       onClick={onNavigate}

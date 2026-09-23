@@ -22,14 +22,16 @@ import {
 } from '../features/terminal';
 import type { TerminalEmulatorHandle, ConnectionPickerResult } from '../features/terminal';
 import { TabBar } from '../features/session';
+import { SftpManager } from '../features/sftp/SftpManager';
 import { CommandPalette } from '../features/command';
 import { spawnTerminal, killTerminal, writeToTerminal, getTerminalCwd } from '../core/services/terminal.service';
 import { copyText, pasteText } from '../core/services/clipboard.service';
 import { parseCommand } from '../core/services/command.service';
 import { generateId } from '../core/utils';
 import type { PtyConfig } from '../proto';
-import { openNotesReferenceWindow, openAiCopilotWindow, openRemoteDesktopWindow, openSftpWindow } from '../core/services/window.service';
+import { openAiCopilotWindow, openRemoteDesktopWindow } from '../core/services/window.service';
 import { useConnectIntent } from '../features/terminal/connectIntent';
+import { readPersistedTabs, savePersistedTabs, tabToPersisted, canAutoRestore } from '../features/terminal/sessionPersistence';
 import { localizeBackendError } from '../core/backendError';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useSettingsStore } from '../engine';
@@ -41,6 +43,7 @@ import type { ProFeature } from '../proto/licensing';
 
 interface Tab {
   id: string;
+  kind: 'terminal' | 'sftp';
   title: string;
   isActive: boolean;
   connectionType: 'local' | 'ssh';
@@ -73,6 +76,85 @@ export function TerminalPage() {
   const shell = useSettingsStore((s) => s.settings.shell);
   const confirmBeforeClose = useSettingsStore((s) => s.settings.confirmBeforeClose);
   const notify = useNotify().notify;
+
+  // —— 跨重启恢复：仅在首次挂载时执行一次 ——
+  const [hydrated, setHydrated] = useState(false);
+  const hydrateRef = useRef(false);
+  useEffect(() => {
+    if (hydrateRef.current) return;
+    hydrateRef.current = true;
+
+    if (!useSettingsStore.getState().settings.restoreTabsOnStartup) {
+      setHydrated(true);
+      return;
+    }
+
+    const persisted = readPersistedTabs();
+    const size = estimateTerminalSize();
+    const restored: Tab[] = [];
+    let activeAssigned = false;
+
+    for (const p of persisted) {
+      // 密码认证的 SSH 会话因密码永不落盘，无法安全自动重连，跳过
+      if (!canAutoRestore(p)) continue;
+
+      const id = generateId();
+      const isSftp = p.kind === 'sftp';
+
+      if (!isSftp) {
+        const config: PtyConfig = {
+          rows: size.rows,
+          cols: size.cols,
+          shell: useSettingsStore.getState().settings.shell,
+          connection_type: p.connectionType,
+          ssh: p.ssh
+            ? {
+                host: p.ssh.host,
+                port: p.ssh.port,
+                username: p.ssh.username,
+                auth_method: p.ssh.authMethod as 'none' | 'password' | 'private_key',
+                private_key_path: p.ssh.privateKeyPath,
+              }
+            : undefined,
+        };
+        spawnTerminal(id, config).catch((e) => { console.error(e); notify(localizeBackendError(e)); });
+      }
+
+      if (p.connectionType === 'ssh' && p.connectionId) {
+        useConnectIntent.getState().addActiveConnection(p.connectionId);
+      }
+
+      restored.push({
+        id,
+        kind: p.kind,
+        title:
+          p.title ||
+          (isSftp && p.ssh
+            ? `SFTP · ${p.ssh.username}@${p.ssh.host}`
+            : p.connectionType === 'ssh' && p.ssh
+              ? `${p.ssh.username}@${p.ssh.host}`
+              : 'Terminal'),
+        isActive: !activeAssigned,
+        connectionType: p.connectionType,
+        connectionId: p.connectionId,
+        ssh: p.ssh ? { ...p.ssh, password: undefined } : undefined,
+      });
+      activeAssigned = true;
+    }
+
+    if (restored.length > 0) {
+      setTabs(restored);
+      notify(t('restore_restored', { count: restored.length }));
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 标签变化后落盘（仅保留安全元数据，password 不落盘）
+  useEffect(() => {
+    if (!hydrated) return;
+    savePersistedTabs(tabs.map(tabToPersisted));
+  }, [tabs, hydrated]);
 
   useEffect(() => {
     const activeTab = tabsRef.current.find((t) => t.isActive);
@@ -162,6 +244,7 @@ export function TerminalPage() {
       ...prev.map((t) => ({ ...t, isActive: false })),
       {
         id,
+        kind: 'terminal',
         title,
         isActive: true,
         connectionType: result.connectionType,
@@ -196,8 +279,12 @@ export function TerminalPage() {
 
   const doCloseTab = useCallback(
     (id: string) => {
-      killTerminal(id).catch((e) => { console.error(e); notify(localizeBackendError(e)); });
-      terminalRefs.current.delete(id);
+      const tab = tabsRef.current.find((t) => t.id === id);
+      if (tab?.kind === 'terminal') {
+        killTerminal(id).catch((e) => { console.error(e); notify(localizeBackendError(e)); });
+        terminalRefs.current.delete(id);
+      }
+      // SFTP 标签：SftpManager 卸载时自行清理连接
       setTabs((prev) => {
         const closing = prev.find((t) => t.id === id);
         const filtered = prev.filter((t) => t.id !== id);
@@ -297,12 +384,6 @@ export function TerminalPage() {
     [tabs],
   );
 
-  const handleOpenNotes = useCallback(() => {
-    guardProFeature('note_reference', () => {
-      openNotesReferenceWindow().catch((e) => { console.error(e); notify(localizeBackendError(e)); });
-    });
-  }, [guardProFeature, notify]);
-
   const handleOpenAiCopilot = useCallback(() => {
     guardProFeature('ai_copilot', () => {
       openAiCopilotWindow().catch((e) => { console.error(e); notify(localizeBackendError(e)); });
@@ -326,19 +407,45 @@ export function TerminalPage() {
   }, [guardProFeature, notify]);
 
   const handleOpenSftp = useCallback(() => {
-    guardProFeature('sftp', () => {
-      const activeTab = tabsRef.current.find((t) => t.isActive);
-      const sshParams = activeTab?.ssh ? {
-        host: activeTab.ssh.host,
-        port: activeTab.ssh.port,
-        username: activeTab.ssh.username,
-        authMethod: activeTab.ssh.authMethod,
-        privateKeyPath: activeTab.ssh.privateKeyPath,
-        password: activeTab.ssh.password,
-      } : undefined;
-      openSftpWindow(sshParams, (msg) => notify(msg)).catch((e) => { console.error(e); notify(localizeBackendError(e)); });
-    });
-  }, [guardProFeature, notify]);
+    const activeTab = tabsRef.current.find((t) => t.isActive);
+    if (!activeTab?.ssh) return;
+
+    // 若当前已是 SFTP 标签，则不重复创建
+    if (activeTab.kind === 'sftp') return;
+
+    if (!canUseFeature('sftp')) {
+      openUpgrade('sftp');
+      return;
+    }
+
+    const id = generateId();
+    const ssh = activeTab.ssh;
+    const title = `SFTP · ${ssh.username}@${ssh.host}`;
+
+    if (activeTab.connectionId) {
+      useConnectIntent.getState().addActiveConnection(activeTab.connectionId);
+    }
+
+    setTabs((prev) => [
+      ...prev.map((t) => ({ ...t, isActive: false })),
+      {
+        id,
+        kind: 'sftp' as const,
+        title,
+        isActive: true,
+        connectionType: 'ssh' as const,
+        connectionId: activeTab.connectionId,
+        ssh: {
+          host: ssh.host,
+          port: ssh.port,
+          username: ssh.username,
+          authMethod: ssh.authMethod,
+          privateKeyPath: ssh.privateKeyPath,
+          password: ssh.password,
+        },
+      },
+    ]);
+  }, [canUseFeature, openUpgrade]);
 
   const handleClearBuffer = useCallback(() => {
     getActiveTerminal()?.clearBuffer();
@@ -523,8 +630,8 @@ export function TerminalPage() {
               right: 0,
               bottom: 0,
               background: isDark
-                ? 'radial-gradient(circle at 50% 30%, rgba(108,99,255,0.06) 0%, transparent 60%)'
-                : 'radial-gradient(circle at 50% 30%, rgba(91,84,224,0.04) 0%, transparent 60%)',
+                ? 'radial-gradient(circle at 50% 30%, rgba(45,212,191,0.06) 0%, transparent 60%)'
+                : 'radial-gradient(circle at 50% 30%, rgba(15,118,110,0.04) 0%, transparent 60%)',
             },
           }}
         >
@@ -548,10 +655,10 @@ export function TerminalPage() {
                 height: 80,
                 borderRadius: '50%',
                 background: isDark
-                  ? 'rgba(108,99,255,0.08)'
-                  : 'rgba(91,84,224,0.05)',
+                  ? 'rgba(45,212,191,0.08)'
+                  : 'rgba(15,118,110,0.05)',
                 border: '1px solid',
-                borderColor: isDark ? 'rgba(108,99,255,0.15)' : 'rgba(91,84,224,0.1)',
+                borderColor: isDark ? 'rgba(45,212,191,0.15)' : 'rgba(15,118,110,0.1)',
               }}
             >
               <Typography
@@ -561,14 +668,14 @@ export function TerminalPage() {
                   fontWeight: 700,
                   lineHeight: 1,
                   background: isDark
-                    ? 'linear-gradient(135deg, #6C63FF, #4FC3F7)'
-                    : 'linear-gradient(135deg, #5B54E0, #1565C0)',
+                    ? 'linear-gradient(135deg, #60A5FA, #38BDF8)'
+                    : 'linear-gradient(135deg, #1D4ED8, #0369A1)',
                   backgroundClip: 'text',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   filter: isDark
-                    ? 'drop-shadow(0 0 12px rgba(108,99,255,0.4))'
-                    : 'drop-shadow(0 0 8px rgba(91,84,224,0.3))',
+                    ? 'drop-shadow(0 0 12px rgba(45,212,191,0.4))'
+                    : 'drop-shadow(0 0 8px rgba(15,118,110,0.3))',
                 }}
               >
                 {`>_`}
@@ -582,8 +689,8 @@ export function TerminalPage() {
                   fontWeight: 700,
                   mb: 2,
                   background: isDark
-                    ? 'linear-gradient(135deg, #6C63FF 0%, #8B83FF 50%, #4FC3F7 100%)'
-                    : 'linear-gradient(135deg, #5B54E0 0%, #7B75FF 50%, #1565C0 100%)',
+                    ? 'linear-gradient(135deg, #60A5FA 0%, #93C5FD 50%, #38BDF8 100%)'
+                    : 'linear-gradient(135deg, #1D4ED8 0%, #3B82F6 50%, #0369A1 100%)',
                   backgroundClip: 'text',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
@@ -613,21 +720,21 @@ export function TerminalPage() {
                 py: 2,
                 borderRadius: 3,
                 background: isDark
-                  ? 'linear-gradient(135deg, #6C63FF 0%, #8B83FF 100%)'
-                  : 'linear-gradient(135deg, #5B54E0 0%, #7B75FF 100%)',
+                  ? 'linear-gradient(135deg, #60A5FA 0%, #93C5FD 100%)'
+                  : 'linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%)',
                 color: '#fff',
                 fontWeight: 600,
                 fontSize: '1.1rem',
                 cursor: 'pointer',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 boxShadow: isDark
-                  ? '0 4px 20px rgba(108,99,255,0.3)'
-                  : '0 4px 20px rgba(91,84,224,0.25)',
+                  ? '0 4px 20px rgba(45,212,191,0.3)'
+                  : '0 4px 20px rgba(15,118,110,0.25)',
                 '&:hover': {
                   transform: 'translateY(-3px) scale(1.02)',
                   boxShadow: isDark
-                    ? '0 12px 40px rgba(108,99,255,0.4)'
-                    : '0 12px 40px rgba(91,84,224,0.35)',
+                    ? '0 12px 40px rgba(45,212,191,0.4)'
+                    : '0 12px 40px rgba(15,118,110,0.35)',
                 },
                 '&:active': {
                   transform: 'translateY(-1px) scale(0.98)',
@@ -672,7 +779,6 @@ export function TerminalPage() {
       <TerminalToolbar
         onNewTab={handleNewTerminal}
         onCloseTab={() => activeTab && handleCloseTab(activeTab.id)}
-        onOpenNotes={handleOpenNotes}
         onOpenAiCopilot={handleOpenAiCopilot}
         onOpenRemoteDesktop={handleOpenRemoteDesktop}
         onOpenSftp={handleOpenSftp}
@@ -682,6 +788,7 @@ export function TerminalPage() {
         onFind={handleFind}
         findOpen={findOpen}
         isSshSession={!!activeTab?.ssh}
+        activeTabKind={activeTab?.kind ?? 'terminal'}
         onOpenConnections={() => navigate('/connections')}
       />
       <TabBar tabs={tabs} onSelect={handleSelectTab} onClose={handleCloseTab} />
@@ -694,60 +801,78 @@ export function TerminalPage() {
         resultInfo={findResultCount}
       />
 
-      <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }} data-terminal-container onContextMenu={handleContextMenu}>
-        {tabs.map((tab) => (
-          <Box
-            key={tab.id}
-            sx={{
-              position: 'absolute',
-              inset: 0,
-              visibility: tab.isActive ? 'visible' : 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <TerminalEmulator
-              ref={(handle) => {
-                if (handle) terminalRefs.current.set(tab.id, handle);
-                else terminalRefs.current.delete(tab.id);
+      <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }} data-terminal-container onContextMenu={activeTab?.kind === 'terminal' ? handleContextMenu : undefined}>
+        {tabs.map((tab) => {
+          const isSftp = tab.kind === 'sftp';
+          return (
+            <Box
+              key={tab.id}
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                visibility: tab.isActive ? 'visible' : 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
               }}
-              sessionId={tab.id}
-              onExit={handleExit}
-              onTitleChange={handleTitleChange}
-              onFindResultsChange={(resultIndex, resultCount) => {
-                setFindResultCount({ resultIndex, resultCount });
-              }}
-              visible={tab.isActive}
-              profileId={tab.profileId}
-            />
-            {tab.disconnected && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: isDark ? 'rgba(13,17,23,0.85)' : 'rgba(255,255,255,0.85)',
-                  zIndex: 10,
-                  gap: 2,
-                }}
-              >
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {t('disconnected')}
-                </Typography>
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={() => handleReconnect(tab)}
-                >
-                  {t('reconnect')}
-                </Button>
-              </Box>
-            )}
-          </Box>
-        ))}
+            >
+              {isSftp && tab.ssh ? (
+                <SftpManager
+                  ssh={{
+                    host: tab.ssh.host,
+                    port: tab.ssh.port,
+                    username: tab.ssh.username,
+                    auth_method: tab.ssh.authMethod as 'none' | 'password' | 'private_key',
+                    private_key_path: tab.ssh.privateKeyPath,
+                    password: tab.ssh.password,
+                  }}
+                />
+              ) : (
+                <>
+                  <TerminalEmulator
+                    ref={(handle) => {
+                      if (handle) terminalRefs.current.set(tab.id, handle);
+                      else terminalRefs.current.delete(tab.id);
+                    }}
+                    sessionId={tab.id}
+                    onExit={handleExit}
+                    onTitleChange={handleTitleChange}
+                    onFindResultsChange={(resultIndex, resultCount) => {
+                      setFindResultCount({ resultIndex, resultCount });
+                    }}
+                    visible={tab.isActive}
+                    profileId={tab.profileId}
+                  />
+                  {tab.disconnected && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        bgcolor: isDark ? 'rgba(13,17,23,0.85)' : 'rgba(255,255,255,0.85)',
+                        zIndex: 10,
+                        gap: 2,
+                      }}
+                    >
+                      <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                        {t('disconnected')}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => handleReconnect(tab)}
+                      >
+                        {t('reconnect')}
+                      </Button>
+                    </Box>
+                  )}
+                </>
+              )}
+            </Box>
+          );
+        })}
       </Box>
       <TerminalStatusBar
         sessionName={activeTab?.title}

@@ -95,7 +95,7 @@ export function ProfileEditor() {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1.5 }}>
           <Typography variant="subtitle2">{t('profile.title')}</Typography>
           <IconButton size="small" onClick={() => startEdit()}>
-            <PlusIcon size={16} color="#6C63FF" />
+            <PlusIcon size={16} color="#60A5FA" />
           </IconButton>
         </Box>
         <List dense>
@@ -107,7 +107,7 @@ export function ProfileEditor() {
               sx={{ borderRadius: 1, mx: 0.5 }}
             >
               <ListItemIcon sx={{ minWidth: 32 }}>
-                <PaletteIcon size={16} color="#6C63FF" />
+                <PaletteIcon size={16} color="#60A5FA" />
               </ListItemIcon>
               <ListItemText
                 primary={p.name}
@@ -131,7 +131,7 @@ export function ProfileEditor() {
         {editing !== null || profiles.length === 0 ? (
           <Stack spacing={2.5}>
             <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PaletteIcon size={24} color="#6C63FF" weight="fill" />
+              <PaletteIcon size={24} color="#60A5FA" weight="fill" />
               {editing ? t('profile.edit_profile') : t('profile.new_profile')}
             </Typography>
 
@@ -245,7 +245,7 @@ export function ProfileEditor() {
           </Stack>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-            <PaletteIcon size={48} color="#8B949E" />
+            <PaletteIcon size={48} color="#8FA3B0" />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
               {t('profile.select_hint')}
             </Typography>

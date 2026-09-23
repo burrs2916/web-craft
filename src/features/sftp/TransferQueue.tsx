@@ -105,7 +105,7 @@ export function TransferQueue({
   const border = isDark ? 'rgba(240,246,252,0.10)' : 'rgba(27,31,36,0.12)';
   const bg = isDark ? '#12171D' : '#FBFCFD';
   const text = isDark ? '#C9D1D9' : '#24292F';
-  const subtle = isDark ? '#7D8590' : '#6E7781';
+  const subtle = isDark ? '#7D8590' : '#5A6B64';
 
   return (
     <Box sx={{ borderTop: `1px solid ${border}`, bgcolor: bg, flexShrink: 0 }}>

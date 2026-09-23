@@ -59,7 +59,6 @@
     "cancel": "取消",
     "delete": "删除",
     "tool_terminal": "终端",
-    "tool_notebook": "笔记本",
     "tool_file": "文件",
     "tool_command_history": "命令历史",
     "tool_terminal_session": "终端会话",
@@ -79,7 +78,7 @@
     "plugin_tools_label": "插件工具",
     "workspace_dir": "工作区目录",
     "workspace_dir_placeholder": "留空使用默认路径",
-    "workspace_dir_helper": "AI 输出文件的保存目录，留空则默认为 系统文稿/BiosphereTerminal/agents/{id}",
+    "workspace_dir_helper": "AI 输出文件的保存目录，留空则默认为 系统文稿/WebCraft/agents/{id}",
     "select_workspace_dir": "选择工作区目录",
     "allowed_tools_label": "已授权工具",
     "allowed_tools_desc": "点击工具可设为始终允许（无需每次确认），再次点击取消。",
@@ -105,6 +104,22 @@
     "delete_confirm_title": "删除对话",
     "delete_confirm_message": "确定要删除此对话吗？所有消息将永久丢失。",
     "message_save_failed": "消息保存失败"
+  },
+  "repair": {
+    "title": "修复进度",
+    "steps": "项",
+    "all_success": "全部成功",
+    "completed_with_failures": "部分失败",
+    "some_failed_note": "部分项修复失败，点击展开查看失败原因和尝试记录。",
+    "status_success": "成功",
+    "status_failed": "失败",
+    "status_running": "进行中",
+    "status_skipped": "已跳过",
+    "status_pending": "待执行",
+    "requires_sudo": "需要管理员权限",
+    "no_description": "暂无描述",
+    "attempt_history": "尝试记录",
+    "attempt": "尝试"
   },
   "config": {
     "label": "配置",
@@ -183,6 +198,17 @@
     "google": "Google",
     "ollama": "Ollama (本地)"
   },
+  "ollama": {
+    "scan_title": "本地模型检测",
+    "scan_button": "检测本地模型",
+    "scanning": "检测中...",
+    "found_models": "发现 {{count}} 个模型",
+    "select_all": "全选",
+    "deselect_all": "取消全选",
+    "import_selected": "导入 {{count}} 个",
+    "importing": "导入中...",
+    "save_first": "请先保存端点，然后再导入模型"
+  },
   "dialog": {
     "cancel": "取消",
     "save": "保存",
@@ -202,20 +228,6 @@
   "assistant": {
     "start_chat": "开始对话",
     "enable_tool": "前往启用工具"
-  },
-  "note_assistant": {
-    "label": "笔记助手",
-    "title": "笔记助手",
-    "description": "选择一个 AI 智能体来维护和优化你的笔记。智能体将能够读取、整理和改进笔记内容。",
-    "select_agent": "选择笔记助手智能体...",
-    "has_notebook_tool": "已启用笔记本工具",
-    "has_notebook_tool_desc": "该智能体可以直接读取和修改笔记。在笔记编辑器中点击 AI 优化按钮即可使用。",
-    "no_notebook_tool": "未启用笔记本工具",
-    "no_notebook_tool_desc": "该智能体未启用笔记本工具。请在智能体管理中启用 Notebook 工具以获得完整的笔记管理能力。",
-    "how_to_use": "使用方法",
-    "step1": "1. 在上方选择一个智能体（确保已启用 Notebook 工具）",
-    "step2": "2. 在笔记本面板中打开一篇笔记",
-    "step3": "3. 点击编辑器工具栏中的 ✨ AI 优化按钮，自动优化笔记内容"
   },
   "plugin_assistant": {
     "label": "插件助手",
@@ -328,6 +340,19 @@
     "srv_already_ready": "部署环境已就绪（nginx 运行中），可以开始部署站点。",
     "srv_consent_message": "用户已确认：请安装并配置部署环境（nginx + systemd 自启 + 防火墙放行 80/443，按标准流程执行，sudo 密码会自动填写）。",
     "srv_decline_message": "好的，暂不安装。需要准备部署环境时再告诉我。",
+    "ops_empty_hint": "运维助手已就绪，可以帮你检查服务状态、分析日志、排查问题。试试说「检查 nginx 运行状态」或「查看最近的错误日志」",
+    "ops_input_placeholder": "向运维助手提问，如「检查服务器环境」「重启 nginx」「分析访问日志」...",
+    "env_fix_start_message": "请分析环境检测报告，列出需要修复的问题和修复方案。",
+    "env_fix_need_fix_title": "检测到环境问题需要修复",
+    "env_fix_confirm_desc": "是否让 AI 助手自动修复环境问题？过程会修改远程服务器配置，需要 sudo 权限。",
+    "env_fix_decline": "暂不修复",
+    "env_fix_agree": "同意，开始修复",
+    "env_fix_all_good": "环境检测一切正常，无需修复。",
+    "env_fix_done": "环境修复完成。建议返回环境检测页面重新检测确认。",
+    "env_fix_consent_message": "用户已确认：请开始修复环境问题，按优先级逐个修复，sudo 密码会自动填写。修复完成后请验证所有服务状态。",
+    "env_fix_decline_message": "好的，暂不修复。需要修复环境时再告诉我。",
+    "env_fix_empty_hint": "环境修复助手已就绪，可以基于检测报告自动修复环境问题。",
+    "env_fix_input_placeholder": "向环境修复助手提问，如「修复所有问题」「检查 SSL 证书」...",
     "thinking": "思考中...",
     "new_chat": "新对话",
     "attachment_prefix": "[附件: {{path}}]",

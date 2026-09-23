@@ -11,8 +11,6 @@ export const PRO_FEATURES: ProFeature[] = [
   'remote_desktop',
   'sftp',
   'ai_copilot',
-  'note_ai_optimize',
-  'note_reference',
 ];
 
 /// Human-readable labels for each Pro feature, used in the upgrade dialog.
@@ -20,8 +18,6 @@ export const PRO_FEATURE_LABELS: Record<ProFeature, string> = {
   remote_desktop: 'Remote desktop (VNC)',
   sftp: 'SFTP file transfer',
   ai_copilot: 'AI Copilot & Agent chat',
-  note_ai_optimize: 'AI-powered note optimization',
-  note_reference: 'AI note references & command linking',
 };
 
 interface LicenseState {

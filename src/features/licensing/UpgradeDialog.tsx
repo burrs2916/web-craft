@@ -100,7 +100,7 @@ export function UpgradeDialog() {
       });
     }
     return t('license.upgrade.headlineDefault', {
-      defaultValue: 'Unlock Biosphere Pro',
+      defaultValue: 'Unlock WebCraft Pro',
     });
   }, [isTrial, trialDaysLeft, isExpired, t]);
 
@@ -127,16 +127,16 @@ export function UpgradeDialog() {
           sx: {
             borderRadius: 3,
             backgroundImage:
-              'linear-gradient(135deg, rgba(108,99,255,0.08) 0%, rgba(79,195,247,0.05) 100%)',
+              'linear-gradient(135deg, rgba(45,212,191,0.08) 0%, rgba(56,189,248,0.05) 100%)',
           },
         },
       }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <SparkleIcon size={22} weight="fill" color="#6C63FF" />
+          <SparkleIcon size={22} weight="fill" color="#60A5FA" />
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            {t('license.upgrade.title', { defaultValue: 'Biosphere Pro' })}
+            {t('license.upgrade.title', { defaultValue: 'WebCraft Pro' })}
           </Typography>
         </Stack>
         <IconButton size="small" onClick={handleClose} aria-label={t('action.close', { defaultValue: 'Close' })}>
@@ -228,9 +228,9 @@ export function UpgradeDialog() {
                 sx={{
                   py: 1.25,
                   fontWeight: 700,
-                  background: 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)',
+                  background: 'linear-gradient(135deg, #60A5FA 0%, #38BDF8 100%)',
                   '&:hover': {
-                    background: 'linear-gradient(135deg, #5B54E0 0%, #29B6F6 100%)',
+                    background: 'linear-gradient(135deg, #1D4ED8 0%, #0EA5E9 100%)',
                   },
                 }}
               >
@@ -250,9 +250,9 @@ export function UpgradeDialog() {
                 sx={{
                   py: 1.25,
                   fontWeight: 700,
-                  background: 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)',
+                  background: 'linear-gradient(135deg, #60A5FA 0%, #38BDF8 100%)',
                   '&:hover': {
-                    background: 'linear-gradient(135deg, #5B54E0 0%, #29B6F6 100%)',
+                    background: 'linear-gradient(135deg, #1D4ED8 0%, #0EA5E9 100%)',
                   },
                 }}
               >

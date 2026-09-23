@@ -2,26 +2,35 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 const openWindows = new Map<string, WebviewWindow>();
 
-export async function openCategoryNotesWindow(groupId: string, categoryName: string): Promise<WebviewWindow | null> {
-  const key = `category-notes-${groupId}-${categoryName || 'all'}`;
+export interface OpenSiteOpsOptions {
+  siteId: string;
+  siteName?: string;
+  connectionId: string;
+  /** 初始打开的 Tab，默认 env（环境检测） */
+  tab?: 'env' | 'deploy' | 'scripts' | 'tasks' | 'history';
+}
 
-  const existing = await WebviewWindow.getByLabel(key);
-  if (existing) {
-    await existing.setFocus();
-    return existing;
-  }
+export async function openSiteOpsWindow(opts: OpenSiteOpsOptions): Promise<WebviewWindow | null> {
+  const key = `site-ops-${opts.siteId}`;
 
-  const title = categoryName
-    ? `${categoryName} — Notes`
-    : 'All Notes';
+  const existing = await reuseOrRecreate(key);
+  if (existing) return existing;
+
+  const params = new URLSearchParams();
+  params.set('siteId', opts.siteId);
+  params.set('connectionId', opts.connectionId);
+  if (opts.siteName) params.set('siteName', opts.siteName);
+  if (opts.tab) params.set('tab', opts.tab);
+
+  const title = opts.siteName ? `${opts.siteName} · 运维中心` : '运维中心';
 
   const webview = new WebviewWindow(key, {
-    url: `/#/category-notes?groupId=${encodeURIComponent(groupId)}&category=${encodeURIComponent(categoryName)}`,
+    url: `/#/site-ops?${params.toString()}`,
     title,
-    width: 1000,
-    height: 700,
-    minWidth: 600,
-    minHeight: 400,
+    width: 1100,
+    height: 750,
+    minWidth: 720,
+    minHeight: 500,
     center: true,
     resizable: true,
     decorations: true,
@@ -35,7 +44,7 @@ export async function openCategoryNotesWindow(groupId: string, categoryName: str
   });
 
   webview.once('tauri://error', (e) => {
-    console.error('[window] failed to create category notes window:', e);
+    console.error('[window] failed to create site ops window:', e);
     openWindows.delete(key);
   });
 
@@ -62,6 +71,15 @@ interface SshWindowParams {
  * "does nothing" — no new window, no error. So: if the window can't be focused
  * or isn't visible, destroy it and let the caller create a fresh one.
  */
+/**
+ * 给预览 URL 追加时间戳查询参数，绕过 WebView/HTTP 缓存，
+ * 确保复用时加载的是最新生成的 preview.html 而非旧缓存。
+ */
+function refreshUrl(url: string): string {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}v=${Date.now()}`;
+}
+
 async function reuseOrRecreate(key: string): Promise<WebviewWindow | null> {
   try {
     const existing = await WebviewWindow.getByLabel(key);
@@ -175,142 +193,51 @@ export async function openSftpWindow(
   return webview;
 }
 
-export async function openNoteEditorWindow(noteId: string, title?: string): Promise<WebviewWindow | null> {
-  const key = `note-editor-${noteId}`;
-
-  const existing = await WebviewWindow.getByLabel(key);
-  if (existing) {
-    await existing.setFocus();
-    return existing;
-  }
-
-  const webview = new WebviewWindow(key, {
-    url: `/#/category-notes?noteId=${encodeURIComponent(noteId)}`,
-    title: title || 'Note Editor',
-    width: 1000,
-    height: 700,
-    minWidth: 600,
-    minHeight: 400,
-    center: true,
-    resizable: true,
-    decorations: true,
-    focus: true,
-  });
-
-  openWindows.set(key, webview);
-
-  webview.once('tauri://destroyed', () => {
-    openWindows.delete(key);
-  });
-
-  webview.once('tauri://error', (e) => {
-    console.error('[window] failed to create note editor window:', e);
-    openWindows.delete(key);
-  });
-
-  return webview;
-}
-
-export async function openAllNotesWindow(): Promise<WebviewWindow | null> {
-  const key = 'category-notes-all';
-
-  const existing = await WebviewWindow.getByLabel(key);
-  if (existing) {
-    await existing.setFocus();
-    return existing;
-  }
-
-  const webview = new WebviewWindow(key, {
-    url: '/#/category-notes',
-    title: 'All Notes',
-    width: 1000,
-    height: 700,
-    minWidth: 600,
-    minHeight: 400,
-    center: true,
-    resizable: true,
-    decorations: true,
-    focus: true,
-  });
-
-  openWindows.set(key, webview);
-
-  webview.once('tauri://destroyed', () => {
-    openWindows.delete(key);
-  });
-
-  webview.once('tauri://error', (e) => {
-    console.error('[window] failed to create all notes window:', e);
-    openWindows.delete(key);
-  });
-
-  return webview;
-}
-
-export async function openNotesReferenceWindow(): Promise<WebviewWindow | null> {
-  const key = 'notes-ref';
-
-  const existing = await WebviewWindow.getByLabel(key);
-  if (existing) {
-    await existing.setFocus();
-    return existing;
-  }
-
-  const webview = new WebviewWindow(key, {
-    url: '/#/notes-reference',
-    title: 'Notes Reference',
-    width: 1000,
-    height: 700,
-    minWidth: 600,
-    minHeight: 400,
-    center: true,
-    resizable: true,
-    decorations: true,
-    focus: true,
-  });
-
-  openWindows.set(key, webview);
-
-  webview.once('tauri://destroyed', () => {
-    openWindows.delete(key);
-  });
-
-  webview.once('tauri://error', (e) => {
-    console.error('[window] failed to create notes reference window:', e);
-    openWindows.delete(key);
-  });
-
-  return webview;
-}
-
 export interface OpenAiCopilotOptions {
   /// 绑定到指定 Agent（如远程桌面安装助手），不传则沿用用户已绑定的 copilot Agent。
   agentId?: string;
-  /// 场景：'rd'（远程桌面安装，默认）| 'srvEnv'（站点服务器环境安装）。
+  /// 场景：'rd'（远程桌面安装）| 'srvEnv'（站点服务器环境安装）| 'ops'（运维助手）| 'envFix'（环境修复）。
   /// 决定窗口 label 与 AiCopilotPage 组装的会话 metadata 类型。
-  scene?: 'rd' | 'srvEnv';
+  scene?: 'rd' | 'srvEnv' | 'ops' | 'envFix';
   /// 设置指南携带的上下文，写入窗口 URL，供 AiCopilotPage 解析。
   sessionId?: string;
   host?: string;
   username?: string;
   /// 远程桌面安装模式：headless（无桌面版）/ basic（基础桌面版）/ full（全量安装）。
   installMode?: string;
-  /// srvEnv 场景：站点名与部署远程路径。
+  /// srvEnv / ops / envFix 场景：站点名与部署远程路径。
   siteName?: string;
   remotePath?: string;
+  /// envFix 场景：站点域名。
+  domain?: string;
+  /// envFix 场景：环境检测报告 JSON 字符串。
+  checkReport?: string;
 }
 
 export async function openAiCopilotWindow(opts?: OpenAiCopilotOptions): Promise<WebviewWindow | null> {
-  // 带上下文的助手（远程桌面 / 服务器环境安装）必须是独立窗口，
+  // 带上下文的助手（远程桌面 / 服务器环境安装 / 运维）必须是独立窗口，
   // 否则会与普通 AI 对话共用 `ai-copilot` label，导致普通对话复用其窗口、
   // 继承安装上下文并误触发安装指令。
   const hasContext = !!(opts?.agentId || opts?.sessionId || opts?.host || opts?.username);
   const key = opts?.scene === 'srvEnv'
     ? 'ai-copilot-srv-env'
-    : hasContext ? 'ai-copilot-rd-setup' : 'ai-copilot';
+    : opts?.scene === 'ops'
+      ? 'ai-copilot-ops'
+      : opts?.scene === 'envFix'
+        ? 'ai-copilot-env-fix'
+        : hasContext ? 'ai-copilot-rd-setup' : 'ai-copilot';
 
   const existing = await WebviewWindow.getByLabel(key);
   if (existing) {
+    // 窗口已存在时通过事件推送最新上下文，前端收到后刷新 metadata。
+    // 避免 URL 中 session_id 过期导致 Agent 拿不到有效终端会话。
+    if (opts) {
+      try {
+        await existing.emit('ai-copilot:context-update', opts);
+      } catch (e) {
+        console.warn('[window] failed to emit context-update to copilot window:', e);
+      }
+    }
     await existing.setFocus();
     return existing;
   }
@@ -325,6 +252,8 @@ export async function openAiCopilotWindow(opts?: OpenAiCopilotOptions): Promise<
   if (opts?.installMode) params.set('installMode', opts.installMode);
   if (opts?.siteName) params.set('siteName', opts.siteName);
   if (opts?.remotePath) params.set('remotePath', opts.remotePath);
+  if (opts?.domain) params.set('domain', opts.domain);
+  if (opts?.checkReport) params.set('checkReport', opts.checkReport);
   const query = params.toString();
   const url = query ? `/#/ai-copilot?${query}` : '/#/ai-copilot';
 
@@ -349,6 +278,119 @@ export async function openAiCopilotWindow(opts?: OpenAiCopilotOptions): Promise<
 
   webview.once('tauri://error', (e) => {
     console.error('[window] failed to create ai copilot window:', e);
+    openWindows.delete(key);
+  });
+
+  return webview;
+}
+
+export interface OpenAiEditorOptions {
+  sceneId: string;
+  sceneName?: string;
+}
+
+export async function openAiEditorWindow(opts: OpenAiEditorOptions): Promise<WebviewWindow | null> {
+  const key = `ai-editor-${opts.sceneId}`;
+
+  const existing = await reuseOrRecreate(key);
+  if (existing) return existing;
+
+  const params = new URLSearchParams();
+  params.set('sceneId', opts.sceneId);
+  if (opts.sceneName) params.set('sceneName', opts.sceneName);
+
+  const title = opts.sceneName ? `AI 编辑器 — ${opts.sceneName}` : 'AI 编辑器';
+
+  const webview = new WebviewWindow(key, {
+    url: `/#/ai-editor?${params.toString()}`,
+    title,
+    width: 1280,
+    height: 820,
+    minWidth: 800,
+    minHeight: 600,
+    center: true,
+    resizable: true,
+    decorations: true,
+    focus: true,
+  });
+
+  openWindows.set(key, webview);
+
+  webview.once('tauri://destroyed', () => {
+    openWindows.delete(key);
+  });
+
+  webview.once('tauri://error', (e) => {
+    console.error('[window] failed to create ai editor window:', e);
+    openWindows.delete(key);
+  });
+
+  return webview;
+}
+
+export interface OpenPreviewWindowOptions {
+  /** 预览 URL（本地 HTTP 服务器地址） */
+  url: string;
+  /** 网站名称，用于窗口标题 */
+  sceneName?: string;
+  /** 画布宽度，用于窗口默认宽度 */
+  width?: number;
+  /** 画布高度，用于窗口默认高度 */
+  height?: number;
+}
+
+/**
+ * 打开网站预览窗口 — 弹出一个完整的独立应用窗口显示渲染后的网站。
+ *
+ * 与其他窗口不同：预览窗口加载的是本地 HTTP 服务器 URL（http://127.0.0.1:port），
+ * 而非应用内路由。窗口尺寸基于画布大小，可自由缩放。
+ */
+export async function openPreviewWindow(opts: OpenPreviewWindowOptions): Promise<WebviewWindow | null> {
+  // 用 sceneName 做安全的 label，去掉 URL 中的特殊字符避免 Tauri label 解析问题
+  const safeName = (opts.sceneName ?? 'window').replace(/[^a-zA-Z0-9_-]/g, '-');
+  const key = `preview-${safeName}`;
+
+  // 加版本号查询参数，强制 WebView/HTTP 缓存失效，确保每次都加载最新生成的 preview.html
+  const url = refreshUrl(opts.url);
+
+  const existing = await reuseOrRecreate(key);
+  if (existing) {
+    // 窗口复用时：仅置前而不重新加载会导致停留在旧的 preview.html 上，
+    // 即使 codegen 已修复仍不断看到旧产物错误。这里强制导航到最新 URL。
+    await existing.setFocus();
+    try {
+      await (existing as WebviewWindow & { navigate?: (u: string) => Promise<void> }).navigate?.(url);
+    } catch {
+      // 忽略导航失败
+    }
+    return existing;
+  }
+
+  const w = Math.min(opts.width ?? 1920, 1920);
+  const h = Math.min(opts.height ?? 1080, 1080);
+  const title = opts.sceneName ? `预览 — ${opts.sceneName}` : '网站预览';
+
+  const webview = new WebviewWindow(key, {
+    url,
+    title,
+    width: w,
+    height: h,
+    minWidth: 320,
+    minHeight: 240,
+    center: true,
+    resizable: true,
+    decorations: true,
+    focus: true,
+  });
+
+  openWindows.set(key, webview);
+
+  webview.once('tauri://destroyed', () => {
+    openWindows.delete(key);
+  });
+
+  webview.once('tauri://error', (e) => {
+    console.error('[window] failed to create preview window:', e);
     openWindows.delete(key);
   });
 

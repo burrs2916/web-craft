@@ -49,10 +49,6 @@ const RULES: BackendErrorRule[] = [
   { re: /^✓ SSH 密钥认证成功/, key: 'connection.ssh_key_auth_success' },
   { re: /^✓ SSH 密码认证成功/, key: 'connection.ssh_password_auth_success' },
 
-  // --- notebook (src-tauri/src/app/notebook_service.rs) --- reuses existing key
-  { re: /^默认分组/, key: 'group.delete_protected', ns: 'notebook' },
-  { re: /^目标分组不存在/, key: 'group.target_not_found', ns: 'notebook' },
-
   // --- crypto (src-tauri/src/infra/security/crypto.rs) ---
   { re: /^crypto 未初始化，无法加密/, key: 'crypto_not_init_encrypt' },
   { re: /^crypto 未初始化，无法解密/, key: 'crypto_not_init_decrypt' },
@@ -113,15 +109,6 @@ const EN_RULES: BackendErrorRule[] = [
   { re: /^Unexpected purchase status:/, key: 'store_unexpected_status' },
   { re: /^User cancelled the purchase/, key: 'store_user_cancelled' },
   { re: /^HRESULT 0x/, key: 'store_api_error' },
-
-  // --- notebook not-found (src-tauri/src/app/notebook_service.rs) ---
-  { re: /^Note not found/, key: 'note_not_found' },
-  { re: /^Group not found/, key: 'group_not_found' },
-  { re: /^Tag not found/, key: 'tag_not_found' },
-  { re: /^Category not found/, key: 'category_not_found' },
-  // 重命名冲突：源串含 {} 插值（Tag name 'xxx' already exists in this group）
-  { re: /^Tag name '.*' already exists in this group/, key: 'notebook_tag_exists' },
-  { re: /^Category name '.*' already exists in this group/, key: 'notebook_category_exists' },
 
   // --- agent (src-tauri/src/app/agent_service.rs, interface/commands/agent.rs) ---
   { re: /^Agent not found/, key: 'agent_not_found' },

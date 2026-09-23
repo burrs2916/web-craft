@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import type { ProviderDto, EndpointDto, ModelDto, AgentDto, ConversationDto, MessageDto } from '../../../proto/agent';
+import type { ProviderDto, EndpointDto, ModelDto, AgentDto, ConversationDto, MessageDto, OllamaModelInfo, OllamaStatusDto } from '../../../proto/agent';
 import * as agentService from '../../../core/services/agent.service';
 import { localizeBackendError } from '../../../core/backendError';
 
 // 空 toolIds 表示「全部工具」。前端统一规范化为全部内置工具名，
 // 保证各处 `agent.toolIds.includes(...)` 判断在「全部」语义下正确（文件附件、插件 tab、笔记等）。
-const ALL_AGENT_TOOLS = ['terminal', 'notebook', 'file', 'command_history', 'terminal_session', 'plugin_manager', 'memory'];
+const ALL_AGENT_TOOLS = ['terminal', 'file', 'command_history', 'terminal_session', 'plugin_manager', 'memory'];
 
 function genId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -36,6 +36,8 @@ interface AgentState {
   deleteModel: (id: string) => Promise<void>;
   testEndpointConnection: (endpointId: string) => Promise<string>;
   testModelChat: (modelId: string) => Promise<string>;
+  scanOllamaModels: (baseUrl: string) => Promise<OllamaModelInfo[]>;
+  checkOllamaStatus: (baseUrl: string, modelName?: string) => Promise<OllamaStatusDto>;
   loadAgents: () => Promise<void>;
   saveAgent: (agent: AgentDto) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
@@ -158,6 +160,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       await get().loadModels();
     } catch (e) {
       set({ error: localizeBackendError(e) });
+      throw e;
     }
   },
 
@@ -184,6 +187,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     } catch (e) {
       throw e;
     }
+  },
+
+  scanOllamaModels: async (baseUrl: string) => {
+    return await agentService.scanOllamaModels(baseUrl);
+  },
+
+  checkOllamaStatus: async (baseUrl: string, modelName?: string) => {
+    return await agentService.checkOllamaStatus(baseUrl, modelName);
   },
 
   loadAgents: async () => {

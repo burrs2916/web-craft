@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "Biosphere Terminal",
-    "version": "0.1.0",
+    "name": "WebCraft",
+    "version": "0.6.2",
     "lang_en": "EN",
     "lang_zh": "中文"
   },
@@ -9,12 +9,16 @@
     "navigation": "Navigation",
     "sites": "Sites",
     "terminal": "Terminal",
-    "notebook": "Notebook",
     "commands": "Commands",
     "connections": "Connections",
     "plugins": "Plugins",
     "settings": "Settings",
-    "agent": "AI Assistant"
+    "agent": "AI Assistant",
+    "ops": "Ops Center",
+    "resources": "Resources",
+    "editor": "Editor",
+    "websites": "My Websites",
+    "published": "Published"
   },
   "action": {
     "save": "Save",
@@ -122,6 +126,8 @@
     "copy_on_select": "Copy on Select",
     "paste_on_middle_click": "Paste on Middle Click",
     "confirm_before_close": "Confirm Before Closing Tab",
+    "restore_tabs_on_startup": "Restore Terminal Tabs on Startup",
+    "restore_tabs_on_startup_desc": "Recreate the previous terminal tabs when the app restarts (password-authenticated SSH sessions are not auto-reconnected for security)",
     "foreground": "Foreground",
     "background": "Background",
     "selection_bg": "Selection Background",
@@ -151,6 +157,8 @@
     "confirm_before_close_desc": "Ask for confirmation when closing a terminal tab with a running process",
     "colors_desc": "Customize terminal color scheme",
     "data_management_desc": "Export, import, or reset your settings",
+    "global_data_sources": "Global Data Sources",
+    "data_general": "General",
     "export_desc": "Download your current settings as a JSON file",
     "reset_desc": "Restore all settings to their original default values",
     "behavior": "Behavior",
@@ -162,16 +170,22 @@
     "bell_visual": "Visual",
     "bell_sound": "Sound"
   },
+  "icon": {
+    "search": "Search icons...",
+    "no_icons": "No icons found",
+    "upload": "Upload icon",
+    "no_custom": "No custom icons"
+  },
   "license": {
     "header": {
       "trialDaysLeft": "Trial · {{count}}d",
       "upgrade": "Upgrade"
     },
     "upgrade": {
-      "title": "Biosphere Pro",
+      "title": "WebCraft Pro",
       "headlineTrial": "Your trial ends in {{trialDaysLeft}} day(s). Unlock Pro to keep everything.",
       "headlineExpired": "Your trial has ended. Upgrade to Pro to continue.",
-      "headlineDefault": "Unlock Biosphere Pro",
+      "headlineDefault": "Unlock WebCraft Pro",
       "subheadlineFeature": "Pro is required for: {{feature}}",
       "subheadlineDefault": "One-time purchase. Lifetime access. No subscription.",
       "featuresLabel": "Everything in Pro",
@@ -186,5 +200,45 @@
       "viewOnStore": "View on Microsoft Store",
       "disclaimer": "Lifetime license is tied to your Microsoft account. Reinstalling on the same account restores Pro automatically."
     }
+  },
+  "resourceCenter": {
+    "title": "Unified Resource Center",
+    "subtitle": "Connections, sites, deployments, terminals and automations are unified as inter-linkable resources forming the whole of WebCraft. Click any resource to inspect its links and jump to it.",
+    "reconcile": "Reconcile Resources",
+    "reconciling": "Rebuilding unified resource graph…",
+    "reconcileDone": "Reconciled: connections {{connections}} · sites {{sites}} · deployments {{deployments}} · terminals {{terminals}} · automations {{automations}}",
+    "reconcileTip": "Pull existing data into the unified resource graph and rebuild links (idempotent).",
+    "kindAll": "All",
+    "kindConnection": "Connection",
+    "kindSite": "Site",
+    "kindDeployment": "Deployment",
+    "kindTerminal": "Terminal",
+    "kindAutomation": "Automation",
+    "summary": "Overview",
+    "empty": "No resources yet. Click \"Reconcile Resources\" to pull existing data in.",
+    "loading": "Loading…",
+    "linksTitle": "Linked Resources",
+    "noLinks": "This resource has no links.",
+    "outgoing": "outgoing",
+    "incoming": "incoming",
+    "relation_runs_on": "runs on",
+    "relation_deploys_to": "deploys to",
+    "relation_opens": "opens",
+    "relation_connects_to": "connects to",
+    "relation_uses": "uses",
+    "relation_belongs_to": "belongs to",
+    "relation_links": "links",
+    "open": "Open",
+    "metaDomain": "Domain",
+    "metaHost": "Host",
+    "metaStatus": "Status",
+    "metaConnection": "Connection",
+    "metaSite": "Site",
+    "metaMode": "Mode",
+    "metaTargetEnv": "Target",
+    "metaVersion": "Version",
+    "metaDbType": "Database",
+    "metaEnabled": "Enabled",
+    "metaServer": "Server terminal"
   }
 }

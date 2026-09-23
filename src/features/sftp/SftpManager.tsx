@@ -19,6 +19,7 @@ import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
+import { brand } from '../../theme/brand';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import {
   ArrowClockwiseIcon,
@@ -332,7 +333,7 @@ export function SftpManager({ ssh }: SftpManagerProps) {
     [s],
   );
 
-  const subtle = isDark ? '#8B949E' : '#6B7280';
+  const subtle = isDark ? '#8FA3B0' : '#5A6B64';
   const textColor = isDark ? '#C9D1D9' : '#24292F';
   const border = isDark ? 'rgba(240,246,252,0.12)' : 'rgba(27,31,36,0.12)';
   const target = `${ssh.username}@${ssh.host}:${ssh.port}`;
@@ -370,7 +371,7 @@ export function SftpManager({ ssh }: SftpManagerProps) {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        bgcolor: isDark ? '#0d1117' : '#f6f8fa',
+        bgcolor: isDark ? brand.dark.background : '#f6f8fa',
         // While the splitter is held, the whole surface adopts the resize
         // cursor so the pointer never "escapes" the 5px handle.
         ...(resizing ? { cursor: 'col-resize', userSelect: 'none' } : null),
@@ -1066,7 +1067,7 @@ function EmptyState({
       }}
     >
       {icon}
-      <Typography sx={{ color: isDark ? '#8B949E' : '#6B7280', fontSize: 13 }}>{title}</Typography>
+      <Typography sx={{ color: isDark ? '#8FA3B0' : '#5A6B64', fontSize: 13 }}>{title}</Typography>
       <Button size="small" variant="outlined" onClick={onAction} sx={{ textTransform: 'none' }}>
         {actionLabel}
       </Button>

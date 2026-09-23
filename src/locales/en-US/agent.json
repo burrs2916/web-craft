@@ -59,7 +59,6 @@
     "cancel": "Cancel",
     "delete": "Delete",
     "tool_terminal": "Terminal",
-    "tool_notebook": "Notebook",
     "tool_file": "File",
     "tool_command_history": "Command History",
     "tool_terminal_session": "Terminal Session",
@@ -79,7 +78,7 @@
     "plugin_tools_label": "Plugin Tools",
     "workspace_dir": "Workspace Directory",
     "workspace_dir_placeholder": "Leave empty for default path",
-    "workspace_dir_helper": "Directory for AI output files. Defaults to Documents/BiosphereTerminal/agents/{id}",
+    "workspace_dir_helper": "Directory for AI output files. Defaults to Documents/WebCraft/agents/{id}",
     "select_workspace_dir": "Select Workspace Directory",
     "allowed_tools_label": "Always Allowed Tools",
     "allowed_tools_desc": "Click a tool to mark it always allowed (no per-action confirmation); click again to undo.",
@@ -105,6 +104,22 @@
     "delete_confirm_title": "Delete Conversation",
     "delete_confirm_message": "Are you sure you want to delete this conversation? All messages will be permanently lost.",
     "message_save_failed": "Failed to save message"
+  },
+  "repair": {
+    "title": "Repair Progress",
+    "steps": "steps",
+    "all_success": "All Succeeded",
+    "completed_with_failures": "Some Failed",
+    "some_failed_note": "Some repair steps failed. Click to expand and view failure reasons and attempt history.",
+    "status_success": "Success",
+    "status_failed": "Failed",
+    "status_running": "Running",
+    "status_skipped": "Skipped",
+    "status_pending": "Pending",
+    "requires_sudo": "Requires sudo",
+    "no_description": "No description",
+    "attempt_history": "Attempt History",
+    "attempt": "Attempt"
   },
   "config": {
     "label": "Configuration",
@@ -183,6 +198,17 @@
     "google": "Google",
     "ollama": "Ollama (Local)"
   },
+  "ollama": {
+    "scan_title": "Local Model Detection",
+    "scan_button": "Scan Local Models",
+    "scanning": "Scanning...",
+    "found_models": "{{count}} models found",
+    "select_all": "Select All",
+    "deselect_all": "Deselect All",
+    "import_selected": "Import {{count}} selected",
+    "importing": "Importing...",
+    "save_first": "Please save the endpoint first before importing models"
+  },
   "dialog": {
     "cancel": "Cancel",
     "save": "Save",
@@ -202,20 +228,6 @@
   "assistant": {
     "start_chat": "Start Chat",
     "enable_tool": "Enable Tool"
-  },
-  "note_assistant": {
-    "label": "Note Assistant",
-    "title": "Note Assistant",
-    "description": "Select an AI agent to maintain and optimize your notes. The agent will be able to read, organize, and improve note content.",
-    "select_agent": "Select a note assistant agent...",
-    "has_notebook_tool": "Notebook tool enabled",
-    "has_notebook_tool_desc": "This agent can read and modify notes directly. Click the AI optimize button in the note editor to use it.",
-    "no_notebook_tool": "Notebook tool not enabled",
-    "no_notebook_tool_desc": "This agent does not have the Notebook tool. Please enable it in Agent Manager for full note management capabilities.",
-    "how_to_use": "How to use",
-    "step1": "1. Select an agent above (make sure it has the Notebook tool enabled)",
-    "step2": "2. Open a note in the Notebook panel",
-    "step3": "3. Click the ✨ AI Optimize button in the editor toolbar to auto-optimize the note"
   },
   "plugin_assistant": {
     "label": "Plugin Assistant",
@@ -328,6 +340,19 @@
     "srv_already_ready": "Deploy environment is ready (nginx running). You can deploy the site now.",
     "srv_consent_message": "The user has confirmed: please install and configure the deploy environment (nginx + systemd auto-start + firewall rules for 80/443; follow the standard flow; sudo passwords are auto-filled).",
     "srv_decline_message": "OK, skip installation. Tell me when you want the deploy environment prepared.",
+    "ops_empty_hint": "Ops assistant is ready. It can help check service status, analyze logs, and troubleshoot issues. Try \"check nginx status\" or \"view recent error logs\"",
+    "ops_input_placeholder": "Ask the ops assistant, e.g. \"check server environment\", \"restart nginx\", \"analyze access logs\"...",
+    "env_fix_start_message": "Please analyze the environment check report, list the issues that need fixing and the repair plan.",
+    "env_fix_need_fix_title": "Environment issues detected that need fixing",
+    "env_fix_confirm_desc": "Let the AI assistant automatically fix environment issues? This will modify remote server config and requires sudo privileges.",
+    "env_fix_decline": "Not now",
+    "env_fix_agree": "Agree, start fixing",
+    "env_fix_all_good": "Environment check passed — no fixes needed.",
+    "env_fix_done": "Environment fix completed. We recommend returning to the env check page and re-running the check to confirm.",
+    "env_fix_consent_message": "User confirmed: please start fixing environment issues, fix one by one in priority order. Sudo passwords will be auto-filled. After all fixes, verify all service statuses.",
+    "env_fix_decline_message": "OK, skip for now. Let me know when you want to fix the environment.",
+    "env_fix_empty_hint": "Environment fix assistant is ready. It can automatically fix environment issues based on the check report.",
+    "env_fix_input_placeholder": "Ask the env fix assistant, e.g. \"fix all issues\", \"check SSL certificate\"...",
     "thinking": "Thinking...",
     "new_chat": "New Chat",
     "attachment_prefix": "[Attachment: {{path}}]",

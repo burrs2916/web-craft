@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
 import { useSettingsStore } from '../../engine';
 import { useLicenseStore, useUpgradeDialogStore } from '../../features/licensing';
+import { brand } from '../../theme/brand';
 import logo from '../../assets/logo.svg?url';
 
 export function Header() {
@@ -44,9 +45,9 @@ export function Header() {
             height: 24,
             fontSize: 11,
             fontWeight: 700,
-            background: 'linear-gradient(135deg, #FFD740 0%, #FFA726 100%)',
-            color: '#1A1A2E',
-            '& .MuiChip-icon': { color: '#1A1A2E', ml: '6px' },
+            background: 'linear-gradient(135deg, #FBBF24 0%, #FFA726 100%)',
+            color: '#0E241D',
+            '& .MuiChip-icon': { color: '#0E241D', ml: '6px' },
           }}
         />
       );
@@ -64,8 +65,8 @@ export function Header() {
             fontSize: 11,
             fontWeight: 700,
             color: '#fff',
-            background: 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)',
-            '&:hover': { background: 'linear-gradient(135deg, #5B54E0 0%, #29B6F6 100%)' },
+            background: brand.gradient,
+            '&:hover': { background: brand.gradientHover },
           }}
         >
           {t('license.header.trialDaysLeft', {
@@ -88,8 +89,8 @@ export function Header() {
           fontSize: 11,
           fontWeight: 700,
           color: '#fff',
-          background: 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)',
-          '&:hover': { background: 'linear-gradient(135deg, #5B54E0 0%, #29B6F6 100%)' },
+          background: 'linear-gradient(135deg, #60A5FA 0%, #38BDF8 100%)',
+          '&:hover': { background: 'linear-gradient(135deg, #1D4ED8 0%, #0EA5E9 100%)' },
         }}
       >
         {t('license.header.upgrade', { defaultValue: 'Upgrade' })}
@@ -104,12 +105,13 @@ export function Header() {
           <Box
             component="img"
             src={logo}
-            alt="Biosphere Terminal"
+            alt="WebCraft"
             sx={{
               width: 24,
               height: 24,
               borderRadius: '6px',
               objectFit: 'contain',
+              filter: isDark ? 'drop-shadow(0 0 6px rgba(45,212,191,0.35))' : 'none',
             }}
           />
           <Typography variant="h6" noWrap component="div" sx={{ fontSize: 15 }}>
@@ -135,6 +137,18 @@ export function Header() {
           {currentLang === 'zh-CN' ? `🌐 ${t('app.lang_en')}` : `🌐 ${t('app.lang_zh')}`}
         </Button>
       </Toolbar>
+      {/* 品牌渐变分隔线：松石青 → 天蓝，呼应 Logo 与业务闭环 */}
+      <Box
+        sx={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 2,
+          background: 'linear-gradient(90deg, #60A5FA 0%, #38BDF8 55%, #FBBF24 100%)',
+          opacity: isDark ? 0.55 : 0.7,
+        }}
+      />
     </AppBar>
   );
 }

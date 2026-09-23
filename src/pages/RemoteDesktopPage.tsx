@@ -29,6 +29,7 @@ import { listen } from '@tauri-apps/api/event';
 import { useTheme } from '@mui/material/styles';
 import { useSearchParams } from 'react-router-dom';
 import { VncViewer } from '../features/terminal/components/VncViewer';
+import { brand } from '../theme/brand';
 import { createRemoteDesktop, closeRemoteDesktop, setupRemoteDesktop, type RemoteDesktopSession } from '../core/services/remote-desktop.service';
 import type { SshConnectionInfo } from '../proto/connection';
 import { spawnTerminal, killTerminal } from '../core/services/terminal.service';
@@ -96,10 +97,10 @@ export function RemoteDesktopPage() {
   const sshRef = useRef<SshConnectionInfo | null>(null);
   const x11TerminalIdRef = useRef<string | null>(null);
 
-  const bgColor = isDark ? '#0d1117' : '#f5f5f5';
-  const cardBg = isDark ? '#161B22' : '#ffffff';
-  const textColor = isDark ? '#c9d1d9' : '#24292f';
-  const accentColor = '#6C63FF';
+  const bgColor = isDark ? brand.dark.background : brand.light.background;
+  const cardBg = isDark ? brand.dark.paper : brand.light.paper;
+  const textColor = isDark ? brand.dark.text : brand.light.text;
+  const accentColor = brand.blue400;
 
   const getSshConfig = useCallback((): SshConnectionInfo => ({
     host,
@@ -353,7 +354,7 @@ export function RemoteDesktopPage() {
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: bgColor }}>
-      <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 1, borderBottom: '1px solid', borderColor: 'divider', bgcolor: isDark ? '#161B22' : '#f0f0f0' }}>
+      <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 1, borderBottom: '1px solid', borderColor: 'divider', bgcolor: isDark ? '#111A28' : '#F4FAF7' }}>
         <MonitorIcon size={20} weight="duotone" color={accentColor} />
         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: textColor }}>
           {t('remote_desktop')}
@@ -401,7 +402,7 @@ export function RemoteDesktopPage() {
                   p: 1.5,
                   borderColor: accentColor,
                   borderWidth: 2,
-                  bgcolor: isDark ? 'rgba(108,99,255,0.06)' : 'rgba(108,99,255,0.04)',
+                  bgcolor: isDark ? 'rgba(45,212,191,0.06)' : 'rgba(45,212,191,0.04)',
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
@@ -431,7 +432,7 @@ export function RemoteDesktopPage() {
                       sx={{
                         color: accentColor,
                         borderColor: accentColor,
-                        '&:hover': { borderColor: '#5A52E0', bgcolor: 'rgba(108,99,255,0.08)' },
+                        '&:hover': { borderColor: '#1D4ED8', bgcolor: 'rgba(45,212,191,0.08)' },
                         textTransform: 'none',
                         fontWeight: 600,
                         fontSize: 12,
@@ -570,7 +571,7 @@ export function RemoteDesktopPage() {
                 sx={{
                   p: 1.5,
                   borderColor: accentColor,
-                  bgcolor: isDark ? 'rgba(108,99,255,0.05)' : 'rgba(108,99,255,0.03)',
+                  bgcolor: isDark ? 'rgba(45,212,191,0.05)' : 'rgba(45,212,191,0.03)',
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
@@ -614,7 +615,7 @@ export function RemoteDesktopPage() {
                     onClick={handleOpenAiAssistant}
                     sx={{
                       bgcolor: accentColor,
-                      '&:hover': { bgcolor: '#5A52E0' },
+                      '&:hover': { bgcolor: '#1D4ED8' },
                       textTransform: 'none',
                       fontWeight: 600,
                       fontSize: 12,
@@ -682,7 +683,7 @@ export function RemoteDesktopPage() {
                 </ToggleButton>
               </ToggleButtonGroup>
 
-              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: isDark ? 'rgba(108,99,255,0.06)' : 'rgba(108,99,255,0.04)', borderColor: `${accentColor}30` }}>
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: isDark ? 'rgba(45,212,191,0.06)' : 'rgba(45,212,191,0.04)', borderColor: `${accentColor}30` }}>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                   <InfoIcon size={14} color={accentColor} />
                   <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
@@ -806,7 +807,7 @@ export function RemoteDesktopPage() {
                 sx={{
                   mt: 1,
                   bgcolor: accentColor,
-                  '&:hover': { bgcolor: '#5A52E0' },
+                  '&:hover': { bgcolor: '#1D4ED8' },
                   textTransform: 'none',
                   fontWeight: 600,
                 }}

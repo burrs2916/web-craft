@@ -10,6 +10,8 @@ export interface AppSettings {
   language: 'zh-CN' | 'en-US';
   showStatusBar: boolean;
   confirmBeforeClose: boolean;
+  /** 应用启动时自动恢复上次的终端标签（仅本地与私钥/无密码 SSH；密码会话不落盘、不自动重建） */
+  restoreTabsOnStartup: boolean;
 
   appearance: AppearanceConfig;
   bellStyle: BellStyle;
@@ -26,16 +28,16 @@ export const DARK_APPEARANCE: AppearanceConfig = {
   lineHeight: 1.2,
   cursorStyle: 'block',
   cursorBlink: true,
-  cursorColor: '#6C63FF',
-  foreground: '#E6EDF3',
-  background: '#0D1117',
-  selectionForeground: '#E6EDF3',
-  selectionBackground: 'rgba(108, 99, 255, 0.3)',
+  cursorColor: '#60A5FA',
+  foreground: '#E8F1EC',
+  background: '#0A0F1A',
+  selectionForeground: '#E8F1EC',
+  selectionBackground: 'rgba(45, 212, 191, 0.3)',
   colors: [
-    '#0D1117', '#FF7B72', '#00E676', '#FFD740',
-    '#4FC3F7', '#CE93D8', '#4DD0E1', '#E6EDF3',
-    '#8B949E', '#FF8A80', '#69F0AE', '#FFE57F',
-    '#80D8FF', '#EA80FC', '#84FFFF', '#FFFFFF',
+    '#0A0F1A', '#FF7B72', '#34D399', '#FBBF24',
+    '#38BDF8', '#CE93D8', '#38BDF8', '#E8F1EC',
+    '#8FA3B0', '#FF8A80', '#93C5FD', '#FFE57F',
+    '#7DD3FC', '#EA80FC', '#67E8F9', '#FFFFFF',
   ],
 };
 
@@ -45,16 +47,16 @@ export const LIGHT_APPEARANCE: AppearanceConfig = {
   lineHeight: 1.2,
   cursorStyle: 'block',
   cursorBlink: true,
-  cursorColor: '#5B54E0',
-  foreground: '#1A1A2E',
+  cursorColor: '#1D4ED8',
+  foreground: '#0E241D',
   background: '#FFFFFF',
   selectionForeground: '#FFFFFF',
-  selectionBackground: 'rgba(91, 84, 224, 0.25)',
+  selectionBackground: 'rgba(15, 118, 110, 0.25)',
   colors: [
-    '#1A1A2E', '#D32F2F', '#2E7D32', '#E65100',
-    '#1565C0', '#7B1FA2', '#00838F', '#424242',
-    '#9E9E9E', '#EF5350', '#66BB6A', '#FFA726',
-    '#42A5F5', '#AB47BC', '#26C6DA', '#FAFAFA',
+    '#0E241D', '#DC2626', '#16A34A', '#D97706',
+    '#0284C7', '#9333EA', '#0369A1', '#374151',
+    '#5A6B64', '#F87171', '#22C55E', '#F59E0B',
+    '#38BDF8', '#A855F7', '#38BDF8', '#FFFFFF',
   ],
 };
 
@@ -65,6 +67,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   language: 'zh-CN',
   showStatusBar: true,
   confirmBeforeClose: true,
+  restoreTabsOnStartup: true,
   appearance: DEFAULT_APPEARANCE,
   bellStyle: 'none',
   webglRenderer: true,

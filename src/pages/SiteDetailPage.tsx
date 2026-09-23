@@ -1,59 +1,51 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
   Button,
   IconButton,
   CircularProgress,
-  TextField,
-  MenuItem,
   Chip,
   Tooltip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Snackbar,
   Alert,
+  LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItemButton,
+  ListItemAvatar,
+  ListItemText,
+  Avatar,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
 import {
   ArrowLeftIcon,
   PlusIcon,
-  TrashIcon,
-  ArrowCounterClockwiseIcon,
-  PaperPlaneRightIcon,
-  ArrowUUpLeftIcon,
-  PushPinIcon,
-  FileTextIcon,
   GlobeIcon,
   RocketIcon,
+  RocketLaunchIcon,
+  LinkIcon,
 } from '@phosphor-icons/react';
-import {
-  getSite,
-  listContents,
-  createContent,
-  publishContent,
-  unpublishContent,
-  deleteContent,
-  restoreContent,
-  purgeContent,
-  setContentPinned,
-} from '../core/services/cms.service';
+import { getSite } from '../core/services/cms.service';
 import { listConnections } from '../core/services/connection.service';
 import { spawnTerminal } from '../core/services/terminal.service';
 import { ensureServerEnvSetupAgent } from '../core/services/agent.service';
-import { openAiCopilotWindow } from '../core/services/window.service';
+import { openAiCopilotWindow, openSftpWindow } from '../core/services/window.service';
 import { useConnectIntent } from '../features/terminal/connectIntent';
 import { DeployDialog } from '../features/cms/DeployDialog';
 import { previewStart, previewStop } from '../core/services/cms.service';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import type { Site, Content, ContentListFilter, ContentType, ContentStatus, SshConnectionInfo, PtyConfig } from '../proto';
+import { useSceneStore } from '../store/sceneStore';
+import { publishBuildAndDeploy, publishScene, buildProject } from '../services/codegenService';
+import { logger } from '../utils/logger';
+import type { Site, SshConnectionInfo, PtyConfig } from '../proto';
 import type { ConnectionConfig } from '../proto';
+import type { SceneDSL } from '../types/scene';
 import {
   TerminalIcon,
   FolderOpenIcon as RemoteFolderIcon,
@@ -62,43 +54,33 @@ import {
   StopIcon,
 } from '@phosphor-icons/react';
 
-/// 站点详情页（FR-C1/C2/C8 的列表侧）：内容列表 + 类型/状态筛选 + 回收站。
-/// 内容编辑器（TipTap）下一步接入；本页先完成状态机操作闭环。
+/// 站点详情页：绑定已发布网站（Scene）→ 部署到远程服务器。
+/// 服务器管理（终端/SFTP/环境检测）+ 本地预览 + 网站部署（codegen 全链路）。
 export function SiteDetailPage() {
   const { siteId = '' } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation('cms');
+  const { scenes, bindSite } = useSceneStore();
 
   const [site, setSite] = useState<Site | null>(null);
-  const [contents, setContents] = useState<Content[] | null>(null);
   const [sshInfo, setSshInfo] = useState<SshConnectionInfo | null>(null);
   const [connectionName, setConnectionName] = useState<string>('');
   const [remotePath, setRemotePath] = useState<string>('');
-  const [typeFilter, setTypeFilter] = useState<'' | ContentType>('');
-  const [statusFilter, setStatusFilter] = useState<'' | ContentStatus>('');
-  const [keyword, setKeyword] = useState('');
-  const [trashView, setTrashView] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [deployOpen, setDeployOpen] = useState(false);
   /// 本地预览当前会话；非空即运行中（含地址与端口）
   const [preview, setPreview] = useState<{ baseUrl: string; port: number } | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
+  // 预览前自动构建的进度
+  const [previewBuildProgress, setPreviewBuildProgress] = useState<{ message: string; percent: number } | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const filter: ContentListFilter = {};
-      if (typeFilter) filter.type = typeFilter;
-      if (statusFilter) filter.status = statusFilter;
-      if (keyword.trim()) filter.keyword = keyword.trim();
-      if (trashView) filter.include_deleted = true;
-      setContents(await listContents(siteId, filter));
-    } catch (e) {
-      setError(String(e));
-      setContents([]);
-    }
-  }, [siteId, typeFilter, statusFilter, keyword, trashView]);
+  // 网站部署（codegen 全链路）状态
+  const [siteDeployBusy, setSiteDeployBusy] = useState(false);
+  const [siteDeployProgress, setSiteDeployProgress] = useState<{ phase: string; message: string; percent: number } | null>(null);
+  // 场景选择对话框
+  const [sceneSelectOpen, setSceneSelectOpen] = useState(false);
 
   useEffect(() => {
     getSite(siteId)
@@ -161,16 +143,19 @@ export function SiteDetailPage() {
 
   const openServerFiles = useCallback(() => {
     if (!sshInfo) return;
-    const q = new URLSearchParams({
-      host: sshInfo.host,
-      port: String(sshInfo.port),
-      username: sshInfo.username,
-      authMethod: sshInfo.auth_method,
-    });
-    if (sshInfo.private_key_path) q.set('privateKeyPath', sshInfo.private_key_path);
-    if (sshInfo.password) q.set('password', sshInfo.password);
-    navigate(`/sftp?${q.toString()}`);
-  }, [sshInfo, navigate]);
+    void openSftpWindow(
+      {
+        host: sshInfo.host,
+        port: sshInfo.port,
+        username: sshInfo.username,
+        authMethod: sshInfo.auth_method,
+        privateKeyPath: sshInfo.private_key_path,
+        password: sshInfo.password,
+        connectionId: site?.connection_id ?? undefined,
+      },
+      (msg) => setError(msg),
+    );
+  }, [sshInfo, site?.connection_id]);
 
   // M-x1 环境剧本入口：建安装用 SSH 终端会话 → 播种环境安装助手 → 打开独立 AI 窗口。
   // AI 探测（nginx/systemd/端口/防火墙）→ 汇报征求同意 → 同意后安装，全程驱动该终端会话。
@@ -210,11 +195,98 @@ export function SiteDetailPage() {
     };
   }, [t]);
 
+  // ─── 场景绑定 ───
+  // 从 URL ?sceneId=xxx 读取场景 ID，自动绑定到当前站点
+  const urlSceneId = searchParams.get('sceneId');
+
+  // 从场景列表中找到绑定到当前站点的场景
+  const boundScene = useMemo<SceneDSL | null>(() => {
+    if (!scenes || scenes.length === 0) return null;
+    return scenes.find((s) => s.metadata?.boundSiteId === siteId) ?? null;
+  }, [scenes, siteId]);
+
+  // 当 URL 携带 sceneId 时执行绑定（从 PublishedSitesPage 跳转过来）
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!urlSceneId || !siteId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // bindSite 内部自动同步 localWorkDir
+        await bindSite(urlSceneId, siteId);
+        logger.info('SiteDetailPage', `Scene ${urlSceneId} bound to site ${siteId}`);
+        if (!cancelled) {
+          setToast('场景已绑定到当前站点');
+          navigate(`/sites/${siteId}`, { replace: true });
+        }
+      } catch (e) {
+        if (!cancelled) {
+          logger.error('SiteDetailPage', `bindSite failed: ${e}`);
+          setError(`绑定场景失败: ${e}`);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [urlSceneId, siteId, bindSite, navigate]);
+
+  // ─── 网站部署（codegen 全链路：publish → build → deploy） ───
+  const handleSiteDeploy = useCallback(async () => {
+    if (!boundScene || siteDeployBusy) return;
+    setSiteDeployBusy(true);
+    setSiteDeployProgress(null);
+    setError(null);
+    try {
+      await publishBuildAndDeploy(boundScene, 'static-html', (phase, progress) => {
+        setSiteDeployProgress({ phase, message: progress.message, percent: progress.percent });
+      });
+      setToast('网站部署完成');
+      refreshSite();
+    } catch (e) {
+      setError(`网站部署失败: ${e}`);
+      logger.error('SiteDetailPage', `publishBuildAndDeploy failed: ${e}`);
+    } finally {
+      setSiteDeployBusy(false);
+      setSiteDeployProgress(null);
+    }
+  }, [boundScene, siteDeployBusy, refreshSite]);
+
+  // ─── 场景选择 ───
+  // 已发布场景列表（供用户在站点侧选择绑定）
+  const publishedScenes = useMemo<SceneDSL[]>(() => {
+    if (!scenes || scenes.length === 0) return [];
+    return scenes.filter((s) => s.status === 'published');
+  }, [scenes]);
+
+  // 从对话框中选择场景并绑定
+  const handleSelectScene = useCallback(
+    async (sceneId: string) => {
+      if (!site) return;
+      try {
+        // bindSite 内部会自动同步 scene.metadata.localWorkDir → site.local_workdir
+        await bindSite(sceneId, siteId);
+        logger.info('SiteDetailPage', `Scene ${sceneId} bound to site ${siteId}`);
+        setSceneSelectOpen(false);
+        setToast('已绑定到选定的网站');
+      } catch (e) {
+        setError(`绑定场景失败: ${e}`);
+      }
+    },
+    [site, bindSite, siteId],
+  );
+
+  // 解绑当前场景
+  const handleUnbindScene = useCallback(async () => {
+    if (!boundScene) return;
+    try {
+      await bindSite(boundScene.id, null);
+      logger.info('SiteDetailPage', `Scene ${boundScene.id} unbound from site ${siteId}`);
+      setToast('已解绑场景');
+    } catch (e) {
+      setError(`解绑失败: ${e}`);
+    }
+  }, [boundScene, bindSite, siteId]);
 
   // 本地预览：启动并打开浏览器；再次点击停止。不依赖 SSH 服务器。
+  // 若 dist 不存在，自动触发构建（publish + build，不含部署）后重试。
   const togglePreview = useCallback(async () => {
     if (previewBusy) return;
     setPreviewBusy(true);
@@ -225,59 +297,45 @@ export function SiteDetailPage() {
         setPreview(null);
         setToast(t('contents.preview_stopped'));
       } else {
-        const info = await previewStart(siteId);
-        setPreview({ baseUrl: info.baseUrl, port: info.port });
-        await openUrl(info.baseUrl).catch(() => undefined);
+        try {
+          const info = await previewStart(siteId);
+          setPreview({ baseUrl: info.baseUrl, port: info.port });
+          await openUrl(info.baseUrl).catch(() => undefined);
+        } catch (previewErr) {
+          const errMsg = String(previewErr);
+          // dist 不存在 → 自动构建后重试
+          if (errMsg.includes('dist not found') || errMsg.includes('please build first') || errMsg.includes('No such file')) {
+            if (!boundScene) {
+              throw new Error('请先绑定网站，再预览');
+            }
+            // Phase 1: 生成脚手架
+            setPreviewBuildProgress({ message: '生成工程脚手架...', percent: 5 });
+            await publishScene(boundScene, { framework: 'static-html' });
+            // Phase 2: 构建
+            setPreviewBuildProgress({ message: '正在构建...', percent: 15 });
+            const buildResult = await buildProject(boundScene, 'static-html', (p) => {
+              setPreviewBuildProgress({ message: p.message, percent: 15 + Math.round(p.percent * 0.8) });
+            });
+            if (!buildResult.success) {
+              throw new Error(`构建失败: ${buildResult.error ?? '未知错误'}`);
+            }
+            setPreviewBuildProgress(null);
+            // 构建完成 → 重试预览
+            const info = await previewStart(siteId);
+            setPreview({ baseUrl: info.baseUrl, port: info.port });
+            await openUrl(info.baseUrl).catch(() => undefined);
+          } else {
+            throw previewErr;
+          }
+        }
       }
     } catch (e) {
       setError(String(e));
     } finally {
       setPreviewBusy(false);
+      setPreviewBuildProgress(null);
     }
-  }, [preview, previewBusy, siteId, t]);
-
-  const run = useCallback(
-    async (action: () => Promise<unknown>, message?: string) => {
-      setBusy(true);
-      setError(null);
-      try {
-        await action();
-        if (message) setToast(message);
-        await refresh();
-      } catch (e) {
-        setError(String(e));
-      } finally {
-        setBusy(false);
-      }
-    },
-    [refresh],
-  );
-
-  const handleCreate = useCallback(
-    (type: ContentType) => {
-      run(
-        () => createContent({ siteId, type, title: '' }),
-        t('contents.toast_created', { type: t(`contents.type_${type}`) }),
-      );
-    },
-    [run, siteId, t],
-  );
-
-  const statusChip = useCallback(
-    (c: Content) => {
-      const key = `contents.status_${c.status}`;
-      const color =
-        c.status === 'published' ? 'success' : c.status === 'scheduled' ? 'warning' : 'default';
-      return <Chip label={t(key)} size="small" color={color} variant="outlined" />;
-    },
-    [t],
-  );
-
-  const emptyText = useMemo(() => {
-    if (trashView) return t('contents.empty_trash');
-    if (keyword.trim()) return t('contents.empty_search');
-    return t('contents.empty');
-  }, [trashView, keyword, t]);
+  }, [preview, previewBusy, siteId, boundScene, t]);
 
   if (!site) {
     return (
@@ -288,7 +346,7 @@ export function SiteDetailPage() {
   }
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1080, width: '100%' }}>
+    <Box sx={{ p: 3, width: '100%' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <IconButton onClick={() => navigate('/sites')} size="small">
           <ArrowLeftIcon size={20} />
@@ -336,7 +394,7 @@ export function SiteDetailPage() {
             </Button>
           </span>
         </Tooltip>
-        <Tooltip title={t('contents.preview_hint')}>
+        <Tooltip title={previewBuildProgress ? previewBuildProgress.message : t('contents.preview_hint')}>
           <span>
             <Button
               variant={preview ? 'contained' : 'outlined'}
@@ -346,7 +404,9 @@ export function SiteDetailPage() {
               disabled={previewBusy}
             >
               {previewBusy ? <CircularProgress size={16} /> : null}
-              {preview ? t('contents.preview_stop') : t('contents.preview')}
+              {previewBuildProgress
+                ? `构建中 ${previewBuildProgress.percent}%`
+                : preview ? t('contents.preview_stop') : t('contents.preview')}
             </Button>
           </span>
         </Tooltip>
@@ -362,22 +422,6 @@ export function SiteDetailPage() {
             </Button>
           </span>
         </Tooltip>
-        <Button
-          variant="outlined"
-          startIcon={<PlusIcon size={18} weight="bold" />}
-          onClick={() => handleCreate('page')}
-          disabled={busy}
-        >
-          {t('contents.action_new_page')}
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={<PlusIcon size={18} weight="bold" />}
-          onClick={() => handleCreate('post')}
-          disabled={busy}
-        >
-          {t('contents.action_new_post')}
-        </Button>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2, ml: 5 }}>
         {sshInfo
@@ -385,173 +429,157 @@ export function SiteDetailPage() {
           : `${t('contents.info_local')}: ${site.local_workdir}`}
       </Typography>
 
-      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
-        <TextField
-          select
-          size="small"
-          label={t('contents.filter_type')}
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as '' | ContentType)}
-          sx={{ minWidth: 120 }}
-          disabled={trashView}
-        >
-          <MenuItem value="">{t('contents.filter_all')}</MenuItem>
-          <MenuItem value="post">{t('contents.type_post')}</MenuItem>
-          <MenuItem value="page">{t('contents.type_page')}</MenuItem>
-        </TextField>
-        <TextField
-          select
-          size="small"
-          label={t('contents.filter_status')}
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as '' | ContentStatus)}
-          sx={{ minWidth: 120 }}
-          disabled={trashView}
-        >
-          <MenuItem value="">{t('contents.filter_all')}</MenuItem>
-          <MenuItem value="draft">{t('contents.status_draft')}</MenuItem>
-          <MenuItem value="published">{t('contents.status_published')}</MenuItem>
-        </TextField>
-        <TextField
-          size="small"
-          label={t('contents.filter_keyword')}
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          sx={{ minWidth: 200 }}
-          disabled={trashView}
-        />
-        <Button
-          size="small"
-          variant={trashView ? 'contained' : 'outlined'}
-          color={trashView ? 'error' : 'inherit'}
-          startIcon={<TrashIcon size={16} weight="bold" />}
-          onClick={() => {
-            setTrashView((v) => !v);
-            setTypeFilter('');
-            setStatusFilter('');
-            setKeyword('');
-          }}
-        >
-          {t('contents.action_trash')}
-        </Button>
+      {/* ─── 场景绑定 & 网站部署 ─── */}
+      <Box sx={{ mb: 2, ml: 5 }}>
+        {boundScene ? (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              p: 1.5,
+              borderRadius: 1,
+              bgcolor: 'action.hover',
+              border: 1,
+              borderColor: 'divider',
+              flexWrap: 'wrap',
+            }}
+          >
+            <LinkIcon size={18} weight="bold" />
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              已绑定网站：{boundScene.name || boundScene.id}
+            </Typography>
+            {boundScene.status === 'published' ? (
+              <Chip label="已发布" size="small" color="success" variant="outlined" />
+            ) : (
+              <Chip label="草稿" size="small" color="default" variant="outlined" />
+            )}
+            <Typography variant="caption" color="text.secondary">
+              工作目录：{site.local_workdir}
+            </Typography>
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => setSceneSelectOpen(true)}
+              sx={{ textTransform: 'none', color: 'text.secondary' }}
+            >
+              更换
+            </Button>
+            <Button
+              variant="text"
+              size="small"
+              onClick={handleUnbindScene}
+              sx={{ textTransform: 'none', color: 'text.secondary' }}
+            >
+              解绑
+            </Button>
+            <Box sx={{ flex: 1 }} />
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              startIcon={
+                siteDeployBusy ? <CircularProgress size={14} color="inherit" /> : <RocketLaunchIcon size={16} weight="bold" />
+              }
+              onClick={handleSiteDeploy}
+              disabled={siteDeployBusy || !sshInfo}
+            >
+              {siteDeployBusy ? '部署中…' : '部署网站'}
+            </Button>
+            {!sshInfo ? (
+              <Typography variant="caption" color="text.secondary">
+                需先绑定服务器
+              </Typography>
+            ) : null}
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              p: 1.5,
+              borderRadius: 1,
+              bgcolor: 'action.hover',
+              border: 1,
+              borderColor: 'divider',
+              borderStyle: 'dashed',
+            }}
+          >
+            <GlobeIcon size={18} weight="bold" />
+            <Typography variant="body2" color="text.secondary">
+              未绑定网站
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<PlusIcon size={14} weight="bold" />}
+              onClick={() => setSceneSelectOpen(true)}
+            >
+              选择已发布网站
+            </Button>
+          </Box>
+        )}
+        {/* 部署进度条 */}
+        {siteDeployProgress ? (
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              {siteDeployProgress.phase}：{siteDeployProgress.message}
+            </Typography>
+            <LinearProgress
+              variant="determinate"
+              value={siteDeployProgress.percent}
+              sx={{ mt: 0.5 }}
+            />
+          </Box>
+        ) : null}
       </Box>
+
+      {/* 场景选择对话框 */}
+      <Dialog open={sceneSelectOpen} onClose={() => setSceneSelectOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>选择已发布网站</DialogTitle>
+        <DialogContent dividers>
+          {publishedScenes.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body2" color="text.secondary">
+                暂无已发布的网站，请先在编辑器中发布场景
+              </Typography>
+            </Box>
+          ) : (
+            <List disablePadding>
+              {publishedScenes.map((scene) => (
+                <ListItemButton
+                  key={scene.id}
+                  onClick={() => handleSelectScene(scene.id)}
+                  sx={{ borderRadius: 1, mb: 0.5 }}
+                >
+                  <ListItemAvatar>
+                    <Avatar variant="rounded" src={scene.thumbnail || undefined}>
+                      <GlobeIcon size={20} />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={scene.name || scene.id}
+                    secondary={scene.description || `更新于 ${new Date(scene.updatedAt).toLocaleDateString('zh-CN')}`}
+                  />
+                  {boundScene?.id === scene.id ? (
+                    <Chip label="当前" size="small" color="primary" variant="outlined" />
+                  ) : null}
+                </ListItemButton>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSceneSelectOpen(false)}>取消</Button>
+        </DialogActions>
+      </Dialog>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
-
-      <TableContainer>
-        <Table size="small" aria-label={t('contents.table_label')}>
-          <TableHead>
-            <TableRow>
-              <TableCell>{t('contents.col_title')}</TableCell>
-              <TableCell width={90}>{t('contents.col_type')}</TableCell>
-              <TableCell width={100}>{t('contents.col_status')}</TableCell>
-              <TableCell>{t('contents.col_slug')}</TableCell>
-              <TableCell width={170}>{t('contents.col_updated')}</TableCell>
-              <TableCell width={150} align="right">{t('contents.col_actions')}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {contents === null ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 5 }}>
-                  <CircularProgress size={24} />
-                </TableCell>
-              </TableRow>
-            ) : contents.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                  {emptyText}
-                </TableCell>
-              </TableRow>
-            ) : (
-              contents.map((c) => (
-                <TableRow key={c.id} hover>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      {c.pinned ? (
-                        <Tooltip title={t('contents.pinned')}>
-                          <PushPinIcon size={14} weight="fill" />
-                        </Tooltip>
-                      ) : null}
-                      <Typography variant="body2" noWrap sx={{ maxWidth: 320 }}>
-                        {c.title}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
-                      <FileTextIcon size={14} />
-                      <Typography variant="caption">
-                        {t(`contents.type_${c.type}`)}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>{statusChip(c)}</TableCell>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 180, display: 'block' }}>
-                      {c.slug}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary">
-                      {new Date(c.updated_at).toLocaleString()}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                      {trashView ? (
-                        <>
-                          <Tooltip title={t('contents.action_restore')}>
-                            <IconButton size="small" onClick={() => run(() => restoreContent(c.id), t('contents.toast_restored'))} disabled={busy}>
-                              <ArrowCounterClockwiseIcon size={16} />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={t('contents.action_purge')}>
-                            <IconButton size="small" color="error" onClick={() => run(() => purgeContent(c.id), t('contents.toast_purged'))} disabled={busy}>
-                              <TrashIcon size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        </>
-                      ) : (
-                        <>
-                          {c.status === 'draft' ? (
-                            <Tooltip title={t('contents.action_publish')}>
-                              <IconButton size="small" color="primary" onClick={() => run(() => publishContent(c.id), t('contents.toast_published'))} disabled={busy}>
-                                <PaperPlaneRightIcon size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          ) : null}
-                          {c.status === 'published' ? (
-                            <Tooltip title={t('contents.action_unpublish')}>
-                              <IconButton size="small" onClick={() => run(() => unpublishContent(c.id), t('contents.toast_unpublished'))} disabled={busy}>
-                                <ArrowUUpLeftIcon size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          ) : null}
-                          <Tooltip title={c.pinned ? t('contents.action_unpin') : t('contents.action_pin')}>
-                            <IconButton size="small" onClick={() => run(() => setContentPinned(c.id, !c.pinned))} disabled={busy}>
-                              <PushPinIcon size={16} weight={c.pinned ? 'fill' : 'regular'} />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={t('contents.action_delete')}>
-                            <IconButton size="small" color="error" onClick={() => run(() => deleteContent(c.id), t('contents.toast_deleted'))} disabled={busy}>
-                              <TrashIcon size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        </>
-                      )}
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
 
       <DeployDialog
         open={deployOpen}

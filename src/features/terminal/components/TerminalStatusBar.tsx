@@ -26,8 +26,8 @@ export function TerminalStatusBar({ sessionName, cwd, connected = true }: Termin
         borderTop: '1px solid',
         borderColor: 'divider',
         background: isDark
-          ? 'linear-gradient(180deg, #161B22 0%, #0D1117 100%)'
-          : 'linear-gradient(180deg, #ffffff 0%, #f5f5f5 100%)',
+          ? 'linear-gradient(180deg, #111A28 0%, #0A0F1A 100%)'
+          : 'linear-gradient(180deg, #ffffff 0%, #F4FAF7 100%)',
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -36,7 +36,7 @@ export function TerminalStatusBar({ sessionName, cwd, connected = true }: Termin
           weight="fill"
           color={connected
             ? (isDark ? '#00E676' : '#00C853')
-            : (isDark ? '#FF5252' : '#D32F2F')}
+            : (isDark ? '#F87171' : '#DC2626')}
         />
         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
           {sessionName || t('local_terminal')}
@@ -44,7 +44,7 @@ export function TerminalStatusBar({ sessionName, cwd, connected = true }: Termin
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <FolderOpenIcon size={13} color={isDark ? '#8B949E' : '#6B7280'} />
+          <FolderOpenIcon size={13} color={isDark ? '#8FA3B0' : '#5A6B64'} />
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {cwd || '~'}
           </Typography>
@@ -54,7 +54,7 @@ export function TerminalStatusBar({ sessionName, cwd, connected = true }: Termin
           sx={{
             color: connected
               ? (isDark ? '#00E676' : '#00C853')
-              : (isDark ? '#FF5252' : '#D32F2F'),
+              : (isDark ? '#F87171' : '#DC2626'),
             fontWeight: 600,
           }}
         >

@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ProviderDto, EndpointDto, ModelDto, AgentDto, ConversationDto, MessageDto } from '../../proto/agent';
+import type { ProviderDto, EndpointDto, ModelDto, AgentDto, ConversationDto, MessageDto, OllamaModelInfo, OllamaStatusDto } from '../../proto/agent';
 
 export async function listProviders(): Promise<ProviderDto[]> {
   return invoke('list_providers');
@@ -53,6 +53,14 @@ export async function testModelChat(modelId: string): Promise<string> {
   return invoke('test_model_chat', { modelId });
 }
 
+export async function scanOllamaModels(baseUrl: string): Promise<OllamaModelInfo[]> {
+  return invoke('scan_ollama_models', { baseUrl });
+}
+
+export async function checkOllamaStatus(baseUrl: string, modelName?: string): Promise<OllamaStatusDto> {
+  return invoke('check_ollama_status', { baseUrl, modelName: modelName ?? null });
+}
+
 export async function listAgents(): Promise<AgentDto[]> {
   return invoke('list_agents');
 }
@@ -75,6 +83,14 @@ export async function createConversation(agentId: string, title: string, metadat
 
 export async function deleteConversation(id: string): Promise<void> {
   return invoke('delete_conversation', { id });
+}
+
+export async function cleanupOldConversations(
+  agentId: string,
+  keepCount: number,
+  maxAgeDays?: number,
+): Promise<number> {
+  return invoke('cleanup_old_conversations', { agentId, keepCount, maxAgeDays });
 }
 
 export async function updateConversationTitle(id: string, title: string): Promise<void> {
@@ -109,6 +125,21 @@ export async function writeFrontendLog(level: string, tag: string, message: stri
   }
 }
 
+/** 写入 env-ops 调试日志（环境检测 & AI 修复全链路追踪） */
+export async function appendEnvOpsLog(
+  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG',
+  runId: string,
+  phase: string,
+  event: string,
+  detail: string,
+): Promise<void> {
+  try {
+    return invoke('append_env_ops_log', { level, runId, phase, event, detail });
+  } catch {
+    console.log(`[env-ops][${level}][${runId}][${phase}][${event}] ${detail}`);
+  }
+}
+
 export async function respondPermission(conversationId: string, approved: boolean, alwaysAllow: boolean): Promise<void> {
   return invoke('respond_permission', { conversationId, approved, alwaysAllow });
 }
@@ -126,4 +157,14 @@ export async function ensureRemoteDesktopSetupAgent(modelId?: string, lang?: str
 /// 确保「服务器环境安装助手」专用 Agent 存在（后端幂等播种），返回其固定 id。
 export async function ensureServerEnvSetupAgent(modelId?: string, lang?: string): Promise<string> {
   return invoke('ensure_server_env_setup_agent', { modelId: modelId ?? null, lang: lang ?? null });
+}
+
+/// 确保「运维助手」专用 Agent 存在（后端幂等播种），返回其固定 id。
+export async function ensureOpsAssistantAgent(modelId?: string, lang?: string): Promise<string> {
+  return invoke('ensure_ops_assistant_agent', { modelId: modelId ?? null, lang: lang ?? null });
+}
+
+/// 确保「环境修复助手」专用 Agent 存在（后端幂等播种），返回其固定 id。
+export async function ensureEnvFixAgent(modelId?: string, lang?: string): Promise<string> {
+  return invoke('ensure_env_fix_assistant_agent', { modelId: modelId ?? null, lang: lang ?? null });
 }

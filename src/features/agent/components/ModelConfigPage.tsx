@@ -4,7 +4,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   IconButton, Chip, Tooltip, Card, Collapse, Divider,
   Alert, Snackbar, CircularProgress, MenuItem, Select, FormControl, InputLabel, Menu,
-  InputAdornment,
+  InputAdornment, Checkbox,
 } from '@mui/material';
 import {
   PlusIcon,
@@ -20,11 +20,13 @@ import {
   CaretUpIcon,
   EyeIcon,
   EyeSlashIcon,
+  MagnifyingGlassIcon,
+  DownloadSimpleIcon,
 } from '@phosphor-icons/react';
 import { useAgentStore, genId } from '../store/agentStore';
-import type { ProviderDto, EndpointDto, ModelDto } from '../../../proto/agent';
+import type { ProviderDto, EndpointDto, ModelDto, OllamaModelInfo } from '../../../proto/agent';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { localizeBackendError } from '../../../core/backendError';
 
 const API_TYPE_KEYS: { value: string; labelKey: string }[] = [
@@ -50,9 +52,9 @@ const PROVIDER_PRESET_KEYS = [
 
 /// 从字符串生成确定性颜色（相同名称永远得到相同颜色）
 const PROVIDER_COLORS = [
-  '#6C63FF', '#4FC3F7', '#00E676', '#FFD740', '#FF6B6B',
+  '#60A5FA', '#38BDF8', '#00E676', '#FBBF24', '#FF6B6B',
   '#26C6DA', '#AB47BC', '#FFA726', '#66BB6A', '#5C6BC0',
-  '#EC407A', '#7E57C2', '#29B6F6', '#9CCC65', '#8D6E63',
+  '#EC407A', '#7E57C2', '#0EA5E9', '#9CCC65', '#8D6E63',
 ];
 
 function hashString(s: string): number {
@@ -156,12 +158,20 @@ function EndpointDialog({
   providerId: string;
 }) {
   const { t } = useTranslation('agent');
+  const theme = useTheme();
+  const { scanOllamaModels, saveModel, loadModels } = useAgentStore();
   const [name, setName] = useState('');
   const [apiType, setApiType] = useState('openai-completions');
   const [baseUrl, setBaseUrl] = useState('');
   const [authType, setAuthType] = useState('bearer');
   const [customAuthHeader, setCustomAuthHeader] = useState('');
   const [enabled, setEnabled] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[]>([]);
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const [scanError, setScanError] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importSuccess, setImportSuccess] = useState(0);
 
   useEffect(() => {
     if (initial) {
@@ -179,6 +189,10 @@ function EndpointDialog({
       setCustomAuthHeader('');
       setEnabled(true);
     }
+    setOllamaModels([]);
+    setSelectedModels(new Set());
+    setScanError('');
+    setImportSuccess(0);
   }, [initial, open]);
 
   useEffect(() => {
@@ -193,6 +207,81 @@ function EndpointDialog({
       }
     }
   }, [apiType, initial, open]);
+
+  const handleScanOllama = async () => {
+    setScanning(true);
+    setScanError('');
+    setOllamaModels([]);
+    setSelectedModels(new Set());
+    try {
+      // Ollama API 直接用根地址（不带 /v1）调用 /api/tags
+      const apiBase = baseUrl.trim().replace(/\/v1\/?$/, '') || 'http://localhost:11434';
+      const models = await scanOllamaModels(apiBase);
+      setOllamaModels(models);
+      if (models.length > 0) {
+        setSelectedModels(new Set(models.map((m) => m.refKey)));
+      }
+    } catch (e) {
+      setScanError(localizeBackendError(e));
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const toggleModelSelection = (refKey: string) => {
+    setSelectedModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(refKey)) next.delete(refKey);
+      else next.add(refKey);
+      return next;
+    });
+  };
+
+  const handleImportModels = async () => {
+    if (!initial?.id || selectedModels.size === 0) return;
+    setImporting(true);
+    setScanError('');
+    setImportSuccess(0);
+    let successCount = 0;
+    let failCount = 0;
+    try {
+      for (const model of ollamaModels) {
+        if (!selectedModels.has(model.refKey)) continue;
+        try {
+          await saveModel({
+            id: genId('model'),
+            endpointId: initial.id,
+            name: model.name,
+            refKey: model.refKey,
+            reasoning: false,
+            inputTypes: ['text'],
+            contextWindow: 8192,
+            maxTokens: 4096,
+            enabled: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+          successCount++;
+        } catch (err) {
+          failCount++;
+          console.error('Failed to import model:', model.name, err);
+        }
+      }
+      await loadModels();
+      setImportSuccess(successCount);
+      if (successCount > 0) {
+        setOllamaModels([]);
+        setSelectedModels(new Set());
+      }
+      if (failCount > 0) {
+        setScanError(`成功导入 ${successCount} 个，失败 ${failCount} 个`);
+      }
+    } catch (e) {
+      setScanError(localizeBackendError(e));
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleSave = () => {
     if (!name.trim()) return;
@@ -237,6 +326,152 @@ function EndpointDialog({
         {authType === 'custom' && (
           <TextField label={t('api.custom_auth_header')} value={customAuthHeader} onChange={(e) => setCustomAuthHeader(e.target.value)} fullWidth size="small" placeholder="X-Custom-Auth" />
         )}
+
+        {apiType === 'ollama' && (
+          <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 1.5, bgcolor: 'rgba(0,0,0,0.02)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                {t('ollama.scan_title')}
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleScanOllama}
+                disabled={scanning || importing}
+                startIcon={scanning ? <CircularProgress size={12} /> : <MagnifyingGlassIcon size={12} />}
+                sx={{ fontSize: 10, borderRadius: 1 }}
+              >
+                {scanning ? t('ollama.scanning') : t('ollama.scan_button')}
+              </Button>
+            </Box>
+
+            {scanError && (
+              <Alert severity="error" sx={{ fontSize: 11, py: 0, mb: 1, '& .MuiAlert-message': { py: 0 } }}>
+                {scanError}
+              </Alert>
+            )}
+
+            {importSuccess > 0 && !ollamaModels.length && (
+              <Alert severity="success" sx={{ fontSize: 11, py: 0, mb: 1, '& .MuiAlert-message': { py: 0 } }}>
+                成功导入 {importSuccess} 个模型
+              </Alert>
+            )}
+
+            {ollamaModels.length > 0 && (
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                    {t('ollama.found_models', { count: ollamaModels.length })}
+                  </Typography>
+                </Box>
+                <Box sx={{ maxHeight: 220, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 0.75, mb: 1.5, pr: 0.5 }}>
+                  {ollamaModels.map((model, index) => {
+                    const isSelected = selectedModels.has(model.refKey);
+                    const itemKey = model.refKey || model.name || `ollama-model-${index}`;
+                    return (
+                      <Box
+                        key={itemKey}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          p: 1.25,
+                          border: 1,
+                          borderColor: isSelected ? 'primary.main' : 'divider',
+                          borderRadius: 1.5,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          bgcolor: isSelected ? alpha(theme.palette.primary.main, 0.15) : 'background.paper',
+                          '&:hover': {
+                            borderColor: 'primary.main',
+                            bgcolor: isSelected ? alpha(theme.palette.primary.main, 0.25) : 'action.hover',
+                          },
+                        }}
+                        onClick={() => toggleModelSelection(model.refKey)}
+                      >
+                        <Checkbox
+                          size="small"
+                          checked={isSelected}
+                          disableRipple
+                          sx={{ p: 0.25, pointerEvents: 'none' }}
+                        />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 13, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isSelected ? 'primary.main' : 'text.primary' }}>
+                            {model.name}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.5 }}>
+                            {model.parameterSize && (
+                              <Chip
+                                label={model.parameterSize}
+                                size="small"
+                                variant="filled"
+                                sx={{
+                                  fontSize: 10,
+                                  height: 20,
+                                  borderRadius: 1,
+                                  bgcolor: isSelected ? alpha(theme.palette.primary.main, 0.3) : 'action.selected',
+                                  color: isSelected ? 'primary.main' : 'text.secondary',
+                                  '& .MuiChip-label': { px: 1, py: 0 },
+                                }}
+                              />
+                            )}
+                            {model.quantizationLevel && (
+                              <Chip
+                                label={model.quantizationLevel}
+                                size="small"
+                                variant="filled"
+                                sx={{
+                                  fontSize: 10,
+                                  height: 20,
+                                  borderRadius: 1,
+                                  bgcolor: isSelected ? alpha(theme.palette.primary.main, 0.3) : 'action.selected',
+                                  color: isSelected ? 'primary.main' : 'text.secondary',
+                                  '& .MuiChip-label': { px: 1, py: 0 },
+                                }}
+                              />
+                            )}
+                            <Typography variant="caption" sx={{ fontSize: 11, color: isSelected ? 'primary.main' : 'text.secondary', opacity: isSelected ? 0.9 : 1 }}>
+                              {(model.size / (1024 * 1024 * 1024)).toFixed(1)} GB
+                            </Typography>
+                          </Box>
+                        </Box>
+                        {isSelected && (
+                          <CheckCircleIcon size={18} weight="fill" color={theme.palette.primary.main} />
+                        )}
+                      </Box>
+                    );
+                  })}
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setSelectedModels(selectedModels.size === ollamaModels.length ? new Set() : new Set(ollamaModels.map((m) => m.refKey)))}
+                    sx={{ fontSize: 11, borderRadius: 1.5, flex: 1, py: 0.75 }}
+                  >
+                    {selectedModels.size === ollamaModels.length ? t('ollama.deselect_all') : t('ollama.select_all')}
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={handleImportModels}
+                    disabled={selectedModels.size === 0 || importing || !initial?.id}
+                    startIcon={importing ? <CircularProgress size={14} /> : <DownloadSimpleIcon size={14} />}
+                    sx={{ fontSize: 11, borderRadius: 1.5, flex: 1, py: 0.75 }}
+                  >
+                    {importing ? t('ollama.importing') : t('ollama.import_selected', { count: selectedModels.size })}
+                  </Button>
+                </Box>
+                {!initial?.id && (
+                  <Typography variant="caption" color="warning.main" sx={{ fontSize: 10, display: 'block', mt: 0.5 }}>
+                    {t('ollama.save_first')}
+                  </Typography>
+                )}
+              </>
+            )}
+          </Box>
+        )}
+
         <FormControlLabel control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />} label={t('agent.enabled')} />
       </DialogContent>
       <DialogActions>
@@ -373,14 +608,14 @@ export function ModelConfigPage() {
   const { t } = useTranslation('agent');
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const primaryColor = isDark ? '#6C63FF' : '#5B54E0';
-  const cardBorder = isDark ? 'rgba(48,54,61,0.6)' : 'rgba(0,0,0,0.08)';
-  const cardBg = isDark ? 'rgba(22,27,34,0.6)' : 'rgba(255,255,255,0.8)';
-  const innerCardBg = isDark ? 'rgba(13,17,23,0.6)' : 'rgba(245,245,245,0.6)';
+  const primaryColor = isDark ? '#60A5FA' : '#1D4ED8';
+  const cardBorder = isDark ? 'rgba(45,212,191,0.12)' : 'rgba(0,0,0,0.08)';
+  const cardBg = isDark ? 'rgba(20,31,46,0.6)' : 'rgba(255,255,255,0.8)';
+  const innerCardBg = isDark ? 'rgba(7,11,18,0.5)' : 'rgba(245,245,245,0.6)';
   const hoverBg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
   const hoverBg2 = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)';
-  const errorColor = isDark ? '#FF5252' : '#D32F2F';
-  const successColor = isDark ? '#00E676' : '#2E7D32';
+  const errorColor = isDark ? '#F87171' : '#DC2626';
+  const successColor = isDark ? '#34D399' : '#16A34A';
   const disabledColor = isDark ? '#555' : '#9E9E9E';
   const {
     providers,
@@ -491,8 +726,9 @@ export function ModelConfigPage() {
 
   const handleAddPreset = useCallback((preset: { nameKey: string; logo: string }) => {
     const now = Date.now();
+    const providerId = genId('pv');
     const provider: ProviderDto = {
-      id: genId('pv'),
+      id: providerId,
       name: t(preset.nameKey),
       apiKey: '',
       logo: preset.logo,
@@ -501,10 +737,27 @@ export function ModelConfigPage() {
       updatedAt: now,
     };
     saveProvider(provider);
-    setExpandedProviders((prev) => new Set(prev).add(provider.id));
+
+    // Ollama 预设：自动创建默认接入点，方便用户直接使用本地模型检测
+    if (preset.nameKey === 'preset.ollama') {
+      saveEndpoint({
+        id: genId('ep'),
+        providerId,
+        name: 'Default',
+        apiType: 'ollama',
+        baseUrl: 'http://localhost:11434/v1/',
+        authType: 'bearer',
+        customAuthHeader: '',
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    setExpandedProviders((prev) => new Set(prev).add(providerId));
     setPresetAnchor(null);
-      setSnackbar({ open: true, message: `${t('config.provider_added')}: ${t(preset.nameKey)}`, severity: 'success' });
-  }, [saveProvider, t]);
+    setSnackbar({ open: true, message: `${t('config.provider_added')}: ${t(preset.nameKey)}`, severity: 'success' });
+  }, [saveProvider, saveEndpoint, t]);
 
   const getEndpointsForProvider = useCallback((providerId: string) => {
     return endpoints.filter((e) => e.providerId === providerId);
@@ -545,7 +798,7 @@ export function ModelConfigPage() {
             variant="contained"
             startIcon={<PlusIcon size={14} weight="bold" />}
             onClick={() => setProviderDialog({ open: true, data: null })}
-            sx={{ borderRadius: 2, fontSize: 11, background: `linear-gradient(135deg, ${primaryColor} 0%, ${isDark ? '#8B83FF' : '#7B75FF'} 100%)` }}
+            sx={{ borderRadius: 2, fontSize: 11, background: `linear-gradient(135deg, ${primaryColor} 0%, ${isDark ? '#93C5FD' : '#3B82F6'} 100%)` }}
           >
             {t('provider.add')}
           </Button>
@@ -698,7 +951,7 @@ export function ModelConfigPage() {
                                 onClick={() => toggleEndpoint(endpoint.id)}
                               >
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                  <PlugsIcon size={14} color="#FFD740" weight="fill" />
+                                  <PlugsIcon size={14} color="#FBBF24" weight="fill" />
                                   <Box>
                                     <Typography variant="caption" sx={{ fontWeight: 600 }}>{endpoint.name}</Typography>
                                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 9 }}>

@@ -50,7 +50,7 @@ export function PathBar({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const border = isDark ? 'rgba(240,246,252,0.12)' : 'rgba(27,31,36,0.12)';
   const text = isDark ? '#C9D1D9' : '#24292F';
-  const subtle = isDark ? '#8B949E' : '#57606A';
+  const subtle = isDark ? '#8FA3B0' : '#5A6B64';
 
   useEffect(() => {
     if (editing) {

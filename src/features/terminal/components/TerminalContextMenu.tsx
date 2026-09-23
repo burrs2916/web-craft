@@ -65,7 +65,7 @@ export function TerminalContextMenu({
     onClose();
   }, [onClose]);
 
-  const iconColor = isDark ? '#8B949E' : '#6B7280';
+  const iconColor = isDark ? '#8FA3B0' : '#5A6B64';
 
   const menuContent = (
     <Paper

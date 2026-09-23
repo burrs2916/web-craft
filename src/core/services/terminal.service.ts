@@ -20,3 +20,7 @@ export async function resizeTerminal(sessionId: string, rows: number, cols: numb
 export async function getTerminalCwd(sessionId: string): Promise<string | null> {
   return invoke('get_terminal_cwd', { sessionId });
 }
+
+export async function terminalSessionAlive(sessionId: string): Promise<boolean> {
+  return invoke('terminal_session_alive', { sessionId });
+}

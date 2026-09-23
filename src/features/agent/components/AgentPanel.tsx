@@ -1,10 +1,9 @@
 import { useState, useCallback } from 'react';
 import { Box, Tabs, Tab, Divider } from '@mui/material';
-import { ChatCircleDotsIcon, GearSixIcon, RobotIcon, NotebookIcon, TerminalIcon } from '@phosphor-icons/react';
+import { ChatCircleDotsIcon, GearSixIcon, RobotIcon, TerminalIcon } from '@phosphor-icons/react';
 import { AgentChat } from './AgentChat';
 import { ModelConfigPage } from './ModelConfigPage';
 import { AgentManager } from './AgentManager';
-import { NoteAssistantTab } from './NoteAssistantTab';
 import { TerminalCopilotTab } from './TerminalCopilotTab';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
@@ -51,11 +50,6 @@ export function AgentPanel() {
           label={t('agent.label')}
         />
         <Tab
-          icon={<NotebookIcon size={16} color={isDark ? '#6C63FF' : '#5B54E0'} />}
-          iconPosition="start"
-          label={t('note_assistant.label')}
-        />
-        <Tab
           icon={<TerminalIcon size={16} color={isDark ? '#81C784' : '#2E7D32'} />}
           iconPosition="start"
           label={t('copilot.label')}
@@ -70,9 +64,8 @@ export function AgentPanel() {
       <Box sx={{ flex: 1, overflow: 'auto', minWidth: 0, minHeight: 0 }}>
         {tab === 0 && <AgentChat />}
         {tab === 1 && <AgentManager />}
-        {tab === 2 && <NoteAssistantTab onStartChat={handleStartChat} onManageAgent={handleManageAgent} />}
-        {tab === 3 && <TerminalCopilotTab onStartChat={handleStartChat} onManageAgent={handleManageAgent} />}
-        {tab === 4 && <ModelConfigPage />}
+        {tab === 2 && <TerminalCopilotTab onStartChat={handleStartChat} onManageAgent={handleManageAgent} />}
+        {tab === 3 && <ModelConfigPage />}
       </Box>
     </Box>
   );

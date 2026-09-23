@@ -20,8 +20,8 @@ export function StatusBar() {
         borderTop: '1px solid',
         borderColor: 'divider',
         background: isDark
-          ? 'linear-gradient(180deg, #161B22 0%, #0D1117 100%)'
-          : 'linear-gradient(180deg, #ffffff 0%, #f5f5f5 100%)',
+          ? 'linear-gradient(180deg, #111A28 0%, #0A0F1A 100%)'
+          : 'linear-gradient(180deg, #ffffff 0%, #F4FAF7 100%)',
       }}
     >
       <SealCheckIcon size={14} weight="fill" color={isDark ? '#00E676' : '#00C853'} />

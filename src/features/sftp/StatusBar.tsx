@@ -37,7 +37,7 @@ export function StatusBar({
 }: StatusBarProps) {
   const border = isDark ? 'rgba(240,246,252,0.10)' : 'rgba(27,31,36,0.12)';
   const bg = isDark ? 'rgba(110,118,129,0.06)' : 'rgba(175,184,193,0.10)';
-  const subtle = isDark ? '#8B949E' : '#57606A';
+  const subtle = isDark ? '#8FA3B0' : '#5A6B64';
   const strong = isDark ? '#C9D1D9' : '#24292F';
 
   return (

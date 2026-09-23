@@ -313,8 +313,8 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
   };
 
   const getTypeIcon = (type: string) => {
-    if (type === 'ssh') return <LightningIcon size={18} color="#FFD740" />;
-    return <DesktopIcon size={18} color="#4FC3F7" />;
+    if (type === 'ssh') return <LightningIcon size={18} color="#FBBF24" />;
+    return <DesktopIcon size={18} color="#38BDF8" />;
   };
 
   const getTypeColor = (type: string) => {
@@ -332,7 +332,7 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
               size="small"
               onClick={() => (multiSelect ? clearSelection() : setMultiSelect(true))}
             >
-              <ListChecksIcon size={16} color={multiSelect ? '#6C63FF' : undefined} />
+              <ListChecksIcon size={16} color={multiSelect ? '#60A5FA' : undefined} />
             </IconButton>
           </Tooltip>
           <Button
@@ -342,9 +342,9 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
             sx={{
               textTransform: 'none',
               color: '#fff',
-              background: 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)',
+              background: 'linear-gradient(135deg, #60A5FA 0%, #38BDF8 100%)',
               boxShadow: 'none',
-              '&:hover': { boxShadow: '0 2px 8px rgba(108,99,255,0.4)' },
+              '&:hover': { boxShadow: '0 2px 8px rgba(45,212,191,0.4)' },
             }}
           >
             {t('connection.new_connection')}
@@ -364,7 +364,7 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
             input: {
               startAdornment: (
                 <InputAdornment position="start">
-                  <MagnifyingGlassIcon size={16} color="#8B949E" />
+                  <MagnifyingGlassIcon size={16} color="#8FA3B0" />
                 </InputAdornment>
               ),
             },
@@ -416,7 +416,7 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
 
       {connections.length === 0 && (
         <Box sx={{ p: 3, textAlign: 'center' }}>
-          <PlugIcon size={32} color="#8B949E" />
+          <PlugIcon size={32} color="#8FA3B0" />
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             {t('connection.no_connections')}
           </Typography>
@@ -446,7 +446,7 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
                 mb: 0.5,
                 px: 1,
                 border: '1px solid',
-                borderColor: multiSelect && selectedIds[conn.id] ? '#6C63FF' : 'divider',
+                borderColor: multiSelect && selectedIds[conn.id] ? '#60A5FA' : 'divider',
                 cursor: multiSelect ? 'pointer' : 'default',
                 transition: 'background-color 0.2s, border-color 0.2s',
                 '&:hover': { backgroundColor: 'action.hover' },
@@ -488,7 +488,7 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
                     )}
                     {recents[conn.id] && (
                       <Tooltip title={t('connection.recent')} arrow>
-                        <ClockIcon size={13} color="#8B949E" />
+                        <ClockIcon size={13} color="#8FA3B0" />
                       </Tooltip>
                     )}
                   </Box>
@@ -507,7 +507,7 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
                     size="small"
                     onClick={(e) => { e.stopPropagation(); handleToggleFav(conn.id); }}
                   >
-                    <StarIcon size={16} weight={isFav ? 'fill' : 'regular'} color={isFav ? '#FFD740' : undefined} />
+                    <StarIcon size={16} weight={isFav ? 'fill' : 'regular'} color={isFav ? '#FBBF24' : undefined} />
                   </IconButton>
                 </Tooltip>
 
@@ -535,9 +535,9 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
                   sx={{
                     textTransform: 'none',
                     color: '#fff',
-                    background: 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)',
+                    background: 'linear-gradient(135deg, #60A5FA 0%, #38BDF8 100%)',
                     boxShadow: 'none',
-                    '&:hover': { boxShadow: '0 2px 8px rgba(108,99,255,0.4)' },
+                    '&:hover': { boxShadow: '0 2px 8px rgba(45,212,191,0.4)' },
                   }}
                 >
                   {t('connection.connect')}
@@ -601,7 +601,7 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
           borderBottom: '1px solid',
           borderColor: 'divider',
         }}>
-          {editing ? <PencilSimpleIcon size={20} color="#6C63FF" /> : <PlusIcon size={20} color="#6C63FF" />}
+          {editing ? <PencilSimpleIcon size={20} color="#60A5FA" /> : <PlusIcon size={20} color="#60A5FA" />}
           {editing ? t('connection.edit_connection') : t('connection.new_connection')}
         </DialogTitle>
         <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
@@ -652,7 +652,7 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
                   gap: 2,
                 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <LightningIcon size={18} color="#FFD740" />
+                    <LightningIcon size={18} color="#FBBF24" />
                     <Typography variant="subtitle2">{t('connection.ssh_config')}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', gap: 2 }}>
@@ -780,9 +780,9 @@ export function ConnectionList({ onConnect }: ConnectionListProps) {
               sx={{
                 textTransform: 'none',
                 color: '#fff',
-                background: 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)',
+                background: 'linear-gradient(135deg, #60A5FA 0%, #38BDF8 100%)',
                 boxShadow: 'none',
-                '&:hover': { boxShadow: '0 2px 8px rgba(108,99,255,0.4)' },
+                '&:hover': { boxShadow: '0 2px 8px rgba(45,212,191,0.4)' },
               }}
             >
               {saving ? t('connection.saving') : t('connection.save')}

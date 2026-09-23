@@ -35,9 +35,9 @@ export function createAssistantTab(config: AssistantTabConfig) {
     const isDark = theme.palette.mode === 'dark';
     const accentColor = config.accentColor(isDark);
     const accentGradientEnd = config.accentGradientEnd(isDark);
-    const primaryColor = isDark ? '#6C63FF' : '#5B54E0';
+    const primaryColor = isDark ? '#60A5FA' : '#1D4ED8';
     const successColor = isDark ? '#81C784' : '#2E7D32';
-    const warningColor = isDark ? '#FFB74D' : '#E65100';
+    const warningColor = isDark ? '#FFB74D' : '#D97706';
     const dividerColor = isDark ? 'rgba(48,54,61,0.4)' : 'rgba(0,0,0,0.08)';
 
     const { agents, models, loadAgents, loadModels } = useAgentStore();

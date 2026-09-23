@@ -49,15 +49,15 @@ function buildTheme(appearance: ReturnType<typeof getThemeAppearance>) {
     cursorAccent: appearance.background,
     selectionBackground: appearance.selectionBackground,
     selectionForeground: appearance.selectionForeground,
-    black: appearance.colors[0] || '#0D1117',
+    black: appearance.colors[0] || '#0A0F1A',
     red: appearance.colors[1] || '#FF7B72',
     green: appearance.colors[2] || '#00E676',
-    yellow: appearance.colors[3] || '#FFD740',
-    blue: appearance.colors[4] || '#4FC3F7',
+    yellow: appearance.colors[3] || '#FBBF24',
+    blue: appearance.colors[4] || '#38BDF8',
     magenta: appearance.colors[5] || '#CE93D8',
     cyan: appearance.colors[6] || '#4DD0E1',
-    white: appearance.colors[7] || '#E6EDF3',
-    brightBlack: appearance.colors[8] || '#8B949E',
+    white: appearance.colors[7] || '#E8F1EC',
+    brightBlack: appearance.colors[8] || '#8FA3B0',
     brightRed: appearance.colors[9] || '#FF8A80',
     brightGreen: appearance.colors[10] || '#69F0AE',
     brightYellow: appearance.colors[11] || '#FFE57F',
@@ -295,7 +295,7 @@ export const TerminalEmulator = forwardRef<TerminalEmulatorHandle, TerminalEmula
         const currentBellStyle = useSettingsStore.getState().settings.bellStyle;
         if (currentBellStyle === 'visual') {
           if (!containerRef.current) return;
-          containerRef.current.style.outline = '2px solid rgba(108,99,255,0.6)';
+          containerRef.current.style.outline = '2px solid rgba(45,212,191,0.6)';
           containerRef.current.style.outlineOffset = '-2px';
           setTimeout(() => {
             if (containerRef.current) {

@@ -117,10 +117,10 @@ export function SftpToolbar({
   const [downloadAnchor, setDownloadAnchor] = useState<HTMLElement | null>(null);
 
   const border = isDark ? 'rgba(240,246,252,0.12)' : 'rgba(27,31,36,0.12)';
-  const subtle = isDark ? '#8B949E' : '#57606A';
+  const subtle = isDark ? '#8FA3B0' : '#5A6B64';
   const accent = isDark ? '#58A6FF' : '#0969DA';
   const green = isDark ? '#3FB950' : '#1A7F37';
-  const red = isDark ? '#FF6B6B' : '#D32F2F';
+  const red = isDark ? '#FF6B6B' : '#DC2626';
   const searchBg = isDark ? 'rgba(110,118,129,0.16)' : 'rgba(27,31,36,0.05)';
 
   const Divider = () => (

@@ -189,7 +189,7 @@ export function SftpDialogs({
 }: SftpDialogsProps) {
   const listBg = isDark ? 'rgba(110,118,129,0.14)' : 'rgba(27,31,36,0.05)';
   const listText = isDark ? '#C9D1D9' : '#24292F';
-  const subtle = isDark ? '#8B949E' : '#6E7781';
+  const subtle = isDark ? '#8FA3B0' : '#5A6B64';
 
   // ---- batch rename preview ------------------------------------------------
   const [pattern, setPattern] = useState('{name}');

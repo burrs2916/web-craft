@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "Biosphere 终端",
-    "version": "0.1.0",
+    "name": "WebCraft",
+    "version": "0.6.2",
     "lang_en": "EN",
     "lang_zh": "中文"
   },
@@ -9,12 +9,16 @@
     "navigation": "导航",
     "sites": "站点",
     "terminal": "终端",
-    "notebook": "笔记",
     "commands": "命令",
     "connections": "连接",
     "plugins": "插件",
     "settings": "设置",
-    "agent": "AI 助手"
+    "agent": "AI 助手",
+    "ops": "运维中心",
+    "resources": "资源中心",
+    "editor": "网站编辑",
+    "websites": "我的网站",
+    "published": "已发布网站"
   },
   "action": {
     "save": "保存",
@@ -122,6 +126,8 @@
     "copy_on_select": "选中即复制",
     "paste_on_middle_click": "中键粘贴",
     "confirm_before_close": "关闭标签页前确认",
+    "restore_tabs_on_startup": "启动时恢复终端标签",
+    "restore_tabs_on_startup_desc": "重启应用后自动重建上次的终端标签（密码认证的 SSH 会话为安全起见不会自动重连）",
     "foreground": "前景色",
     "background": "背景色",
     "selection_bg": "选中背景色",
@@ -151,6 +157,8 @@
     "confirm_before_close_desc": "关闭有运行中进程的终端标签页时请求确认",
     "colors_desc": "自定义终端颜色方案",
     "data_management_desc": "导出、导入或重置您的设置",
+    "global_data_sources": "全局数据源",
+    "data_general": "常规设置",
     "export_desc": "将当前设置下载为 JSON 文件",
     "reset_desc": "将所有设置恢复为原始默认值",
     "behavior": "行为",
@@ -162,16 +170,22 @@
     "bell_visual": "视觉",
     "bell_sound": "声音"
   },
+  "icon": {
+    "search": "搜索图标...",
+    "no_icons": "未找到图标",
+    "upload": "上传图标",
+    "no_custom": "暂无自定义图标"
+  },
   "license": {
     "header": {
       "trialDaysLeft": "试用 · {{count}} 天",
       "upgrade": "升级"
     },
     "upgrade": {
-      "title": "Biosphere Pro",
+      "title": "WebCraft Pro",
       "headlineTrial": "您的试用将在 {{trialDaysLeft}} 天后结束。解锁 Pro 以保留全部功能。",
       "headlineExpired": "您的试用已结束。升级到 Pro 以继续使用。",
-      "headlineDefault": "解锁 Biosphere Pro",
+      "headlineDefault": "解锁 WebCraft Pro",
       "subheadlineFeature": "使用此功能需要 Pro：{{feature}}",
       "subheadlineDefault": "一次性购买，终身使用，无需订阅。",
       "featuresLabel": "Pro 全部功能",
@@ -186,5 +200,45 @@
       "viewOnStore": "在 Microsoft Store 查看",
       "disclaimer": "终身许可证与您的 Microsoft 账户绑定。在同一账户上重新安装将自动恢复 Pro。"
     }
+  },
+  "resourceCenter": {
+    "title": "统一资源中心",
+    "subtitle": "连接、站点、部署、终端与自动化已统一登记为可互链的资源，构成 WebCraft 的整体。点击任意资源查看其互联关系并跳转。",
+    "reconcile": "刷新统一资源",
+    "reconciling": "正在重建统一资源体…",
+    "reconcileDone": "已刷新：连接 {{connections}} · 站点 {{sites}} · 部署 {{deployments}} · 终端 {{terminals}} · 自动化 {{automations}}",
+    "reconcileTip": "把存量数据纳入统一资源体并重建互联边（幂等，可反复执行）。",
+    "kindAll": "全部",
+    "kindConnection": "连接",
+    "kindSite": "站点",
+    "kindDeployment": "部署",
+    "kindTerminal": "终端",
+    "kindAutomation": "自动化",
+    "summary": "资源概览",
+    "empty": "暂无资源。点击「刷新统一资源」把现有数据纳入统一体。",
+    "loading": "加载中…",
+    "linksTitle": "互联关系",
+    "noLinks": "该资源暂无互联边。",
+    "outgoing": "出向",
+    "incoming": "入向",
+    "relation_runs_on": "运行于",
+    "relation_deploys_to": "部署到",
+    "relation_opens": "打开",
+    "relation_connects_to": "连接到",
+    "relation_uses": "使用",
+    "relation_belongs_to": "属于",
+    "relation_links": "关联",
+    "open": "前往",
+    "metaDomain": "域名",
+    "metaHost": "主机",
+    "metaStatus": "状态",
+    "metaConnection": "连接",
+    "metaSite": "站点",
+    "metaMode": "模式",
+    "metaTargetEnv": "目标环境",
+    "metaVersion": "版本",
+    "metaDbType": "数据库",
+    "metaEnabled": "启用",
+    "metaServer": "服务器终端"
   }
 }

@@ -1,24 +1,26 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  Box, IconButton, Typography, Divider, Chip,
+  Box, IconButton, Typography, Divider, Chip, Tooltip,
   Select, MenuItem, FormControl,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  Button, Alert,
+  Button, Alert, CircularProgress,
 } from '@mui/material';
 import {
   Robot, Plus as PlusIcon, TrashIcon,
   ChatCircleDotsIcon, Sparkle, ShieldWarning,
+  WarningCircle as WarningCircleIcon,
 } from '@phosphor-icons/react';
 import { useAgentStore } from '../store/agentStore';
 import type { MessageDto } from '../../../proto/agent';
 import { useTranslation } from 'react-i18next';
 import { useNotify } from '../../../core/notification';
 import { listen } from '@tauri-apps/api/event';
-import { runAgent, saveMessage, stopAgent, respondPermission } from '../../../core/services/agent.service';
+import { runAgent, saveMessage, stopAgent, respondPermission, cleanupOldConversations } from '../../../core/services/agent.service';
 import { useTheme } from '@mui/material/styles';
 import { ChatMessagesArea, ChatInputArea, type FileAttachment } from '../../../components/chat/ChatComponents';
 import type { ToolCallDisplay } from '../../../components/chat/ChatComponents';
 import { localizeBackendError } from '../../../core/backendError';
+import { RepairProgressPanel, type RepairPlanData } from './RepairProgressPanel';
 
 interface StreamChunk { conversationId: string; chunk: string }
 interface StreamDone { conversationId: string; response: string }
@@ -29,8 +31,33 @@ interface ToolCallEvent {
   result: string | null;
   success: boolean | null;
   status: 'running' | 'done' | 'denied';
+  duration_ms?: number | null;
 }
 interface ToolCallPayload { conversationId: string; toolCall: ToolCallEvent }
+
+/**
+ * 流式工具调用增量（来自 LLM 流式输出）
+ * 用于在工具真正执行前，向用户展示 AI 正在准备调用什么工具
+ */
+interface StreamingToolCallDelta {
+  index: number;
+  id?: string;
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
+}
+
+/**
+ * 流式工具调用的累积状态
+ */
+interface StreamingToolCall {
+  index: number;
+  id?: string;
+  name: string;
+  arguments: string;
+  isStreaming: boolean;
+}
 
 interface PermissionRequestPayload {
   conversationId: string;
@@ -53,19 +80,60 @@ export function AgentChat() {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const agentColor = isDark ? '#CE93D8' : '#7B1FA2';
-  const userColor = isDark ? '#6C63FF' : '#5B54E0';
+  const userColor = isDark ? '#60A5FA' : '#1D4ED8';
   const mutedBorder = isDark ? 'rgba(48,54,61,0.6)' : 'rgba(0,0,0,0.08)';
 
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [streamingReasoning, setStreamingReasoning] = useState('');
   const [toolCalls, setToolCalls] = useState<ToolCallDisplay[]>([]);
+  const [streamingToolCalls, setStreamingToolCalls] = useState<StreamingToolCall[]>([]);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestPayload | null>(null);
   const [deleteConvConfirm, setDeleteConvConfirm] = useState<string | null>(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
+  const [repairPlan, setRepairPlan] = useState<RepairPlanData | null>(null);
+  const [agentStatus, setAgentStatus] = useState<{
+    status: string;
+    iteration: number;
+    maxIterations: number;
+    detail?: string;
+    streamStats?: {
+      charsTotal: number;
+      tokensEstimated: number;
+      charsPerSec: number;
+      tokensPerSec: number;
+      elapsedMs: number;
+    } | null;
+    contextUsage?: {
+      tokensUsed: number;
+      contextWindow: number;
+      usageRatio: number;
+    } | null;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingMsgIdRef = useRef<string | null>(null);
   const toolCallCounterRef = useRef(0);
+
+  // 合并流式工具调用和正式工具调用，流式的在前（正在生成中），正式的在后（正在执行/已完成）
+  const combinedToolCalls = useMemo<ToolCallDisplay[]>(() => {
+    const streaming: ToolCallDisplay[] = streamingToolCalls.map((stc, idx) => ({
+      id: `streaming-${stc.index}-${idx}`,
+      toolName: stc.name || '...',
+      arguments: (() => {
+        try {
+          return stc.arguments ? JSON.parse(stc.arguments) : {};
+        } catch {
+          return { _raw: stc.arguments };
+        }
+      })(),
+      result: null,
+      success: null,
+      status: 'streaming',
+    }));
+    return [...streaming, ...toolCalls];
+  }, [streamingToolCalls, toolCalls]);
 
   useEffect(() => {
     loadAgents();
@@ -92,6 +160,17 @@ export function AgentChat() {
     if (activeConversationId) {
       loadMessages(activeConversationId);
     }
+    // 切换会话时清理所有运行时状态，确保会话间完全隔离
+    setStreamingContent('');
+    setStreamingReasoning('');
+    setToolCalls([]);
+    setStreamingToolCalls([]);
+    setAgentStatus(null);
+    setLoading(false);
+    setRepairPlan(null);
+    setPermissionRequest(null);
+    streamingMsgIdRef.current = null;
+    toolCallCounterRef.current = 0;
   }, [activeConversationId, loadMessages]);
 
   useEffect(() => {
@@ -101,7 +180,59 @@ export function AgentChat() {
   useEffect(() => {
     const unlistenChunk = listen<StreamChunk>('agent-chunk', (event) => {
       if (event.payload.conversationId === activeConversationId) {
-        setStreamingContent((prev) => prev + event.payload.chunk);
+        const chunk = event.payload.chunk;
+        // 工具调用流式增量（\x02 前缀 + JSON）
+        if (chunk.startsWith('\x02')) {
+          try {
+            const deltas: StreamingToolCallDelta[] = JSON.parse(chunk.slice(1));
+            setStreamingToolCalls((prev) => {
+              const next = [...prev];
+              for (const delta of deltas) {
+                const idx = next.findIndex((tc) => tc.index === delta.index);
+                if (idx === -1) {
+                  next.push({
+                    index: delta.index,
+                    id: delta.id,
+                    name: delta.function?.name ?? '',
+                    arguments: delta.function?.arguments ?? '',
+                    isStreaming: true,
+                  });
+                } else {
+                  const tc = next[idx];
+                  next[idx] = {
+                    ...tc,
+                    id: delta.id ?? tc.id,
+                    name: (tc.name + (delta.function?.name ?? '')).trim(),
+                    arguments: tc.arguments + (delta.function?.arguments ?? ''),
+                    isStreaming: true,
+                  };
+                }
+              }
+              return next;
+            });
+          } catch (e) {
+            // 静默忽略解析错误
+          }
+        }
+        // 完成原因（\x03 前缀）
+        else if (chunk.startsWith('\x03')) {
+          // 流式工具调用生成完成，标记为非 streaming 状态
+          const reason = chunk.slice(1);
+          if (reason === 'tool_calls' || reason === 'tool_use') {
+            setStreamingToolCalls((prev) => prev.map((tc) => ({ ...tc, isStreaming: false })));
+          }
+        }
+        // 思考过程（\x04 前缀）
+        else if (chunk.startsWith('\x04')) {
+          const reasoningText = chunk.slice(1);
+          if (reasoningText) {
+            setStreamingReasoning((prev) => prev + reasoningText);
+          }
+        }
+        // 普通文本内容
+        else {
+          setStreamingContent((prev) => prev + chunk);
+        }
       }
     });
 
@@ -131,6 +262,8 @@ export function AgentChat() {
           }
         }
         setStreamingContent('');
+        setStreamingReasoning('');
+        setStreamingToolCalls([]);
         setLoading(false);
         streamingMsgIdRef.current = null;
       }
@@ -143,6 +276,8 @@ export function AgentChat() {
           updateMessage(msgId, `❌ ${event.payload.error}`);
         }
         setStreamingContent('');
+        setStreamingReasoning('');
+        setStreamingToolCalls([]);
         setLoading(false);
         streamingMsgIdRef.current = null;
       }
@@ -154,16 +289,19 @@ export function AgentChat() {
         if (tc.status === 'running') {
           toolCallCounterRef.current += 1;
           const id = `tc-${toolCallCounterRef.current}`;
+          // 工具开始执行时，移除第一个流式工具调用（按顺序对应）
+          setStreamingToolCalls((prev) => prev.slice(1));
           setToolCalls((prev) => [...prev, {
             id, toolName: tc.tool_name, arguments: tc.arguments,
             result: null, success: null, status: 'running',
+            durationMs: null,
           }]);
         } else if (tc.status === 'denied') {
           setToolCalls((prev) => {
             const last = prev.length - 1;
             if (last >= 0 && prev[last].status === 'running') {
               const updated = [...prev];
-              updated[last] = { ...updated[last], result: tc.result, success: false, status: 'denied' };
+              updated[last] = { ...updated[last], result: tc.result, success: false, status: 'denied', durationMs: tc.duration_ms ?? null };
               return updated;
             }
             return prev;
@@ -173,7 +311,7 @@ export function AgentChat() {
             const last = prev.length - 1;
             if (last >= 0 && prev[last].status === 'running') {
               const updated = [...prev];
-              updated[last] = { ...updated[last], result: tc.result, success: tc.success, status: 'done' };
+              updated[last] = { ...updated[last], result: tc.result, success: tc.success, status: 'done', durationMs: tc.duration_ms ?? null };
               return updated;
             }
             return prev;
@@ -188,12 +326,55 @@ export function AgentChat() {
       }
     });
 
+    const unlistenRepairProgress = listen<RepairPlanData & { conversationId: string }>('agent-repair-progress', (event) => {
+      if (event.payload.conversationId === activeConversationId) {
+        setRepairPlan(event.payload);
+      }
+    });
+
+    const unlistenStatus = listen<{
+      conversationId: string;
+      status: string;
+      iteration: number;
+      maxIterations: number;
+      detail?: string;
+      streamStats?: {
+        charsTotal: number;
+        tokensEstimated: number;
+        charsPerSec: number;
+        tokensPerSec: number;
+        elapsedMs: number;
+      } | null;
+      contextUsage?: {
+        tokensUsed: number;
+        contextWindow: number;
+        usageRatio: number;
+      } | null;
+    }>('agent-status', (event) => {
+      if (event.payload.conversationId === activeConversationId) {
+        setAgentStatus({
+          status: event.payload.status,
+          iteration: event.payload.iteration,
+          maxIterations: event.payload.maxIterations,
+          detail: event.payload.detail,
+          streamStats: event.payload.streamStats || null,
+          contextUsage: event.payload.contextUsage || null,
+        });
+        // 完成时清除状态
+        if (event.payload.status === 'done') {
+          setTimeout(() => setAgentStatus(null), 1500);
+        }
+      }
+    });
+
     return () => {
       unlistenChunk.then((fn) => fn());
       unlistenDone.then((fn) => fn());
       unlistenError.then((fn) => fn());
       unlistenToolCall.then((fn) => fn());
       unlistenPermission.then((fn) => fn());
+      unlistenRepairProgress.then((fn) => fn());
+      unlistenStatus.then((fn) => fn());
     };
   }, [activeConversationId, updateMessage]);
 
@@ -230,6 +411,8 @@ export function AgentChat() {
     setAttachments([]);
     setLoading(true);
     setToolCalls([]);
+    setStreamingToolCalls([]);
+    setRepairPlan(null);
     toolCallCounterRef.current = 0;
 
     try { await saveMessage(userMsg); } catch (err) { console.error('AgentChat: failed to save message', err); notify(t('chat.message_save_failed')); }
@@ -248,12 +431,14 @@ export function AgentChat() {
     };
     addMessage(assistantMsg);
     setStreamingContent('');
+    setStreamingReasoning('');
 
     try {
       await runAgent(activeAgentId, input.trim(), activeConversationId);
     } catch (e) {
       updateMessage(assistantMsgId, `❌ ${localizeBackendError(e)}`);
       setStreamingContent('');
+      setStreamingReasoning('');
       setLoading(false);
       streamingMsgIdRef.current = null;
     }
@@ -267,6 +452,7 @@ export function AgentChat() {
     }
     setLoading(false);
     setStreamingContent('');
+    setStreamingReasoning('');
     streamingMsgIdRef.current = null;
   };
 
@@ -280,6 +466,24 @@ export function AgentChat() {
     await deleteConversation(convId);
     setDeleteConvConfirm(null);
   }, [deleteConversation]);
+
+  const handleCleanupConversations = useCallback(async () => {
+    if (!activeAgentId) return;
+    if (!confirm(`确认清理旧会话？将保留最近 20 个未运行的会话。`)) return;
+    setCleaningUp(true);
+    try {
+      const deleted = await cleanupOldConversations(activeAgentId, 20, 30);
+      notify(`已清理 ${deleted} 个旧会话`);
+      // 刷新列表
+      if (activeAgentId) {
+        loadConversations(activeAgentId);
+      }
+    } catch (err) {
+      notify(`清理失败：${localizeBackendError(err)}`);
+    } finally {
+      setCleaningUp(false);
+    }
+  }, [activeAgentId, notify]);
 
   const handleEditMessage = useCallback((_messageId: string, content: string) => {
     const cleaned = content.replace(/\[(?:附件|Attachment):.*?\]\s*/g, '').trim();
@@ -310,11 +514,13 @@ export function AgentChat() {
     };
     addMessage(assistantMsg);
     setStreamingContent('');
+    setStreamingReasoning('');
     try {
       await runAgent(activeAgentId, prevUserMsg.content.replace(/\[(?:附件|Attachment):.*?\]\s*/g, '').trim(), activeConversationId);
     } catch (e) {
       updateMessage(newAssistantMsgId, `❌ ${localizeBackendError(e)}`);
       setStreamingContent('');
+      setStreamingReasoning('');
       setLoading(false);
       streamingMsgIdRef.current = null;
     }
@@ -328,6 +534,7 @@ export function AgentChat() {
   };
 
   const activeAgent = agents.find((a) => a.id === activeAgentId);
+  const activeConversation = conversations.find((c) => c.id === activeConversationId);
 
   return (
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
@@ -426,21 +633,52 @@ export function AgentChat() {
         </Box>
 
         {conversations.length > 0 && (
-          <Box sx={{ display: 'flex', gap: 0.5, overflow: 'auto', '&::-webkit-scrollbar': { height: 3 } }}>
-            {conversations.map((conv) => (
-              <Chip
-                key={conv.id} label={conv.title} size="small"
-                variant={activeConversationId === conv.id ? 'filled' : 'outlined'}
-                color={activeConversationId === conv.id ? 'secondary' : 'default'}
-                onClick={() => useAgentStore.getState().setActiveConversation(conv.id)}
-                onDelete={conversations.length > 1 ? () => setDeleteConvConfirm(conv.id) : undefined}
-                deleteIcon={<TrashIcon size={12} />}
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+            <Box sx={{ flex: 1, minWidth: 0, overflow: 'auto', '&::-webkit-scrollbar': { height: 3 } }}>
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                {conversations.map((conv) => (
+                  <Chip
+                    key={conv.id}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        {conv.status === 'interrupted' && (
+                          <WarningCircleIcon size={12} weight="fill" color="#FF9800" />
+                        )}
+                        {conv.status === 'running' && (
+                          <CircularProgress size={10} sx={{ color: '#4CAF50' }} />
+                        )}
+                        <span>{conv.title}</span>
+                      </Box>
+                    }
+                    size="small"
+                    variant={activeConversationId === conv.id ? 'filled' : 'outlined'}
+                    color={activeConversationId === conv.id ? 'secondary' : 'default'}
+                    onClick={() => useAgentStore.getState().setActiveConversation(conv.id)}
+                    onDelete={conversations.length > 1 ? () => setDeleteConvConfirm(conv.id) : undefined}
+                    deleteIcon={<TrashIcon size={12} />}
+                    sx={{
+                      height: 24, fontSize: 11, borderRadius: 1.5, flexShrink: 0,
+                      '& .MuiChip-deleteIcon': { color: 'rgba(255,123,114,0.5)', '&:hover': { color: '#FF7B72' } },
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+            <Tooltip title="清理旧会话（保留最近 20 个）">
+              <IconButton
+                size="small"
+                onClick={handleCleanupConversations}
+                disabled={cleaningUp || conversations.length <= 5}
                 sx={{
-                  height: 24, fontSize: 11, borderRadius: 1.5,
-                  '& .MuiChip-deleteIcon': { color: 'rgba(255,123,114,0.5)', '&:hover': { color: '#FF7B72' } },
+                  borderRadius: 1.5, p: 0.25,
+                  bgcolor: 'rgba(156, 39, 176, 0.08)',
+                  '&:hover': { bgcolor: 'rgba(156, 39, 176, 0.15)' },
+                  '&.Mui-disabled': { opacity: 0.3 },
                 }}
-              />
-            ))}
+              >
+                <TrashIcon size={14} color="#9C27B0" />
+              </IconButton>
+            </Tooltip>
           </Box>
         )}
       </Box>
@@ -451,12 +689,44 @@ export function AgentChat() {
         <EmptyState type="no_agent" t={t} agentColor={agentColor} />
       ) : (
         <>
+          {/* 会话异常中断恢复提示 */}
+          {activeConversation && activeConversation.status === 'interrupted' && !loading && (
+            <Box sx={{
+              px: 2, py: 1,
+              bgcolor: 'rgba(255,152,0,0.08)',
+              borderBottom: '1px solid',
+              borderColor: 'rgba(255,152,0,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+            }}>
+              <WarningCircleIcon size={16} weight="fill" color="#FF9800" />
+              <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1 }}>
+                上次会话异常中断，消息已保留。您可以继续对话或开启新会话。
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                color="warning"
+                sx={{ minWidth: 'auto', py: 0.25, fontSize: 11 }}
+                onClick={handleNewChat}
+              >
+                新会话
+              </Button>
+            </Box>
+          )}
+          {repairPlan && (
+            <Box sx={{ px: 2, pt: 1, pb: 0.5 }}>
+              <RepairProgressPanel plan={repairPlan} />
+            </Box>
+          )}
           <ChatMessagesArea
             messages={messages}
             streamingContent={streamingContent}
+            streamingReasoning={streamingReasoning}
             streamingMsgId={streamingMsgIdRef.current}
             loading={loading}
-            toolCalls={toolCalls}
+            toolCalls={combinedToolCalls}
             agentColor={agentColor}
             userColor={userColor}
             isDark={isDark}
@@ -464,6 +734,7 @@ export function AgentChat() {
             emptyIcon={<Sparkle size={40} weight="duotone" color={userColor} />}
             emptyText={activeAgent?.name ? `Start chatting with ${activeAgent.name}` : t('chat.start_conversation')}
             thinkingText={t('chat.thinking')}
+            agentStatus={agentStatus}
             onEditMessage={handleEditMessage}
             onRegenerate={handleRegenerate}
           />
@@ -574,7 +845,7 @@ function EmptyState({ type, t, agentColor }: {
 }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const userColor = isDark ? '#6C63FF' : '#5B54E0';
+  const userColor = isDark ? '#60A5FA' : '#1D4ED8';
 
   return (
     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1.5, px: 3, opacity: 0.6 }}>

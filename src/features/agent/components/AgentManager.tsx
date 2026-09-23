@@ -18,9 +18,9 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
 import { open } from '@tauri-apps/plugin-dialog';
 
-const ALL_AGENT_TOOLS = ['terminal', 'notebook', 'file', 'command_history', 'terminal_session', 'plugin_manager', 'memory'];
-const BRAND = '#6C63FF';
-const GRADIENT = 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)';
+const ALL_AGENT_TOOLS = ['terminal', 'file', 'command_history', 'terminal_session', 'plugin_manager', 'memory'];
+const BRAND = '#60A5FA';
+const GRADIENT = 'linear-gradient(135deg, #60A5FA 0%, #38BDF8 100%)';
 
 // 自造可靠 outlined 字段：彻底弃用 MUI 的 <fieldset><legend> notch。
 // Tauri WKWebView 下，MUI 用 legend 渲染缺口时：① 不可靠渲染（缺口不出现）② legend 占满宽度拦截点击（无法输入）。
@@ -90,7 +90,7 @@ const OutlinedField = ({
     </Box>
     <Box
       sx={{
-        border: `1px solid ${error ? '#FF7B72' : 'rgba(108,99,255,0.30)'}`,
+        border: `1px solid ${error ? '#FF7B72' : 'rgba(45,212,191,0.30)'}`,
         borderRadius: 1.5,
         bgcolor: 'background.paper',
         color: 'text.primary',
@@ -206,7 +206,7 @@ export function AgentManager() {
     });
   };
 
-  // 从「笔记助手 / 终端助手」绑定 Tab 跳转过来时，自动打开该智能体编辑器
+  // 从「终端助手」绑定 Tab 跳转过来时，自动打开该智能体编辑器
   useEffect(() => {
     if (!pendingAgentEditorId) return;
     const agent = agents.find((a) => a.id === pendingAgentEditorId);
@@ -328,7 +328,7 @@ export function AgentManager() {
           borderRadius: 2.5,
           overflow: 'hidden',
           borderColor: 'divider',
-          bgcolor: isDark ? 'rgba(108,99,255,0.04)' : 'rgba(108,99,255,0.025)',
+          bgcolor: isDark ? 'rgba(45,212,191,0.04)' : 'rgba(45,212,191,0.025)',
         }}
       >
         <Box sx={{ height: 3, background: GRADIENT }} />
@@ -362,7 +362,7 @@ export function AgentManager() {
             fontSize: 11,
             fontWeight: 700,
             fontFamily: 'monospace',
-            bgcolor: 'rgba(108,99,255,0.10)',
+            bgcolor: 'rgba(45,212,191,0.10)',
             color: BRAND,
           }}
         />
@@ -398,11 +398,11 @@ export function AgentManager() {
             textTransform: 'none',
             color: '#fff',
             background: GRADIENT,
-            boxShadow: '0 2px 8px rgba(108,99,255,0.3)',
+            boxShadow: '0 2px 8px rgba(45,212,191,0.3)',
             fontSize: 13,
             px: 2.5,
             py: 1,
-            '&:hover': { boxShadow: '0 4px 14px rgba(108,99,255,0.45)', background: GRADIENT },
+            '&:hover': { boxShadow: '0 4px 14px rgba(45,212,191,0.45)', background: GRADIENT },
           }}
         >
           {t('agent.new_agent')}
@@ -452,11 +452,11 @@ export function AgentManager() {
                       borderColor: isSelected ? 'primary.main' : 'divider',
                       borderLeft: isSelected ? '3px solid' : '1px solid',
                       borderLeftColor: isSelected ? 'primary.main' : 'divider',
-                      bgcolor: isSelected ? 'rgba(108,99,255,0.08)' : 'transparent',
+                      bgcolor: isSelected ? 'rgba(45,212,191,0.08)' : 'transparent',
                       transition: 'all 0.2s',
                       '&:hover': {
                         borderColor: 'primary.main',
-                        bgcolor: 'rgba(108,99,255,0.04)',
+                        bgcolor: 'rgba(45,212,191,0.04)',
                         boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
                       },
                       '&:hover .agent-del': { opacity: 1 },
@@ -474,7 +474,7 @@ export function AgentManager() {
                           background: GRADIENT,
                           color: '#fff',
                           flexShrink: 0,
-                          boxShadow: '0 2px 6px rgba(108,99,255,0.3)',
+                          boxShadow: '0 2px 6px rgba(45,212,191,0.3)',
                         }}
                       >
                         <RobotIcon size={16} weight="bold" />
@@ -558,7 +558,7 @@ export function AgentManager() {
             >
               <Box sx={{ height: 4, background: GRADIENT }} />
               <Box sx={{ p: { xs: 3, sm: 4 }, textAlign: 'center' }}>
-                <Box sx={{ width: 72, height: 72, borderRadius: '50%', background: GRADIENT, display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2, boxShadow: '0 6px 20px rgba(108,99,255,0.35)' }}>
+                <Box sx={{ width: 72, height: 72, borderRadius: '50%', background: GRADIENT, display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2, boxShadow: '0 6px 20px rgba(45,212,191,0.35)' }}>
                   <RobotIcon size={36} weight="bold" color="#fff" />
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 700, fontSize: 20 }}>
@@ -576,7 +576,7 @@ export function AgentManager() {
                   ].map((step, i) => (
                     <Box key={i} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.8 }}>
-                        <Box sx={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(108,99,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Box sx={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(45,212,191,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {step.icon}
                         </Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13 }}>
@@ -594,7 +594,7 @@ export function AgentManager() {
                   variant="contained"
                   startIcon={<PlusIcon size={18} weight="bold" />}
                   onClick={handleNew}
-                  sx={{ mt: 3, textTransform: 'none', background: GRADIENT, fontSize: 14, px: 3, py: 1, '&:hover': { boxShadow: '0 4px 14px rgba(108,99,255,0.4)' } }}
+                  sx={{ mt: 3, textTransform: 'none', background: GRADIENT, fontSize: 14, px: 3, py: 1, '&:hover': { boxShadow: '0 4px 14px rgba(45,212,191,0.4)' } }}
                 >
                   {t('agent.new_agent')}
                 </Button>
@@ -613,7 +613,7 @@ export function AgentManager() {
                 bgcolor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)',
               }}
             >
-              <Box sx={{ width: 64, height: 64, borderRadius: '50%', background: GRADIENT, display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2, boxShadow: '0 6px 20px rgba(108,99,255,0.3)' }}>
+              <Box sx={{ width: 64, height: 64, borderRadius: '50%', background: GRADIENT, display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2, boxShadow: '0 6px 20px rgba(45,212,191,0.3)' }}>
                 <RobotIcon size={32} weight="bold" color="#fff" />
               </Box>
               <Typography variant="h6" sx={{ fontWeight: 700, fontSize: 18 }}>
@@ -656,7 +656,7 @@ export function AgentManager() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(108,99,255,0.35)',
+                boxShadow: '0 4px 12px rgba(45,212,191,0.35)',
                 flexShrink: 0,
               }}
             >
@@ -997,8 +997,8 @@ export function AgentManager() {
               fontSize: 13,
               px: 3,
               py: 1,
-              boxShadow: '0 4px 14px rgba(108,99,255,0.35)',
-              '&:hover': { boxShadow: '0 6px 18px rgba(108,99,255,0.5)', background: GRADIENT },
+              boxShadow: '0 4px 14px rgba(45,212,191,0.35)',
+              '&:hover': { boxShadow: '0 6px 18px rgba(45,212,191,0.5)', background: GRADIENT },
               '&:disabled': { opacity: 0.5, boxShadow: 'none' },
             }}
           >

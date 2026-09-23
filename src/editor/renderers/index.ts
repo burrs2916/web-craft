@@ -1,0 +1,32 @@
+export { TextRenderer } from "./TextRenderer";
+export { ImageRenderer } from "./ImageRenderer";
+export { ShapeRenderer } from "./ShapeRenderer";
+export { EchartRenderer } from "./EchartRenderer";
+export { MetricRenderer } from "./MetricRenderer";
+export { MapRenderer } from "./MapRenderer";
+export { VideoRenderer } from "./VideoRenderer";
+export { FallbackRenderer } from "./FallbackRenderer";
+
+// ECharts 图表渲染器 - 全量覆盖
+export { BarChartRenderer } from "./echarts/BarChartRenderer";
+export { LineChartRenderer } from "./echarts/LineChartRenderer";
+export { PieChartRenderer } from "./echarts/PieChartRenderer";
+export { ScatterChartRenderer } from "./echarts/ScatterChartRenderer";
+export { RadarChartRenderer } from "./echarts/RadarChartRenderer";
+export { GaugeChartRenderer } from "./echarts/GaugeChartRenderer";
+export { HeatmapChartRenderer } from "./echarts/HeatmapChartRenderer";
+export { TreemapChartRenderer } from "./echarts/TreemapChartRenderer";
+export { SunburstChartRenderer } from "./echarts/SunburstChartRenderer";
+export { BoxplotChartRenderer } from "./echarts/BoxplotChartRenderer";
+export { CandlestickChartRenderer } from "./echarts/CandlestickChartRenderer";
+export { FunnelChartRenderer } from "./echarts/FunnelChartRenderer";
+export { SankeyChartRenderer } from "./echarts/SankeyChartRenderer";
+export { GraphChartRenderer } from "./echarts/GraphChartRenderer";
+export { TreeChartRenderer } from "./echarts/TreeChartRenderer";
+export { ThemeRiverChartRenderer } from "./echarts/ThemeRiverChartRenderer";
+export { ParallelChartRenderer } from "./echarts/ParallelChartRenderer";
+export { MapChartRenderer } from "./echarts/MapChartRenderer";
+export { LinesChartRenderer } from "./echarts/LinesChartRenderer";
+export { EffectScatterChartRenderer } from "./echarts/EffectScatterChartRenderer";
+export { PictorialBarChartRenderer } from "./echarts/PictorialBarChartRenderer";
+export { CustomChartRenderer } from "./echarts/CustomChartRenderer";

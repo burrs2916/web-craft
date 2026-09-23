@@ -1,10 +1,18 @@
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
-import { XIcon } from '@phosphor-icons/react';
+import { XIcon, FolderIcon } from '@phosphor-icons/react';
 import { useTheme } from '@mui/material/styles';
+import { brand } from '../../../theme/brand';
 
 interface TabBarProps {
-  tabs: { id: string; title: string; isActive: boolean; connectionType: 'local' | 'ssh'; disconnected?: boolean }[];
+  tabs: {
+    id: string;
+    title: string;
+    isActive: boolean;
+    connectionType: 'local' | 'ssh';
+    disconnected?: boolean;
+    kind?: 'terminal' | 'sftp';
+  }[];
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
 }
@@ -16,33 +24,41 @@ export function TabBar({ tabs, onSelect, onClose }: TabBarProps) {
   // 颜色体系
   const colors = isDark
     ? {
-        bg: '#161B22',
+        bg: brand.dark.elevated,
         border: 'rgba(255,255,255,0.06)',
         tabHover: 'rgba(255,255,255,0.04)',
-        tabActiveBg: 'rgba(108,99,255,0.06)',
-        tabActiveBorder: 'rgba(108,99,255,0.25)',
-        textActive: '#E6EDF3',
-        textInactive: '#8B949E',
-        dotSsh: '#4FC3F7',
+        tabActiveBg: 'rgba(45,212,191,0.06)',
+        tabActiveBorder: 'rgba(45,212,191,0.25)',
+        tabActiveBgSftp: 'rgba(251,191,36,0.08)',
+        tabActiveBorderSftp: 'rgba(251,191,36,0.28)',
+        textActive: brand.dark.text,
+        textInactive: brand.dark.textSecondary,
+        dotSsh: '#38BDF8',
         dotLocal: '#81C784',
-        dotDisconnected: '#FF5252',
-        indicator: '#6C63FF',
-        indicatorErr: '#FF5252',
+        dotSftp: '#FBBF24',
+        dotDisconnected: '#F87171',
+        indicator: '#60A5FA',
+        indicatorSftp: '#FBBF24',
+        indicatorErr: '#F87171',
         closeHover: 'rgba(255,255,255,0.12)',
       }
     : {
-        bg: '#F6F8FA',
+        bg: brand.light.background,
         border: 'rgba(0,0,0,0.08)',
         tabHover: 'rgba(0,0,0,0.04)',
-        tabActiveBg: 'rgba(108,99,255,0.04)',
-        tabActiveBorder: 'rgba(108,99,255,0.18)',
-        textActive: '#1F2328',
-        textInactive: '#656D76',
+        tabActiveBg: 'rgba(45,212,191,0.04)',
+        tabActiveBorder: 'rgba(45,212,191,0.18)',
+        tabActiveBgSftp: 'rgba(217,119,6,0.08)',
+        tabActiveBorderSftp: 'rgba(217,119,6,0.22)',
+        textActive: brand.light.text,
+        textInactive: brand.light.textSecondary,
         dotSsh: '#0284C7',
         dotLocal: '#2E7D32',
-        dotDisconnected: '#D32F2F',
-        indicator: '#6C63FF',
-        indicatorErr: '#D32F2F',
+        dotSftp: '#D97706',
+        dotDisconnected: '#DC2626',
+        indicator: '#60A5FA',
+        indicatorSftp: '#D97706',
+        indicatorErr: '#DC2626',
         closeHover: 'rgba(0,0,0,0.10)',
       };
 
@@ -67,9 +83,15 @@ export function TabBar({ tabs, onSelect, onClose }: TabBarProps) {
         const isDisconnected = !!tab.disconnected;
         const isSSH = tab.connectionType === 'ssh';
         const isActive = tab.isActive;
+        const isSftp = tab.kind === 'sftp';
         const dotColor = isDisconnected
           ? colors.dotDisconnected
-          : isSSH ? colors.dotSsh : colors.dotLocal;
+          : isSftp
+            ? colors.dotSftp
+            : isSSH ? colors.dotSsh : colors.dotLocal;
+        const activeBg = isSftp ? colors.tabActiveBgSftp : colors.tabActiveBg;
+        const activeBorder = isSftp ? colors.tabActiveBorderSftp : colors.tabActiveBorder;
+        const indicatorColor = isSftp ? colors.indicatorSftp : colors.indicator;
 
         return (
           <Tooltip
@@ -81,41 +103,54 @@ export function TabBar({ tabs, onSelect, onClose }: TabBarProps) {
           >
             {/* 单个标签外框 */}
             <Box
-              onClick={() => onSelect(tab.id)}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.75,
-                px: 1.25,
-                py: 0.25,
-                height: 28,
-                minWidth: 80,
-                maxWidth: 160,
-                borderRadius: '6px 6px 0 0',
-                cursor: 'pointer',
-                position: 'relative',
-                flexShrink: 0,
-                bgcolor: isActive ? colors.tabActiveBg : 'transparent',
-                borderTop: isActive ? `2px solid ${colors.tabActiveBorder}` : '2px solid transparent',
-                opacity: isDisconnected ? 0.55 : 1,
-                transition: 'background-color 0.12s ease, border-color 0.12s ease',
-                '&:hover': {
-                  bgcolor: isActive ? colors.tabActiveBg : colors.tabHover,
-                },
-              }}
-            >
-              {/* 连接状态点 */}
-              <Box
+                onClick={() => onSelect(tab.id)}
                 sx={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  bgcolor: dotColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  px: 1.25,
+                  py: 0.25,
+                  height: 28,
+                  minWidth: 80,
+                  maxWidth: 170,
+                  borderRadius: '6px 6px 0 0',
+                  cursor: 'pointer',
+                  position: 'relative',
                   flexShrink: 0,
-                  boxShadow: isActive && !isDisconnected ? `0 0 4px ${dotColor}` : 'none',
-                  transition: 'box-shadow 0.15s ease',
+                  bgcolor: isActive ? activeBg : 'transparent',
+                  borderTop: isActive ? `2px solid ${activeBorder}` : '2px solid transparent',
+                  opacity: isDisconnected ? 0.55 : 1,
+                  transition: 'background-color 0.12s ease, border-color 0.12s ease',
+                  '&:hover': {
+                    bgcolor: isActive ? activeBg : colors.tabHover,
+                  },
                 }}
-              />
+              >
+                {/* 连接状态点 / SFTP 文件夹图标 */}
+                {isSftp ? (
+                  <FolderIcon
+                    size={12}
+                    weight="fill"
+                    color={dotColor}
+                    style={{
+                      flexShrink: 0,
+                      filter: isActive && !isDisconnected ? `drop-shadow(0 0 3px ${dotColor})` : 'none',
+                      transition: 'filter 0.15s ease',
+                    }}
+                  />
+                ) : (
+                  <Box
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      bgcolor: dotColor,
+                      flexShrink: 0,
+                      boxShadow: isActive && !isDisconnected ? `0 0 4px ${dotColor}` : 'none',
+                      transition: 'box-shadow 0.15s ease',
+                    }}
+                  />
+                )}
 
               {/* 标签文字 */}
               <Box
@@ -174,7 +209,7 @@ export function TabBar({ tabs, onSelect, onClose }: TabBarProps) {
                     borderRadius: '2px 2px 0 0',
                     background: isDisconnected
                       ? `linear-gradient(90deg, ${colors.indicatorErr}, transparent)`
-                      : `linear-gradient(90deg, ${colors.indicator}, transparent)`,
+                      : `linear-gradient(90deg, ${indicatorColor}, transparent)`,
                   }}
                 />
               )}

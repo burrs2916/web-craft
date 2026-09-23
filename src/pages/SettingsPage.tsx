@@ -26,6 +26,7 @@ import {
 } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../engine';
+import { GlobalDataSourcePanel } from '../editor/panels/GlobalDataSourcePanel';
 import type { ThemeMode, CursorStyle } from '../engine/settingsStore';
 
 type SectionKey = 'appearance' | 'terminal' | 'colors' | 'data';
@@ -212,8 +213,8 @@ export function SettingsPage() {
                 mb: 0.25,
                 py: 1,
                 '&.Mui-selected': {
-                  backgroundColor: 'rgba(108, 99, 255, 0.12)',
-                  '&:hover': { backgroundColor: 'rgba(108, 99, 255, 0.18)' },
+                  backgroundColor: 'rgba(45, 212, 191, 0.12)',
+                  '&:hover': { backgroundColor: 'rgba(45, 212, 191, 0.18)' },
                   '& .MuiListItemIcon-root': { color: 'primary.main' },
                   '& .MuiListItemText-primary': { color: 'primary.main', fontWeight: 600 },
                 },
@@ -263,13 +264,13 @@ export function SettingsPage() {
                   >
                     <MenuItem value="dark">
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: '#0D1117', border: '1px solid #30363D' }} />
+                        <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: '#0A0F1A', border: '1px solid #30363D' }} />
                         {t('theme.dark')}
                       </Box>
                     </MenuItem>
                     <MenuItem value="light">
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: '#F5F5F5', border: '1px solid #D1D5DB' }} />
+                        <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: '#F4FAF7', border: '1px solid #D1D5DB' }} />
                         {t('theme.light')}
                       </Box>
                     </MenuItem>
@@ -487,6 +488,16 @@ export function SettingsPage() {
                   onChange={(e) => update('confirmBeforeClose', e.target.checked)}
                 />
               </SettingRow>
+              <Divider />
+              <SettingRow
+                label={t('settings.restore_tabs_on_startup')}
+                description={t('settings.restore_tabs_on_startup_desc')}
+              >
+                <Switch
+                  checked={settings.restoreTabsOnStartup}
+                  onChange={(e) => update('restoreTabsOnStartup', e.target.checked)}
+                />
+              </SettingRow>
             </Paper>
           </Box>
 
@@ -580,6 +591,20 @@ export function SettingsPage() {
               {t('settings.data_management_desc')}
             </Typography>
 
+            <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+              <Box sx={{ p: 2, pb: 0 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  {t('settings.global_data_sources')}
+                </Typography>
+              </Box>
+              <Box sx={{ p: 2 }}>
+                <GlobalDataSourcePanel open onClose={() => {}} embedded />
+              </Box>
+            </Paper>
+
+            <Typography variant="subtitle2" sx={{ mt: 3, mb: 1.5, fontWeight: 600 }}>
+              {t('settings.data_general')}
+            </Typography>
             <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
               <SettingRow
                 label={t('settings.export')}

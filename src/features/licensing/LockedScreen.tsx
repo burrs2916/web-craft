@@ -19,10 +19,6 @@ const FEATURE_DESCRIPTIONS: Record<ProFeature, string> = {
     'One-click VNC remote desktop access. Connect to your Linux/Windows servers without third-party tools.',
   ai_copilot:
     'Multi-agent AI conversations with streaming tool calls. Bring your own model API key.',
-  note_ai_optimize:
-    'AI-powered note polishing, summarization, and rewriting directly inside the editor.',
-  note_reference:
-    'Smart note references and AI-driven command-to-note linking for instant context recall.',
   sftp:
     'Encrypted SFTP file transfer reusing your active SSH session. Upload and download files to any server without extra tooling.',
 };
@@ -52,12 +48,12 @@ export function LockedScreen({ feature, message }: LockedScreenProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, rgba(108,99,255,0.15) 0%, rgba(79,195,247,0.1) 100%)',
+            background: 'linear-gradient(135deg, rgba(45,212,191,0.15) 0%, rgba(56,189,248,0.1) 100%)',
             border: '1px solid',
             borderColor: 'divider',
           }}
         >
-          <LockIcon size={28} weight="duotone" color="#6C63FF" />
+          <LockIcon size={28} weight="duotone" color="#60A5FA" />
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>
           {PRO_FEATURE_LABELS[feature]}
@@ -74,9 +70,9 @@ export function LockedScreen({ feature, message }: LockedScreenProps) {
             px: 3,
             py: 1,
             fontWeight: 700,
-            background: 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)',
+            background: 'linear-gradient(135deg, #60A5FA 0%, #38BDF8 100%)',
             '&:hover': {
-              background: 'linear-gradient(135deg, #5B54E0 0%, #29B6F6 100%)',
+              background: 'linear-gradient(135deg, #1D4ED8 0%, #0EA5E9 100%)',
             },
           }}
         >

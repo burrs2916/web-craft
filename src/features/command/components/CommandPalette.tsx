@@ -152,7 +152,7 @@ export function CommandPalette({ open, onClose, onExecute }: CommandPaletteProps
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
-                      <MagnifyingGlassIcon size={20} color="#6C63FF" />
+                      <MagnifyingGlassIcon size={20} color="#60A5FA" />
                     </InputAdornment>
                   ),
                 },
@@ -175,7 +175,7 @@ export function CommandPalette({ open, onClose, onExecute }: CommandPaletteProps
                 borderColor: 'divider',
                 bgcolor: parsed.isDangerous
                   ? 'rgba(255,107,107,0.08)'
-                  : 'rgba(108,99,255,0.05)',
+                  : 'rgba(45,212,191,0.05)',
               }}
             >
               {parsed.isDangerous && (
@@ -209,12 +209,12 @@ export function CommandPalette({ open, onClose, onExecute }: CommandPaletteProps
                   onClick={() => handleHistoryClick(entry.command)}
                   sx={{
                     '&.Mui-selected': {
-                      bgcolor: 'rgba(108,99,255,0.1)',
+                      bgcolor: 'rgba(45,212,191,0.1)',
                     },
                   }}
                 >
                   <ListItemIcon sx={{ minWidth: 36 }}>
-                    <ClockCounterClockwiseIcon size={18} color="#8B949E" />
+                    <ClockCounterClockwiseIcon size={18} color="#8FA3B0" />
                   </ListItemIcon>
                   <ListItemText
                     primary={entry.command}

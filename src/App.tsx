@@ -1,108 +1,25 @@
+import { Suspense, lazy, useEffect } from 'react';
 import Box from '@mui/material/Box';
-import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
-import { initWindowCloseFlush } from './features/notebook/utils/registerWindowCloseFlush';
+import CircularProgress from '@mui/material/CircularProgress';
+import { HashRouter, useLocation } from 'react-router-dom';
 import { AppTheme } from './theme';
-import { AppShell, Sidebar, Header, StatusBar } from './components/layout';
 import { NotificationProvider } from './core/notification';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useSettingsStore } from './engine';
 import i18n from './core/i18n';
-import { TerminalPage } from './pages/TerminalPage';
-import { SitesPage } from './pages/SitesPage';
-import { SiteDetailPage } from './pages/SiteDetailPage';
-import { CommandPage } from './pages/CommandPage';
-import { ConnectionPage } from './pages/ConnectionPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { NotebookPage } from './pages/NotebookPage';
-import { AgentPage } from './pages/AgentPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { NotFoundPage } from './pages/NotFoundPage';
-import { CategoryNotesPage } from './features/notebook/components/CategoryNotesPage';
-import { NotesReferencePage } from './features/notebook/components/NotesReferencePage';
-import { AiCopilotPage } from './pages/AiCopilotPage';
-import { RemoteDesktopPage } from './pages/RemoteDesktopPage';
-import { SftpPage } from './pages/SftpPage';
 import { LicenseProvider, UpgradeDialog } from './features/licensing';
 
-function AppLayout() {
-  const showStatusBar = useSettingsStore((s) => s.settings.showStatusBar);
-  const location = useLocation();
-  const isTerminal = location.pathname === '/';
+// 布局级代码分割：主窗口与独立窗口各自按需加载。
+// 独立窗口（site-ops / sftp / remote-desktop / ai-copilot）不再加载
+// 主窗口的编辑器、终端、站点管理等全部页面模块与 90 个组件注册。
+const AppLayout = lazy(() => import('./components/layout/AppLayout').then((m) => ({ default: m.AppLayout })));
+const StandaloneLayout = lazy(() => import('./components/layout/StandaloneLayout').then((m) => ({ default: m.StandaloneLayout })));
 
+function RootLoading() {
   return (
-    <AppShell>
-      <Header />
-      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden', mt: '48px' }}>
-        <Sidebar />
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            overflow: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            position: 'relative',
-          }}
-        >
-          <Box
-            sx={{
-              position: 'absolute',
-              inset: isTerminal ? 0 : undefined,
-              width: isTerminal ? 'auto' : 0,
-              height: isTerminal ? 'auto' : 0,
-              overflow: 'hidden',
-              visibility: isTerminal ? 'visible' : 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              zIndex: isTerminal ? 1 : -1,
-            }}
-          >
-            <TerminalPage />
-          </Box>
-
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              visibility: isTerminal ? 'hidden' : 'visible',
-              position: isTerminal ? 'absolute' : 'relative',
-              inset: isTerminal ? 0 : undefined,
-              width: isTerminal ? 0 : 'auto',
-              overflow: isTerminal ? 'hidden' : 'visible',
-              zIndex: isTerminal ? -1 : 1,
-            }}
-          >
-            <Routes>
-              <Route path="/sites" element={<SitesPage />} />
-              <Route path="/sites/:siteId" element={<SiteDetailPage />} />
-              <Route path="/commands" element={<CommandPage />} />
-              <Route path="/notebook" element={<NotebookPage />} />
-              <Route path="/agent" element={<AgentPage />} />
-              <Route path="/connections" element={<ConnectionPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </Box>
-        </Box>
-      </Box>
-      {showStatusBar && <StatusBar />}
-    </AppShell>
-  );
-}
-
-function StandaloneLayout() {
-  return (
-    <Routes>
-      <Route path="/category-notes" element={<CategoryNotesPage />} />
-      <Route path="/notes-reference" element={<NotesReferencePage />} />
-      <Route path="/ai-copilot" element={<AiCopilotPage />} />
-      <Route path="/remote-desktop" element={<RemoteDesktopPage />} />
-      <Route path="/sftp" element={<SftpPage />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+    <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <CircularProgress size={32} />
+    </Box>
   );
 }
 
@@ -112,9 +29,13 @@ function RootRouter() {
   // WebviewWindow urls (e.g. "/#/category-notes") are loaded as pathname "/<any>" with hash "#/category-notes"
   // So we need to inspect both pathname AND hash to determine if we are in a standalone window.
   const checkPath = (location.hash.replace(/^#/, '') || location.pathname);
-  const isStandalone = checkPath.startsWith('/category-notes') || checkPath.startsWith('/notes-reference') || checkPath.startsWith('/ai-copilot') || checkPath.startsWith('/remote-desktop') || checkPath.startsWith('/sftp');
+  const isStandalone = checkPath.startsWith('/ai-copilot') || checkPath.startsWith('/ai-editor') || checkPath.startsWith('/remote-desktop') || checkPath.startsWith('/sftp') || checkPath.startsWith('/site-ops');
 
-  return isStandalone ? <StandaloneLayout /> : <AppLayout />;
+  return (
+    <Suspense fallback={<RootLoading />}>
+      {isStandalone ? <StandaloneLayout /> : <AppLayout />}
+    </Suspense>
+  );
 }
 
 export default function App() {
@@ -124,11 +45,6 @@ export default function App() {
   useEffect(() => {
     initSettings();
   }, [initSettings]);
-
-  useEffect(() => {
-    // 关窗前 flush 所有未落盘笔记改动，避免 2s 自动保存防抖窗口内输入丢失（R6-1）。
-    void initWindowCloseFlush();
-  }, []);
 
   useEffect(() => {
     if (language && i18n.language !== language) {

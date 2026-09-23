@@ -66,7 +66,7 @@ export function FindBar({ open, onClose, onFindNext, onFindPrevious, resultInfo 
         bgcolor: 'background.paper',
       }}
     >
-      <MagnifyingGlassIcon size={16} color="#8B949E" />
+      <MagnifyingGlassIcon size={16} color="#8FA3B0" />
       <TextField
         inputRef={inputRef}
         size="small"
@@ -101,8 +101,8 @@ export function FindBar({ open, onClose, onFindNext, onFindPrevious, resultInfo 
           py: 0.25,
           fontSize: '0.7rem',
           fontWeight: 700,
-          bgcolor: caseSensitive ? 'rgba(108,99,255,0.12)' : 'transparent',
-          '&:hover': { bgcolor: caseSensitive ? 'rgba(108,99,255,0.18)' : 'rgba(0,0,0,0.04)' },
+          bgcolor: caseSensitive ? 'rgba(45,212,191,0.12)' : 'transparent',
+          '&:hover': { bgcolor: caseSensitive ? 'rgba(45,212,191,0.18)' : 'rgba(0,0,0,0.04)' },
         }}
         title={t('find_case_sensitive', { defaultValue: 'Case sensitive' })}
       >

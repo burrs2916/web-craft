@@ -59,6 +59,7 @@ export interface ConversationDto {
   agentId: string;
   title: string;
   metadata: string;
+  status: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -71,4 +72,23 @@ export interface MessageDto {
   toolCalls: string;
   isError: number;
   createdAt: number;
+}
+
+export interface OllamaModelInfo {
+  name: string;
+  refKey: string;
+  size: number;
+  modifiedAt: string;
+  parameterSize: string;
+  quantizationLevel: string;
+  family: string;
+}
+
+export interface OllamaStatusDto {
+  serviceAvailable: boolean;
+  version: string;
+  modelLoaded: boolean;
+  modelName: string;
+  runningModels: string[];
+  error: string | null;
 }

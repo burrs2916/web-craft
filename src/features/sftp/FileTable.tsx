@@ -178,9 +178,9 @@ export function FileTable({
       ? '1fr 96px 148px 92px 104px'
       : '1fr 96px 148px 92px';
   const border = isDark ? 'rgba(240,246,252,0.08)' : 'rgba(27,31,36,0.10)';
-  const headText = isDark ? '#8B949E' : '#57606A';
+  const headText = isDark ? '#8FA3B0' : '#5A6B64';
   const bodyText = isDark ? '#C9D1D9' : '#24292F';
-  const subtle = isDark ? '#7D8590' : '#6E7781';
+  const subtle = isDark ? '#7D8590' : '#5A6B64';
   const selBg = isDark ? 'rgba(56,139,253,0.22)' : 'rgba(9,105,218,0.12)';
   const hoverBg = isDark ? 'rgba(177,186,196,0.08)' : 'rgba(27,31,36,0.045)';
   const focusRing = isDark ? 'rgba(88,166,255,0.65)' : 'rgba(9,105,218,0.55)';
@@ -203,8 +203,8 @@ export function FileTable({
         fontSize: 12,
         fontWeight: 600,
         letterSpacing: 0.2,
-        color: sortKey === k ? (isDark ? '#E6EDF3' : '#1F2328') : headText,
-        '&:hover': { color: isDark ? '#E6EDF3' : '#1F2328' },
+        color: sortKey === k ? (isDark ? '#E8F1EC' : '#1F2328') : headText,
+        '&:hover': { color: isDark ? '#E8F1EC' : '#1F2328' },
       }}
     >
       {label}
@@ -312,7 +312,7 @@ export function FileTable({
                         component="span"
                         sx={{
                           fontSize: 13,
-                          color: navigable ? (isDark ? '#E6EDF3' : '#1F2328') : bodyText,
+                          color: navigable ? (isDark ? '#E8F1EC' : '#1F2328') : bodyText,
                           fontWeight: navigable ? 500 : 400,
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',

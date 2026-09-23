@@ -6,6 +6,7 @@ import {
   PaperPlaneTilt as SendIcon, Stop, Robot, User,
   Terminal, Wrench, PaperclipIcon, XIcon, Package,
   BrainIcon, CheckCircleIcon, WarningCircleIcon, ArrowsDownUpIcon,
+  Sparkle,
 } from '@phosphor-icons/react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +20,9 @@ export interface ToolCallDisplay {
   arguments: Record<string, unknown>;
   result: string | null;
   success: boolean | null;
-  status: 'running' | 'done' | 'denied';
+  status: 'streaming' | 'running' | 'done' | 'denied';
+  /** 执行耗时（毫秒） */
+  durationMs?: number | null;
 }
 
 interface ParsedToolCall {
@@ -65,9 +68,31 @@ function extractToolCallIdFromMsgId(msgId: string, convId: string): string | nul
   return null;
 }
 
+export interface AgentStatusInfo {
+  status: string;
+  iteration: number;
+  maxIterations: number;
+  detail?: string;
+  streamStats?: {
+    charsTotal: number;
+    tokensEstimated: number;
+    charsPerSec: number;
+    tokensPerSec: number;
+    elapsedMs: number;
+  } | null;
+  contextUsage?: {
+    tokensUsed: number;
+    contextWindow: number;
+    usageRatio: number;
+  } | null;
+  /** 是否为 Ollama 本地模型（用于显示本地模型标识和专属样式） */
+  isOllama?: boolean;
+}
+
 export interface ChatMessagesAreaProps {
   messages: MessageDto[];
   streamingContent: string;
+  streamingReasoning?: string;
   streamingMsgId: string | null;
   loading: boolean;
   toolCalls: ToolCallDisplay[];
@@ -78,6 +103,7 @@ export interface ChatMessagesAreaProps {
   emptyIcon?: React.ReactNode;
   emptyText?: string;
   thinkingText?: string;
+  agentStatus?: AgentStatusInfo | null;
   onEditMessage?: (messageId: string, content: string) => void;
   onRegenerate?: (messageId: string) => void;
 }
@@ -99,15 +125,15 @@ const markdownStyles = (agentColor: string, isDark: boolean) => ({
 });
 
 export function ChatMessagesArea({
-  messages, streamingContent, streamingMsgId, loading, toolCalls,
+  messages, streamingContent, streamingReasoning, streamingMsgId, loading, toolCalls,
   agentColor, userColor, isDark, conversationId, emptyIcon, emptyText, thinkingText,
-  onEditMessage, onRegenerate,
+  agentStatus, onEditMessage, onRegenerate,
 }: ChatMessagesAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingContent, toolCalls]);
+  }, [messages, streamingContent, streamingReasoning, toolCalls, agentStatus]);
 
   const groupedMessages = useMemo(() => {
     const groups: Array<{
@@ -178,17 +204,22 @@ export function ChatMessagesArea({
               streamingToolCalls={isStreaming ? toolCalls : []}
               toolMessages={group.toolMessages}
               displayContent={displayContent}
+              streamingReasoning={isStreaming ? streamingReasoning : undefined}
               hasContent={hasContent}
               agentColor={agentColor}
               isDark={isDark}
               conversationId={conversationId}
               onRegenerate={isLastGroup && !isStreaming ? onRegenerate : undefined}
               assistantMsgId={group.assistantMsg?.id}
+              agentStatus={isLastGroup && isStreaming ? agentStatus : undefined}
             />
           );
         }
         return null;
       })}
+      {loading && groupedMessages.length === 0 && agentStatus && (
+        <AgentStatusBar status={agentStatus} />
+      )}
       <div ref={messagesEndRef} />
     </Box>
   );
@@ -201,7 +232,7 @@ function UserMessageBubble({ msg, userColor, isDark, onEdit, showActions }: { ms
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <Box sx={{
         width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: `linear-gradient(135deg, ${userColor} 0%, ${isDark ? '#8B83FF' : '#7B75FF'} 100%)`,
+        background: `linear-gradient(135deg, ${userColor} 0%, ${isDark ? '#93C5FD' : '#3B82F6'} 100%)`,
         color: '#fff', flexShrink: 0, mt: 0.25,
       }}>
         <User size={14} weight="bold" />
@@ -240,30 +271,35 @@ interface AssistantTurnGroupProps {
   streamingToolCalls: ToolCallDisplay[];
   toolMessages: MessageDto[];
   displayContent: string;
+  streamingReasoning?: string;
   hasContent: boolean;
   agentColor: string;
   isDark: boolean;
   conversationId?: string;
   onRegenerate?: (messageId: string) => void;
   assistantMsgId?: string;
+  agentStatus?: AgentStatusInfo | null;
 }
 
 function AssistantTurnGroup({
   isStreaming, thinkingText, isThinking,
   parsedToolCalls, streamingToolCalls, toolMessages,
-  displayContent, hasContent, agentColor, isDark, conversationId,
-  onRegenerate, assistantMsgId,
+  displayContent, streamingReasoning, hasContent, agentColor, isDark, conversationId,
+  onRegenerate, assistantMsgId, agentStatus,
 }: AssistantTurnGroupProps) {
+  const [reasoningExpanded, setReasoningExpanded] = useState(false);
   const showThinking = isThinking;
+  const showReasoning = !!streamingReasoning && streamingReasoning.length > 0;
   const showToolCalls = parsedToolCalls.length > 0 || streamingToolCalls.length > 0;
   const showToolResults = toolMessages.length > 0;
   const showContent = hasContent;
+  const showStatusBar = isStreaming && agentStatus && !showThinking;
 
   return (
     <Box sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'flex-start' }}>
       <Box sx={{
         width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: `linear-gradient(135deg, ${agentColor} 0%, ${isDark ? '#29B6F6' : '#0277BD'} 100%)`,
+        background: `linear-gradient(135deg, ${agentColor} 0%, ${isDark ? '#0EA5E9' : '#0277BD'} 100%)`,
         color: '#fff', flexShrink: 0, mt: 0.25,
       }}>
         <Robot size={14} weight="bold" />
@@ -271,6 +307,51 @@ function AssistantTurnGroup({
       <Box sx={{ maxWidth: '85%', minWidth: 0, flex: 1 }}>
         {showThinking && (
           <ThinkingIndicator thinkingText={thinkingText} agentColor={agentColor} />
+        )}
+        {showStatusBar && agentStatus && (
+          <AgentStatusBar status={agentStatus} />
+        )}
+        {showReasoning && (
+          <Box sx={{ mb: 0.75 }}>
+            <Box
+              onClick={() => setReasoningExpanded(!reasoningExpanded)}
+              sx={{
+                display: 'flex', alignItems: 'center', gap: 0.5,
+                px: 1, py: 0.6,
+                bgcolor: 'rgba(156, 39, 176, 0.06)',
+                border: '1px solid rgba(156, 39, 176, 0.2)',
+                borderRadius: 2,
+                cursor: 'pointer',
+                fontSize: 11,
+                color: 'text.secondary',
+                '&:hover': { bgcolor: 'rgba(156, 39, 176, 0.1)' },
+              }}
+            >
+              <BrainIcon size={12} weight="bold" style={{ color: '#9C27B0' }} />
+              <span>思考过程</span>
+              <span style={{ opacity: 0.6, fontSize: 10 }}>
+                ({streamingReasoning.length} 字符)
+              </span>
+              <Box sx={{ flex: 1 }} />
+              <span style={{ opacity: 0.5 }}>{reasoningExpanded ? '收起 ▲' : '展开 ▼'}</span>
+            </Box>
+            {reasoningExpanded && (
+              <Box sx={{
+                mt: 0.5, px: 1.25, py: 1,
+                bgcolor: 'rgba(156, 39, 176, 0.04)',
+                border: '1px solid rgba(156, 39, 176, 0.1)',
+                borderRadius: 2,
+                fontSize: 11.5, lineHeight: 1.6,
+                color: 'text.secondary',
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'monospace',
+                maxHeight: 400, overflow: 'auto',
+              }}>
+                {streamingReasoning}
+                {isStreaming && <Box component="span" sx={{ color: '#9C27B0', ml: 0.25 }}>▌</Box>}
+              </Box>
+            )}
+          </Box>
         )}
         {showToolCalls && (
           <Box sx={{ mb: 0.75 }}>
@@ -369,25 +450,276 @@ function ThinkingIndicator({ thinkingText, agentColor }: { thinkingText?: string
   );
 }
 
+/**
+ * 根据上下文使用率获取对应颜色
+ */
+function getContextUsageColor(ratio: number): string {
+  if (ratio > 0.9) return '#FF5252';   // 红色 - 危险
+  if (ratio > 0.75) return '#FF9800';  // 橙色 - 警告
+  if (ratio > 0.5) return '#FFEB3B';   // 黄色 - 注意
+  return 'text.disabled';              // 默认灰色
+}
+
+/**
+ * 格式化流式速率为友好显示
+ */
+function formatStreamRate(tokensPerSec: number, charsPerSec: number): string {
+  if (tokensPerSec > 0) {
+    if (tokensPerSec >= 100) {
+      return `${tokensPerSec.toFixed(0)} tok/s`;
+    }
+    return `${tokensPerSec.toFixed(1)} tok/s`;
+  }
+  if (charsPerSec > 0) {
+    return `${charsPerSec.toFixed(0)} char/s`;
+  }
+  return '';
+}
+
+/**
+ * Agent 执行状态条 - 展示当前 AI 正在做什么（思考/调用工具/压缩上下文等）
+ * 提供迭代进度和详细状态信息
+ */
+function AgentStatusBar({ status }: { status: AgentStatusInfo }) {
+  const statusConfig: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+    thinking: {
+      label: '思考中',
+      icon: <BrainIcon size={13} weight="duotone" />,
+      color: '#67B8FF',
+    },
+    tool_calling: {
+      label: '调用工具',
+      icon: <Wrench size={13} weight="bold" />,
+      color: '#FFB74D',
+    },
+    summarizing: {
+      label: '生成总结',
+      icon: <Sparkle size={13} weight="fill" />,
+      color: '#CE93D8',
+    },
+    compact: {
+      label: '压缩上下文',
+      icon: <ArrowsDownUpIcon size={13} />,
+      color: '#4DD0E1',
+    },
+    fallback: {
+      label: '模型降级',
+      icon: <WarningCircleIcon size={13} weight="fill" />,
+      color: '#FF9800',
+    },
+    done: {
+      label: '完成',
+      icon: <CheckCircleIcon size={13} weight="fill" />,
+      color: '#81C784',
+    },
+    error: {
+      label: '错误',
+      icon: <WarningCircleIcon size={13} weight="fill" />,
+      color: '#EF5350',
+    },
+  };
+
+  const config = statusConfig[status.status] || statusConfig.thinking;
+  const progress = status.maxIterations > 0
+    ? Math.min((status.iteration / status.maxIterations) * 100, 100)
+    : 0;
+
+  // 判断是否为模型加载状态（Ollama 本地模型首次加载）
+  const isModelLoading = status.status === 'thinking' && status.detail?.includes('模型加载中');
+  const isOllama = status.isOllama ?? false;
+
+  // 模型加载时使用特殊的渐变色
+  const loadingGradient = isModelLoading
+    ? 'linear-gradient(90deg, #67B8FF, #A78BFA, #67B8FF)'
+    : undefined;
+
+  return (
+    <Box sx={{
+      px: 1.25, py: 0.6, mb: 0.5,
+      bgcolor: isOllama ? `${config.color}06` : `${config.color}08`,
+      border: '1px solid',
+      borderColor: isOllama ? `${config.color}20` : `${config.color}25`,
+      borderRadius: '10px 10px 10px 3px',
+      fontSize: 11,
+      ...(isModelLoading ? {
+        position: 'relative',
+        overflow: 'hidden',
+      } : {}),
+    }}>
+      {/* 模型加载时的流动光效 */}
+      {isModelLoading && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '2px',
+            background: 'linear-gradient(90deg, transparent, #67B8FF, #A78BFA, #67B8FF, transparent)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 2s linear infinite',
+            '@keyframes shimmer': {
+              '0%': { backgroundPosition: '200% 0' },
+              '100%': { backgroundPosition: '-200% 0' },
+            },
+          }}
+        />
+      )}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
+        <Box sx={{
+          color: config.color,
+          display: 'flex',
+          animation: status.status !== 'done' ? 'pulse 2s ease-in-out infinite' : 'none',
+          ...(isModelLoading ? {
+            animation: 'bounce 1s ease-in-out infinite',
+            '@keyframes bounce': {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-2px)' },
+            },
+          } : {}),
+        }}>
+          {config.icon}
+        </Box>
+        <Typography variant="caption" sx={{ fontWeight: 600, color: config.color }}>
+          {config.label}
+        </Typography>
+        {status.detail && (
+          <Typography variant="caption" sx={{ color: 'text.secondary', ml: 0.5 }}>
+            {status.detail}
+          </Typography>
+        )}
+        {/* Ollama 本地模型标识 */}
+        {isOllama && (
+          <Chip
+            label="本地"
+            size="small"
+            sx={{
+              height: 14,
+              fontSize: 9,
+              fontWeight: 600,
+              bgcolor: 'rgba(103, 184, 255, 0.12)',
+              color: '#67B8FF',
+              border: '1px solid rgba(103, 184, 255, 0.3)',
+              '& .MuiChip-label': { px: 0.5, py: 0 },
+              ml: 0.25,
+            }}
+          />
+        )}
+        {status.streamStats && status.streamStats.tokensPerSec > 0 && (
+          <Tooltip
+            title={
+              status.streamStats
+                ? `生成速度: ${formatStreamRate(status.streamStats.tokensPerSec, status.streamStats.charsPerSec)}\n已生成: ~${status.streamStats.tokensEstimated} tokens / ${status.streamStats.charsTotal} 字符\n耗时: ${(status.streamStats.elapsedMs / 1000).toFixed(1)}s`
+                : ''
+            }
+          >
+            <Typography variant="caption" sx={{
+              color: 'text.disabled', ml: 1, fontSize: 10, fontFamily: 'monospace',
+              cursor: 'help',
+            }}>
+              {formatStreamRate(status.streamStats.tokensPerSec, status.streamStats.charsPerSec)}
+              {status.streamStats.tokensEstimated > 0 && ` · ~${status.streamStats.tokensEstimated} tok`}
+            </Typography>
+          </Tooltip>
+        )}
+        {status.contextUsage && (
+          <Tooltip title={`上下文使用: ${status.contextUsage.tokensUsed.toLocaleString()} / ${status.contextUsage.contextWindow.toLocaleString()} tokens`}>
+            <Typography
+              variant="caption"
+              sx={{
+                ml: 1,
+                fontSize: 10,
+                fontFamily: 'monospace',
+                color: getContextUsageColor(status.contextUsage.usageRatio),
+                cursor: 'help',
+              }}
+            >
+              {Math.round(status.contextUsage.usageRatio * 100)}% ctx
+            </Typography>
+          </Tooltip>
+        )}
+        <Box sx={{ flex: 1 }} />
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10 }}>
+          第 {status.iteration}/{status.maxIterations} 轮
+        </Typography>
+      </Box>
+      <Box sx={{
+        width: '100%', height: 3, borderRadius: 1.5,
+        bgcolor: `${config.color}15`,
+        overflow: 'hidden',
+        position: 'relative',
+      }}>
+        {/* 模型加载时显示流动进度条 */}
+        {isModelLoading ? (
+          <Box sx={{
+            height: '100%',
+            width: '40%',
+            borderRadius: 1.5,
+            background: loadingGradient,
+            backgroundSize: '200% 100%',
+            animation: 'loadingSlide 1.5s ease-in-out infinite',
+            '@keyframes loadingSlide': {
+              '0%': { transform: 'translateX(-100%)' },
+              '100%': { transform: 'translateX(250%)' },
+            },
+          }} />
+        ) : (
+          <Box sx={{
+            height: '100%',
+            width: `${progress}%`,
+            bgcolor: config.color,
+            borderRadius: 1.5,
+            transition: 'width 0.3s ease',
+          }} />
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * 格式化耗时为简短格式（如 1.2s, 300ms, 2m 30s）
+ */
+function formatDurationShort(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  const mins = Math.floor(ms / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+  return `${mins}m ${secs}s`;
+}
+
+/**
+ * 格式化耗时为详细格式（用于 tooltip）
+ */
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms} 毫秒`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(2)} 秒`;
+  const mins = Math.floor(ms / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+  return `${mins} 分 ${secs} 秒 (${ms.toLocaleString()} ms)`;
+}
+
 interface PersistentToolCallCardProps {
   toolCall: ParsedToolCall;
   result: string | null;
   success: boolean | null;
-  status: 'running' | 'done' | 'denied';
+  status: 'running' | 'done' | 'denied' | 'streaming';
   isDark: boolean;
+  durationMs?: number | null;
 }
 
-function PersistentToolCallCard({ toolCall, result, success, status, isDark }: PersistentToolCallCardProps) {
+function PersistentToolCallCard({ toolCall, result, success, status, isDark, durationMs }: PersistentToolCallCardProps) {
   const isRunning = status === 'running';
-  const [expanded, setExpanded] = useState(!isRunning && !!result);
+  const isStreaming = status === 'streaming';
+  const [expanded, setExpanded] = useState(!isRunning && !isStreaming && !!result);
   const isDenied = status === 'denied';
   const isSuccess = success === true;
   const args = parseArguments(toolCall.arguments);
 
-  const borderColor = isRunning ? 'rgba(255,183,77,0.4)' : isDenied ? 'rgba(255,152,0,0.4)' : isSuccess ? 'rgba(129,199,132,0.4)' : 'rgba(255,123,114,0.4)';
-  const bgColor = isRunning ? 'rgba(255,183,77,0.06)' : isDenied ? 'rgba(255,152,0,0.06)' : isSuccess ? 'rgba(129,199,132,0.06)' : 'rgba(255,123,114,0.06)';
-  const statusLabel = isRunning ? 'Running' : isDenied ? 'Denied' : isSuccess ? 'Done' : 'Failed';
-  const statusColor = isRunning ? '#FFB74D' : isDenied ? '#FF9800' : isSuccess ? '#81C784' : '#FF7B72';
+  const borderColor = isStreaming ? 'rgba(103,184,255,0.4)' : isRunning ? 'rgba(255,183,77,0.4)' : isDenied ? 'rgba(255,152,0,0.4)' : isSuccess ? 'rgba(129,199,132,0.4)' : 'rgba(255,123,114,0.4)';
+  const bgColor = isStreaming ? 'rgba(103,184,255,0.06)' : isRunning ? 'rgba(255,183,77,0.06)' : isDenied ? 'rgba(255,152,0,0.06)' : isSuccess ? 'rgba(129,199,132,0.06)' : 'rgba(255,123,114,0.06)';
+  const statusLabel = isStreaming ? 'Generating...' : isRunning ? 'Running' : isDenied ? 'Denied' : isSuccess ? 'Done' : 'Failed';
+  const statusColor = isStreaming ? '#67B8FF' : isRunning ? '#FFB74D' : isDenied ? '#FF9800' : isSuccess ? '#81C784' : '#FF7B72';
 
   const isPluginManager = toolCall.name === 'plugin_manager';
   const actionLabel = isPluginManager && args?.action ? String(args.action) : '';
@@ -403,7 +735,9 @@ function PersistentToolCallCard({ toolCall, result, success, status, isDark }: P
         sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1, py: 0.5, cursor: 'pointer', fontSize: 12 }}
         onClick={() => setExpanded(!expanded)}
       >
-        {isRunning ? (
+        {isStreaming ? (
+          <Sparkle size={12} weight="fill" style={{ color: '#67B8FF' }} />
+        ) : isRunning ? (
           <CircularProgress size={12} sx={{ color: '#FFB74D' }} />
         ) : isDenied ? (
           <WarningCircleIcon size={14} weight="fill" color="#FF9800" />
@@ -427,6 +761,16 @@ function PersistentToolCallCard({ toolCall, result, success, status, isDark }: P
             '& .MuiChip-label': { px: 0.5 },
           }}
         />
+        {durationMs != null && durationMs > 0 && (
+          <Tooltip title={`执行耗时: ${formatDuration(durationMs)}`}>
+            <Typography variant="caption" sx={{
+              color: 'text.disabled', fontSize: 10, fontFamily: 'monospace',
+              ml: 0.5, cursor: 'help',
+            }}>
+              {formatDurationShort(durationMs)}
+            </Typography>
+          </Tooltip>
+        )}
         <Box sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
           <ArrowsDownUpIcon size={10} />
         </Box>
@@ -526,12 +870,16 @@ export interface ChatInputAreaProps {
   attachments?: FileAttachment[];
   onAttachmentsChange?: (files: FileAttachment[]) => void;
   hasFileTool?: boolean;
+  /** 外部禁用原因（如会话已断开），提供时整个输入区被禁用并显示提示 */
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export function ChatInputArea({
   input, setInput, handleSend, handleKeyDown, loading, conversationId,
   agentName, agentColor, userColor, isDark, placeholder, onStop,
   attachments = [], onAttachmentsChange, hasFileTool = true,
+  disabled = false, disabledReason,
 }: ChatInputAreaProps) {
   const { t } = useTranslation('agent');
   const mutedBorder = isDark ? 'rgba(48,54,61,0.6)' : 'rgba(0,0,0,0.08)';
@@ -575,7 +923,7 @@ export function ChatInputArea({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1.5, pt: 1, pb: 0 }}>
             <Box sx={{
               width: 16, height: 16, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: `linear-gradient(135deg, ${agentColor} 0%, ${isDark ? '#29B6F6' : '#0277BD'} 100%)`,
+              background: `linear-gradient(135deg, ${agentColor} 0%, ${isDark ? '#0EA5E9' : '#0277BD'} 100%)`,
               color: '#fff', flexShrink: 0,
             }}>
               <Robot size={8} weight="bold" />
@@ -606,7 +954,7 @@ export function ChatInputArea({
               <IconButton
                 size="small"
                 onClick={handleAttachFile}
-                disabled={loading || !conversationId || !hasFileTool}
+                disabled={disabled || loading || !conversationId || !hasFileTool}
                 sx={{ borderRadius: 2, mb: 0.25, color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)', '&:hover': { color: userColor, bgcolor: `${userColor}10` } }}
               >
                 <PaperclipIcon size={16} weight="bold" />
@@ -616,8 +964,8 @@ export function ChatInputArea({
           <TextField
             fullWidth variant="standard" multiline minRows={1} maxRows={4}
             value={input} onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown} placeholder={placeholder}
-            disabled={loading || !conversationId}
+            onKeyDown={handleKeyDown} placeholder={disabled && disabledReason ? disabledReason : placeholder}
+            disabled={disabled || loading || !conversationId}
             slotProps={{ input: { disableUnderline: true } }}
             sx={{
               '& .MuiInputBase-root': { fontSize: 13, px: 1, py: 0.5, minHeight: 28, alignItems: 'flex-start' },
@@ -632,17 +980,17 @@ export function ChatInputArea({
           ) : (
             <IconButton
               size="small" onClick={handleSend}
-              disabled={!input.trim() || !conversationId}
+              disabled={disabled || !input.trim() || !conversationId}
               sx={{
                 borderRadius: 2, mr: 0.5, mb: 0.25,
-                bgcolor: input.trim() && conversationId
+                bgcolor: !disabled && input.trim() && conversationId
                   ? `${userColor}20`
                   : 'transparent',
-                color: input.trim() && conversationId
+                color: !disabled && input.trim() && conversationId
                   ? (isDark ? '#A5A0FF' : userColor)
                   : (isDark ? 'rgba(255,255,255,0.2)' : `${userColor}30`),
                 '&:hover': {
-                  bgcolor: input.trim() && conversationId
+                  bgcolor: !disabled && input.trim() && conversationId
                     ? `${userColor}30`
                     : 'transparent',
                 },
@@ -661,6 +1009,7 @@ export function ChatInputArea({
 
 export function ToolCallCard({ toolCall }: { toolCall: ToolCallDisplay }) {
   const [expanded, setExpanded] = useState(false);
+  const isStreaming = toolCall.status === 'streaming';
   const isRunning = toolCall.status === 'running';
   const isDenied = toolCall.status === 'denied';
   const isSuccess = toolCall.success === true;
@@ -674,7 +1023,7 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCallDisplay }) {
     <Wrench size={14} weight="bold" />
   );
 
-  const statusLabel = isRunning ? '⏳ Running' : isDenied ? '⊘ Denied' : isSuccess ? '✓ Done' : '✗ Failed';
+  const statusLabel = isStreaming ? '✨ Generating...' : isRunning ? '⏳ Running' : isDenied ? '⊘ Denied' : isSuccess ? '✓ Done' : '✗ Failed';
 
   const getActionLabel = () => {
     if (!isPluginManager || !toolCall.arguments) return null;
@@ -697,14 +1046,16 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCallDisplay }) {
   return (
     <Paper variant="outlined" sx={{
       mb: 0.5, borderRadius: 1.5, overflow: 'hidden',
-      borderColor: isRunning ? 'rgba(255,183,77,0.4)' : isDenied ? 'rgba(255,152,0,0.4)' : isSuccess ? 'rgba(129,199,132,0.4)' : 'rgba(255,123,114,0.4)',
-      bgcolor: isRunning ? 'rgba(255,183,77,0.06)' : isDenied ? 'rgba(255,152,0,0.06)' : isSuccess ? 'rgba(129,199,132,0.06)' : 'rgba(255,123,114,0.06)',
+      borderColor: isStreaming ? 'rgba(103,184,255,0.4)' : isRunning ? 'rgba(255,183,77,0.4)' : isDenied ? 'rgba(255,152,0,0.4)' : isSuccess ? 'rgba(129,199,132,0.4)' : 'rgba(255,123,114,0.4)',
+      bgcolor: isStreaming ? 'rgba(103,184,255,0.06)' : isRunning ? 'rgba(255,183,77,0.06)' : isDenied ? 'rgba(255,152,0,0.06)' : isSuccess ? 'rgba(129,199,132,0.06)' : 'rgba(255,123,114,0.06)',
     }}>
       <Box
         sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1, py: 0.5, cursor: 'pointer', fontSize: 12 }}
         onClick={() => setExpanded(!expanded)}
       >
-        {isRunning ? (
+        {isStreaming ? (
+          <Sparkle size={12} weight="fill" style={{ color: '#67B8FF' }} />
+        ) : isRunning ? (
           <CircularProgress size={12} sx={{ color: '#FFB74D' }} />
         ) : isDenied ? (
           <Box sx={{ color: '#FF9800', display: 'flex' }}>⊘</Box>
@@ -727,9 +1078,19 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCallDisplay }) {
             {String(toolCall.arguments.name)}
           </Typography>
         )}
-        <Typography variant="caption" sx={{ color: isRunning ? '#FFB74D' : 'text.secondary', fontSize: 10 }}>
-          {isRunning ? statusLabel : '▼'}
+        <Typography variant="caption" sx={{ color: isStreaming ? '#67B8FF' : isRunning ? '#FFB74D' : 'text.secondary', fontSize: 10 }}>
+          {(isStreaming || isRunning) ? statusLabel : '▼'}
         </Typography>
+        {toolCall.durationMs != null && toolCall.durationMs > 0 && (
+          <Tooltip title={`执行耗时: ${formatDuration(toolCall.durationMs)}`}>
+            <Typography variant="caption" sx={{
+              color: 'text.disabled', fontSize: 10, fontFamily: 'monospace',
+              ml: 0.5, cursor: 'help',
+            }}>
+              {formatDurationShort(toolCall.durationMs)}
+            </Typography>
+          </Tooltip>
+        )}
       </Box>
       <Collapse in={expanded}>
         <Box sx={{ px: 1, pb: 0.75, borderTop: '1px solid', borderColor: 'divider' }}>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { listen } from '@tauri-apps/api/event';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
@@ -15,35 +16,22 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
-import Stack from '@mui/material/Stack';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import Collapse from '@mui/material/Collapse';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import InputAdornment from '@mui/material/InputAdornment';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
-import Radio from '@mui/material/Radio';
-import RadioGroup from '@mui/material/RadioGroup';
-import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Collapse from '@mui/material/Collapse';
 import {
   ClockCounterClockwiseIcon,
   ArrowClockwiseIcon,
-  NotebookIcon,
   TrashIcon,
-  PencilSimpleIcon,
   FolderOpenIcon,
-  LinkBreakIcon,
   MagnifyingGlassIcon,
   CaretDownIcon,
   CaretRightIcon,
-  LinkIcon,
   EraserIcon,
-  FloppyDiskIcon,
   ChartBarIcon,
   ListIcon,
   WarningCircleIcon,
@@ -51,16 +39,10 @@ import {
   CheckSquareIcon,
 } from '@phosphor-icons/react';
 import { getCommandHistory, searchCommandHistory, deleteCommandHistoryEntry, clearCommandHistory, deleteCommandHistoryBatch } from '../../../core/services/command.service';
-import { createNote, linkCommandToNote, unlinkCommandNote, listNoteGroups, listNoteCategoriesByGroup, searchNotes } from '../../../core/services/notebook.service';
-import { openNoteEditorWindow } from '../../../core/services/window.service';
-import { useNotify } from '../../../core/notification';
-import { listen } from '@tauri-apps/api/event';
-import { IconRenderer } from '../../notebook/components/IconRenderer';
-import type { CommandHistoryEntry, LinkedNoteInfo } from '../../../proto/command';
-import type { NoteGroupDto, NoteDto } from '../../../proto/notebook';
+import type { CommandHistoryEntry } from '../../../proto/command';
 import { localizeBackendError } from '../../../core/backendError';
 
-type ActiveFilter = 'all' | 'unsaved' | 'saved' | 'success' | 'failed';
+type ActiveFilter = 'all' | 'success' | 'failed';
 type TimeFilter = 'all' | 'today' | 'week' | 'month';
 type GroupMode = 'command' | 'program';
 type ViewMode = 'list' | 'frequent';
@@ -75,8 +57,6 @@ interface CommandGroup {
   entries: CommandHistoryEntry[];
   count: number;
   lastExecutedAt: number;
-  isLinked: boolean;
-  linkedNotes: LinkedNoteInfo[];
 }
 
 export function CommandHistory({ onExecute }: CommandHistoryProps) {
@@ -95,18 +75,7 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
-  const notify = useNotify().notify;
 
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [savingGroup, setSavingGroup] = useState<CommandGroup | null>(null);
-  const [newNoteTitle, setNewNoteTitle] = useState('');
-  const [newNoteGroupId, setNewNoteGroupId] = useState('');
-  const [newNoteCategory, setNewNoteCategory] = useState('command');
-  const [groups, setGroups] = useState<NoteGroupDto[]>([]);
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
-  const [matchedNotes, setMatchedNotes] = useState<NoteDto[]>([]);
-  const [saveMode, setSaveMode] = useState<'new' | 'existing'>('new');
-  const [selectedExistingNoteId, setSelectedExistingNoteId] = useState('');
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [deleteEntryConfirm, setDeleteEntryConfirm] = useState<CommandHistoryEntry | null>(null);
 
@@ -129,15 +98,6 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen('command-history-changed', () => {
-      loadHistory();
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }, [loadHistory]);
-
-  // 监听笔记↔命令关联变更（AI 链接/解除，或命令历史侧链接），实时刷新"关联笔记"面板（P1-5 消费端）
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen('note-links-changed', () => {
       loadHistory();
     }).then((fn) => { unlisten = fn; });
     return () => { if (unlisten) unlisten(); };
@@ -174,8 +134,6 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
   const filteredEntries = useMemo(() => {
     let filtered = timeFilteredEntries;
 
-    if (activeFilter === 'saved') filtered = filtered.filter((e) => e.linked);
-    if (activeFilter === 'unsaved') filtered = filtered.filter((e) => !e.linked);
     if (activeFilter === 'success') filtered = filtered.filter((e) => e.exit_code === null || e.exit_code === 0);
     if (activeFilter === 'failed') filtered = filtered.filter((e) => e.exit_code !== null && e.exit_code !== 0);
 
@@ -194,18 +152,12 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
     });
 
     let groups = Array.from(groupMap.entries()).map(([key, ents]): CommandGroup => {
-      // 聚合该分组下所有命令条目的关联笔记（按 noteId 去重），打通命令→笔记双向链接
-      const linkedMap = new Map<string, LinkedNoteInfo>();
-      ents.forEach((e) => (e.linked_notes || []).forEach((n) => linkedMap.set(n.noteId, n)));
-      const linkedNotes = Array.from(linkedMap.values());
       return {
         key,
         label: key,
         entries: ents.sort((a, b) => b.executed_at - a.executed_at),
         count: ents.length,
         lastExecutedAt: Math.max(...ents.map((e) => e.executed_at)),
-        isLinked: linkedNotes.length > 0,
-        linkedNotes,
       };
     });
 
@@ -266,166 +218,6 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
     }
   };
 
-  const buildNoteContent = (group: CommandGroup) => {
-    const program = group.entries[0].command.trim().split(/\s+/)[0] || 'command';
-    const lines: string[] = [`## ${program}`, ''];
-    group.entries.forEach((entry, i) => {
-      if (i > 0) lines.push('');
-      lines.push('```bash', entry.command, '```');
-      if (entry.cwd) lines.push(`> 📁 ${entry.cwd}`);
-      if (entry.executed_at) {
-        const date = new Date(entry.executed_at);
-        lines.push(`> 🕐 ${date.toLocaleString()}`);
-      }
-    });
-    lines.push('');
-    return lines.join('\n');
-  };
-
-  const handleQuickSave = async (e: React.MouseEvent, group: CommandGroup) => {
-    e.stopPropagation();
-    const entry = group.entries[0];
-    const program = entry.command.trim().split(/\s+/)[0] || 'command';
-    try {
-      const content = buildNoteContent(group);
-      // R28 复盘：之前硬编码 category='command'，会污染任何分组的分类库（每组都被 ensure_category
-      // 补建一行 'command'），且与用户在保存对话框里选的分类无关。改为：quick save 不带 category，
-      // 让 note.category=''（即「未分类」），用户进编辑器自己选；同时 tags 仍带 [program, 'command']
-      // 维持"按命令找笔记"的工作流能力。
-      const note = await createNote({
-        title: `${program}: ${entry.command.slice(0, 50)}`,
-        content,
-        groupId: '',
-        category: '',
-        tags: [program, 'command'],
-      });
-      if (note && entry.id) {
-        await linkCommandToNote({
-          noteId: note.id,
-          commandId: entry.id,
-          context: entry.command,
-        });
-      }
-      setSnackbar({ open: true, message: t('history.quick_saved'), severity: 'success' });
-      setExpandedCommands((prev) => new Set(prev).add(group.key));
-      loadHistory();
-    } catch (err) {
-      setSnackbar({ open: true, message: localizeBackendError(err), severity: 'error' });
-    }
-  };
-
-  const handleOpenSaveDialog = async (e: React.MouseEvent, group: CommandGroup) => {
-    e.stopPropagation();
-    const entry = group.entries[0];
-    const program = entry.command.trim().split(/\s+/)[0] || 'command';
-    setSavingGroup(group);
-    setNewNoteTitle(`${program}: ${entry.command.slice(0, 50)}`);
-    setNewNoteGroupId('');
-    // R28 复盘：之前初始化为 'command' 会让"用户没选 category 直接保存"的笔记也带 'command'。
-    // 改为：初始 = ''，与 UI 「未分类」占位一致；handleConfirmSave 时若仍空就传空串，
-    // 由用户在 NoteEditor 自行选合适的分类。
-    setNewNoteCategory('');
-    setCategories([]);
-    setSaveMode('new');
-    setSelectedExistingNoteId('');
-    setMatchedNotes([]);
-    listNoteGroups().then(setGroups).catch((e) => notify(localizeBackendError(e)));
-    setSaveDialogOpen(true);
-
-    try {
-      const results = await searchNotes(program);
-      setMatchedNotes(results);
-      if (results.length > 0) {
-        setSelectedExistingNoteId(results[0].id);
-      }
-    } catch (err) { console.error('CommandHistory: operation failed', err); }
-  };
-
-  const handleGroupChange = (gid: string) => {
-    setNewNoteGroupId(gid);
-    // R28：切组时重置 category 为空（而不是强制 'command'），
-    // 让用户自行选择目标分组下合适的分类，避免脏的 'command' 行扩散。
-    setNewNoteCategory('');
-    if (gid) {
-      listNoteCategoriesByGroup(gid).then(setCategories).catch((e) => notify(localizeBackendError(e)));
-    } else {
-      setCategories([]);
-    }
-  };
-
-  const handleConfirmSave = async () => {
-    if (!savingGroup) return;
-    const entry = savingGroup.entries[0];
-
-    try {
-      if (saveMode === 'existing' && selectedExistingNoteId) {
-        if (entry.id) {
-          await linkCommandToNote({
-            noteId: selectedExistingNoteId,
-            commandId: entry.id,
-            context: entry.command,
-          });
-        }
-        setSnackbar({ open: true, message: t('history.linked_to_existing'), severity: 'success' });
-      } else {
-        const content = buildNoteContent(savingGroup);
-        const program = savingGroup.entries[0].command.trim().split(/\s+/)[0] || 'command';
-        const note = await createNote({
-          title: newNoteTitle.trim(),
-          content,
-          groupId: newNoteGroupId || '',
-          category: newNoteCategory,
-          tags: [program, 'command'],
-        });
-        if (note && entry.id) {
-          await linkCommandToNote({
-            noteId: note.id,
-            commandId: entry.id,
-            context: entry.command,
-          });
-        }
-        setSnackbar({ open: true, message: t('history.quick_saved'), severity: 'success' });
-      }
-      setSaveDialogOpen(false);
-      if (savingGroup) {
-        setExpandedCommands((prev) => new Set(prev).add(savingGroup.key));
-      }
-      setSavingGroup(null);
-      loadHistory();
-    } catch (err) {
-      console.error('Save to note failed:', err);
-      setSnackbar({ open: true, message: localizeBackendError(err), severity: 'error' });
-    }
-  };
-
-  const handleEditLinkedNote = async (e: React.MouseEvent, noteId: string, noteTitle: string) => {
-    e.stopPropagation();
-    await openNoteEditorWindow(noteId, noteTitle);
-  };
-
-  const handleUnlinkNote = async (e: React.MouseEvent, linkId: string) => {
-    e.stopPropagation();
-    try {
-      await unlinkCommandNote(linkId);
-      loadHistory();
-    } catch (err) {
-      console.error('Failed to unlink note:', err);
-    }
-  };
-
-  // 头部解链按钮：解链该命令分组关联的全部笔记（不止第一条）。
-  // 此前只解 group.linkedNotes[0]，若一条命令关联了多篇笔记，头部按钮会遗漏其余关联。
-  const handleUnlinkAll = async (e: React.MouseEvent, linkedNotes: LinkedNoteInfo[]) => {
-    e.stopPropagation();
-    if (linkedNotes.length === 0) return;
-    try {
-      await Promise.all(linkedNotes.map((n) => unlinkCommandNote(n.linkId)));
-      loadHistory();
-    } catch (err) {
-      console.error('Failed to unlink notes:', err);
-    }
-  };
-
   const handleDeleteEntry = async (entry: CommandHistoryEntry) => {
     if (!entry.id) return;
     try {
@@ -463,7 +255,7 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
   if (entries.length === 0 && !loading) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
-        <ClockCounterClockwiseIcon size={32} color="#8B949E" />
+        <ClockCounterClockwiseIcon size={32} color="#8FA3B0" />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           {t('history.no_history')}
         </Typography>
@@ -474,7 +266,7 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
   if (loading && entries.length === 0) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
-        <ArrowClockwiseIcon size={24} color="#6C63FF" className="spin" />
+        <ArrowClockwiseIcon size={24} color="#60A5FA" className="spin" />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           {tCommon('status.loading')}
         </Typography>
@@ -497,12 +289,12 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
             sx={{ '& .MuiToggleButton-root': { py: 0.25, px: 0.75, fontSize: '0.65rem', border: 'none', borderRadius: 1.5 } }}
           >
             <Tooltip title={t('history.view_list') || ''} arrow>
-            <ToggleButton value="list" sx={{ '&.Mui-selected': { bgcolor: 'rgba(108,99,255,0.12)' } }}>
+            <ToggleButton value="list" sx={{ '&.Mui-selected': { bgcolor: 'rgba(45,212,191,0.12)' } }}>
               <ListIcon size={14} />
             </ToggleButton>
           </Tooltip>
           <Tooltip title={t('history.view_frequent') || ''} arrow>
-            <ToggleButton value="frequent" sx={{ '&.Mui-selected': { bgcolor: 'rgba(108,99,255,0.12)' } }}>
+            <ToggleButton value="frequent" sx={{ '&.Mui-selected': { bgcolor: 'rgba(45,212,191,0.12)' } }}>
               <ChartBarIcon size={14} />
             </ToggleButton>
           </Tooltip>
@@ -529,7 +321,7 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
           )}
           <Tooltip title={t('history.clear_all') || ''} arrow>
             <IconButton size="small" onClick={() => setClearConfirmOpen(true)} disabled={entries.length === 0}>
-              <EraserIcon size={16} color="#FF5252" />
+              <EraserIcon size={16} color="#F87171" />
             </IconButton>
           </Tooltip>
         </Box>
@@ -547,7 +339,7 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
             input: {
               startAdornment: (
                 <InputAdornment position="start">
-                  <MagnifyingGlassIcon size={16} color="#8B949E" />
+                  <MagnifyingGlassIcon size={16} color="#8FA3B0" />
                 </InputAdornment>
               ),
               sx: { fontSize: '0.85rem' },
@@ -569,13 +361,11 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
           sx={{ '& .MuiToggleButton-root': { py: 0.15, px: 1, fontSize: '0.6rem', borderRadius: 1.5 } }}
         >
           <ToggleButton value="all">{t('history.filter_all')}</ToggleButton>
-          <ToggleButton value="unsaved">{t('history.filter_unsaved')}</ToggleButton>
-          <ToggleButton value="saved">{t('history.filter_saved')}</ToggleButton>
           <ToggleButton value="success" sx={{ '&.Mui-selected': { color: '#4CAF50', bgcolor: 'rgba(76,175,80,0.12)' } }}>
             <CheckCircleIcon size={12} style={{ marginRight: 2 }} />
             {t('history.filter_success')}
           </ToggleButton>
-          <ToggleButton value="failed" sx={{ '&.Mui-selected': { color: '#FF5252', bgcolor: 'rgba(255,82,82,0.12)' } }}>
+          <ToggleButton value="failed" sx={{ '&.Mui-selected': { color: '#F87171', bgcolor: 'rgba(255,82,82,0.12)' } }}>
             <WarningCircleIcon size={12} style={{ marginRight: 2 }} />
             {t('history.filter_failed')}
           </ToggleButton>
@@ -611,7 +401,7 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
       <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
         {groupedEntries.length === 0 ? (
           <Box sx={{ p: 3, textAlign: 'center' }}>
-            <MagnifyingGlassIcon size={28} color="#8B949E" />
+            <MagnifyingGlassIcon size={28} color="#8FA3B0" />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               {t('history.no_results')}
             </Typography>
@@ -628,13 +418,6 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
                       borderRadius: 1,
                       mx: 0.5,
                       mb: 0.25,
-                      ...(group.isLinked
-                        ? {
-                            bgcolor: 'rgba(129, 199, 132, 0.08)',
-                            borderLeft: '3px solid rgba(129, 199, 132, 0.6)',
-                            '&:hover': { bgcolor: 'rgba(129, 199, 132, 0.14)' },
-                          }
-                        : {}),
                     }}
                   >
                     <ListItemIcon sx={{ minWidth: 24, display: 'flex', alignItems: 'center' }}>
@@ -646,9 +429,9 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
                           onClick={(e) => { e.stopPropagation(); toggleSelectGroup(group); }}
                         />
                       ) : isExpanded ? (
-                        <CaretDownIcon size={14} color="#8B949E" />
+                        <CaretDownIcon size={14} color="#8FA3B0" />
                       ) : (
-                        <CaretRightIcon size={14} color="#8B949E" />
+                        <CaretRightIcon size={14} color="#8FA3B0" />
                       )}
                     </ListItemIcon>
                     <ListItemText
@@ -673,7 +456,7 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
                                   ? { bgcolor: '#C0C0C0', color: '#000' }
                                   : groupedEntries.findIndex(g => g.key === group.key) === 2
                                   ? { bgcolor: '#CD7F32', color: '#fff' }
-                                  : { bgcolor: 'rgba(108,99,255,0.12)', color: '#6C63FF' }),
+                                  : { bgcolor: 'rgba(45,212,191,0.12)', color: '#60A5FA' }),
                               }}
                             />
                           )}
@@ -698,9 +481,6 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
                               sx={{ height: 16, fontSize: '0.55rem', flexShrink: 0 }}
                             />
                           )}
-                          {group.isLinked && (
-                            <NotebookIcon size={12} color="#81C784" weight="fill" />
-                          )}
                         </Box>
                       }
                       secondary={
@@ -708,48 +488,9 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
                           <Typography variant="caption" color="text.secondary">
                             {formatTime(group.lastExecutedAt)}
                           </Typography>
-                          {group.isLinked && group.linkedNotes[0] && (
-                            <Typography variant="caption" sx={{ color: '#81C784', display: 'flex', alignItems: 'center', gap: 0.25 }}>
-                              {group.linkedNotes[0].title}
-                              {group.linkedNotes.length > 1 && (
-                                <Chip
-                                  label={`+${group.linkedNotes.length - 1}`}
-                                  size="small"
-                                  sx={{ height: 14, fontSize: '0.55rem', ml: 0.25, bgcolor: 'rgba(129,199,132,0.18)', color: '#81C784' }}
-                                />
-                              )}
-                            </Typography>
-                          )}
                         </Box>
                       }
                     />
-                    {group.isLinked ? (
-                      <Box sx={{ display: 'flex', flexShrink: 0 }}>
-                        <Tooltip title={t('history.edit_note') || ''} arrow>
-                          <IconButton size="small" onClick={(e) => handleEditLinkedNote(e, group.linkedNotes[0].noteId, group.linkedNotes[0].title)}>
-                            <PencilSimpleIcon size={14} color="#81C784" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={t('history.unlink_note') || 'Unlink'} arrow>
-                          <IconButton size="small" onClick={(e) => handleUnlinkAll(e, group.linkedNotes)}>
-                            <LinkBreakIcon size={14} color="#FFA726" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    ) : (
-                      <Box sx={{ display: 'flex', flexShrink: 0 }}>
-                        <Tooltip title={t('history.quick_save') || ''} arrow>
-                          <IconButton size="small" onClick={(e) => handleQuickSave(e, group)}>
-                            <FloppyDiskIcon size={14} color="#81C784" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={t('history.save_to_notebook') || ''} arrow>
-                          <IconButton size="small" onClick={(e) => handleOpenSaveDialog(e, group)}>
-                            <NotebookIcon size={14} color="#6C63FF" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    )}
                   </ListItemButton>
 
                   <Collapse in={isExpanded} timeout="auto" unmountOnExit>
@@ -763,7 +504,7 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
                             mx: 0.5,
                             mb: 0.1,
                             py: 0.25,
-                            '&:hover': { bgcolor: 'rgba(108,99,255,0.06)' },
+                            '&:hover': { bgcolor: 'rgba(45,212,191,0.06)' },
                           }}
                         >
                           <ListItemIcon sx={{ minWidth: 20, display: 'flex', alignItems: 'center' }}>
@@ -774,7 +515,7 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
                                 onClick={(e) => { e.stopPropagation(); toggleSelect(entry.id); }}
                               />
                             ) : (
-                              <FolderOpenIcon size={10} color="#8B949E" />
+                              <FolderOpenIcon size={10} color="#8FA3B0" />
                             )}
                           </ListItemIcon>
                           <ListItemText
@@ -805,45 +546,11 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
                               onClick={(e) => { e.stopPropagation(); setDeleteEntryConfirm(entry); }}
                               sx={{ flexShrink: 0 }}
                             >
-                              <TrashIcon size={12} color="#FF5252" />
+                              <TrashIcon size={12} color="#F87171" />
                             </IconButton>
                           </Tooltip>
                         </ListItemButton>
                       ))}
-
-                      {group.linkedNotes.length > 0 && (
-                        <Box sx={{ pl: 3, pr: 1, pb: 1, pt: 0.25 }}>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5, fontWeight: 600 }}
-                          >
-                            <NotebookIcon size={12} color="#81C784" weight="fill" />
-                            {t('history.linked_notes_count', { count: group.linkedNotes.length })}
-                          </Typography>
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                            {group.linkedNotes.map((note) => (
-                              <Chip
-                                key={note.noteId}
-                                icon={<NotebookIcon size={12} color="#81C784" />}
-                                label={note.title}
-                                size="small"
-                                clickable
-                                onClick={(e) => handleEditLinkedNote(e, note.noteId, note.title)}
-                                onDelete={(e) => handleUnlinkNote(e, note.linkId)}
-                                deleteIcon={<LinkBreakIcon size={12} />}
-                                sx={{
-                                  borderRadius: 1.5,
-                                  fontSize: 11,
-                                  cursor: 'pointer',
-                                  bgcolor: 'rgba(129,199,132,0.1)',
-                                  '&:hover': { bgcolor: 'rgba(129,199,132,0.18)' },
-                                }}
-                              />
-                            ))}
-                          </Box>
-                        </Box>
-                      )}
                     </List>
                   </Collapse>
                 </Box>
@@ -852,162 +559,6 @@ export function CommandHistory({ onExecute }: CommandHistoryProps) {
           </List>
         )}
       </Box>
-
-      <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('history.save_dialog.title')}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Box
-              sx={{
-                p: 1.5,
-                borderRadius: 1,
-                bgcolor: 'rgba(108,99,255,0.08)',
-                border: '1px solid rgba(108,99,255,0.2)',
-                fontFamily: 'monospace',
-                fontSize: '0.85rem',
-                wordBreak: 'break-all',
-              }}
-            >
-              {savingGroup?.entries[0]?.command}
-            </Box>
-
-            {matchedNotes.length > 0 && (
-              <Box
-                sx={{
-                  p: 1.5,
-                  borderRadius: 1,
-                  bgcolor: 'rgba(255, 167, 38, 0.08)',
-                  border: '1px solid rgba(255, 167, 38, 0.3)',
-                }}
-              >
-                <Typography variant="caption" sx={{ color: '#FFA726', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                  <LinkIcon size={12} />
-                  {t('history.save_dialog.matched_notes', { count: matchedNotes.length })}
-                </Typography>
-                <RadioGroup
-                  value={saveMode}
-                  onChange={(e) => setSaveMode(e.target.value as 'new' | 'existing')}
-                  sx={{ gap: 0.5 }}
-                >
-                  <FormControlLabel
-                    value="existing"
-                    control={<Radio size="small" />}
-                    label={
-                      <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                        {t('history.save_dialog.link_existing')}
-                      </Typography>
-                    }
-                    sx={{ mr: 0 }}
-                  />
-                  {saveMode === 'existing' && (
-                    <Box sx={{ pl: 3, maxHeight: 120, overflow: 'auto' }}>
-                      <RadioGroup
-                        value={selectedExistingNoteId}
-                        onChange={(e) => setSelectedExistingNoteId(e.target.value)}
-                        sx={{ gap: 0.25 }}
-                      >
-                        {matchedNotes.map((note) => (
-                          <FormControlLabel
-                            key={note.id}
-                            value={note.id}
-                            control={<Radio size="small" />}
-                            label={
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <NotebookIcon size={12} color="#81C784" />
-                                <Typography variant="caption" noWrap sx={{ maxWidth: 280 }}>
-                                  {note.title}
-                                </Typography>
-                                {note.category && (
-                                  <Chip label={note.category} size="small" variant="outlined" sx={{ height: 16, fontSize: '0.55rem' }} />
-                                )}
-                              </Box>
-                            }
-                            sx={{ mr: 0 }}
-                          />
-                        ))}
-                      </RadioGroup>
-                    </Box>
-                  )}
-                  <FormControlLabel
-                    value="new"
-                    control={<Radio size="small" />}
-                    label={
-                      <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                        {t('history.save_dialog.create_new')}
-                      </Typography>
-                    }
-                    sx={{ mr: 0 }}
-                  />
-                </RadioGroup>
-              </Box>
-            )}
-
-            {saveMode === 'new' && (
-              <>
-                <TextField
-                  label={t('history.save_dialog.note_title')}
-                  value={newNoteTitle}
-                  onChange={(e) => setNewNoteTitle(e.target.value)}
-                  fullWidth
-                  size="small"
-                />
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <FormControl size="small" sx={{ flex: 1 }}>
-                    <InputLabel>{t('history.save_dialog.group')}</InputLabel>
-                    <Select
-                      value={newNoteGroupId}
-                      label={t('history.save_dialog.group')}
-                      onChange={(e) => handleGroupChange(e.target.value)}
-                    >
-                      <MenuItem value="">
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <IconRenderer value="" size={14} />
-                          {t('group.uncategorized', { ns: 'notebook' })}
-                        </Box>
-                      </MenuItem>
-                      {groups.map((g) => (
-                        <MenuItem key={g.id} value={g.id}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <IconRenderer value={g.icon} size={14} />
-                            {g.name}
-                          </Box>
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl size="small" sx={{ flex: 1 }} disabled={!newNoteGroupId}>
-                    <InputLabel>{t('history.save_dialog.category')}</InputLabel>
-                    <Select
-                      value={newNoteCategory}
-                      label={t('history.save_dialog.category')}
-                      onChange={(e) => setNewNoteCategory(e.target.value)}
-                    >
-                      <MenuItem value="">
-                        <em>{t('group.uncategorized', { ns: 'notebook' })}</em>
-                      </MenuItem>
-                      {categories.map((cat) => (
-                        <MenuItem key={cat.id} value={cat.name}>
-                          {cat.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Box>
-              </>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSaveDialogOpen(false)}>{tCommon('action.cancel')}</Button>
-          <Button
-            onClick={handleConfirmSave}
-            variant="contained"
-            disabled={saveMode === 'new' ? !newNoteTitle.trim() : !selectedExistingNoteId}
-          >
-            {saveMode === 'existing' ? t('history.save_dialog.link_button') : tCommon('action.save')}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Snackbar
         open={snackbar.open}

@@ -52,7 +52,7 @@ export function SftpPage() {
         <Typography variant="subtitle1" sx={{ color: textColor, fontWeight: 600 }}>
           {t('title')}
         </Typography>
-        <Typography variant="body2" sx={{ color: isDark ? '#8B949E' : '#6B7280' }}>
+        <Typography variant="body2" sx={{ color: isDark ? '#8FA3B0' : '#5A6B64' }}>
           {ssh.username}@{ssh.host}:{ssh.port}
         </Typography>
       </Box>

@@ -75,10 +75,10 @@ export function ConnectionPicker({ open, onConnect, onClose }: ConnectionPickerP
   const [showPassword, setShowPassword] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const localColor = isDark ? '#4FC3F7' : '#1565C0';
-  const sshColor = isDark ? '#FFD740' : '#E65100';
-  const primaryColor = isDark ? '#6C63FF' : '#5B54E0';
-  const mutedColor = isDark ? '#8B949E' : '#6B7280';
+  const localColor = isDark ? '#38BDF8' : '#0369A1';
+  const sshColor = isDark ? '#FBBF24' : '#D97706';
+  const primaryColor = isDark ? '#60A5FA' : '#1D4ED8';
+  const mutedColor = isDark ? '#8FA3B0' : '#5A6B64';
   const notify = useNotify().notify;
 
   useEffect(() => {
@@ -325,13 +325,13 @@ export function ConnectionPicker({ open, onConnect, onClose }: ConnectionPickerP
                   p: 2,
                   borderRadius: 2,
                   border: '1px solid',
-                  borderColor: isDark ? 'rgba(79,195,247,0.3)' : 'rgba(21,101,192,0.2)',
-                  bgcolor: isDark ? 'rgba(79,195,247,0.06)' : 'rgba(21,101,192,0.04)',
+                  borderColor: isDark ? 'rgba(56,189,248,0.3)' : 'rgba(21,101,192,0.2)',
+                  bgcolor: isDark ? 'rgba(56,189,248,0.06)' : 'rgba(21,101,192,0.04)',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                   '&:hover': {
-                    bgcolor: isDark ? 'rgba(79,195,247,0.12)' : 'rgba(21,101,192,0.08)',
-                    borderColor: isDark ? 'rgba(79,195,247,0.5)' : 'rgba(21,101,192,0.35)',
+                    bgcolor: isDark ? 'rgba(56,189,248,0.12)' : 'rgba(21,101,192,0.08)',
+                    borderColor: isDark ? 'rgba(56,189,248,0.5)' : 'rgba(21,101,192,0.35)',
                     transform: 'translateY(-1px)',
                   },
                 }}
@@ -411,8 +411,8 @@ export function ConnectionPicker({ open, onConnect, onClose }: ConnectionPickerP
                           mb: 0.5,
                           border: '1px solid transparent',
                           '&:hover': {
-                            borderColor: isDark ? 'rgba(108,99,255,0.3)' : 'rgba(91,84,224,0.2)',
-                            bgcolor: isDark ? 'rgba(108,99,255,0.06)' : 'rgba(91,84,224,0.04)',
+                            borderColor: isDark ? 'rgba(45,212,191,0.3)' : 'rgba(15,118,110,0.2)',
+                            bgcolor: isDark ? 'rgba(45,212,191,0.06)' : 'rgba(15,118,110,0.04)',
                           },
                         }}
                       >
@@ -445,7 +445,7 @@ export function ConnectionPicker({ open, onConnect, onClose }: ConnectionPickerP
                     borderRadius: 1.5,
                     cursor: 'pointer',
                     color: primaryColor,
-                    '&:hover': { bgcolor: isDark ? 'rgba(108,99,255,0.06)' : 'rgba(91,84,224,0.04)' },
+                    '&:hover': { bgcolor: isDark ? 'rgba(45,212,191,0.06)' : 'rgba(15,118,110,0.04)' },
                   }}
                 >
                   <PlusIcon size={16} />

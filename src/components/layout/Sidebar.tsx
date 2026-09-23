@@ -11,17 +11,19 @@ import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   TerminalIcon,
-  ClockCounterClockwiseIcon,
-  NotebookIcon,
   RobotIcon,
   PlugsConnectedIcon,
   GearSixIcon,
   GlobeHemisphereWestIcon,
+  PencilSimpleIcon,
+  RocketLaunchIcon,
+  BrowserIcon,
 } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useLicenseStore } from '../../features/licensing/licenseStore';
 import { useUpgradeDialogStore } from '../../features/licensing/upgradeDialogStore';
 import { useConnectionCountStore } from '../../features/connection/connectionCountStore';
+import { brand } from '../../theme/brand';
 import type { ProFeature } from '../../proto/licensing';
 
 interface MenuItem {
@@ -34,13 +36,14 @@ interface MenuItem {
 }
 
 const menuConfig: MenuItem[] = [
-  { path: '/sites', labelKey: 'menu.sites', icon: GlobeHemisphereWestIcon, color: '#B39DDB' },
-  { path: '/', labelKey: 'menu.terminal', icon: TerminalIcon, color: '#4FC3F7' },
-  { path: '/commands', labelKey: 'menu.commands', icon: ClockCounterClockwiseIcon, color: '#FFB74D' },
-  { path: '/notebook', labelKey: 'menu.notebook', icon: NotebookIcon, color: '#81C784' },
-  { path: '/agent', labelKey: 'menu.agent', icon: RobotIcon, color: '#CE93D8', proFeature: 'ai_copilot' },
-  { path: '/connections', labelKey: 'menu.connections', icon: PlugsConnectedIcon, color: '#4DD0E1' },
-  { path: '/settings', labelKey: 'menu.settings', icon: GearSixIcon, color: '#90A4AE' },
+  { path: '/websites', labelKey: 'menu.websites', icon: BrowserIcon, color: '#6366F1' },
+  { path: '/editor', labelKey: 'menu.editor', icon: PencilSimpleIcon, color: brand.amber500 },
+  { path: '/published', labelKey: 'menu.published', icon: RocketLaunchIcon, color: '#34D399' },
+  { path: '/sites', labelKey: 'menu.sites', icon: GlobeHemisphereWestIcon, color: '#38BDF8' },
+  { path: '/terminal', labelKey: 'menu.terminal', icon: TerminalIcon, color: '#60A5FA' },
+  { path: '/agent', labelKey: 'menu.agent', icon: RobotIcon, color: brand.agent, proFeature: 'ai_copilot' },
+  { path: '/connections', labelKey: 'menu.connections', icon: PlugsConnectedIcon, color: '#38BDF8' },
+  { path: '/settings', labelKey: 'menu.settings', icon: GearSixIcon, color: '#94A3B8' },
 ];
 
 export function Sidebar() {
@@ -144,7 +147,7 @@ export function Sidebar() {
                     height: 18,
                     fontSize: 10,
                     fontWeight: 700,
-                    background: 'linear-gradient(135deg, #6C63FF 0%, #4FC3F7 100%)',
+                    background: brand.gradient,
                     color: '#fff',
                     '& .MuiChip-label': { px: 0.75 },
                   }}
