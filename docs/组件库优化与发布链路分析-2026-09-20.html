@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>组件库优化与发布链路分析 · 2026-09-20</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161c24; --panel-2:#1c242e; --line:#26303c;
+    --fg:#e6edf3; --fg-dim:#9aa7b4; --fg-mute:#6b7885;
+    --accent:#4fc3f7; --ok:#3fb950; --warn:#d29922; --err:#f85149; --done:#a371f7;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 28px 80px}
+  header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:32px}
+  h1{margin:0 0 10px;font-size:26px;font-weight:650;letter-spacing:.2px}
+  .sub{color:var(--fg-dim);font-size:13px}
+  .sub code{background:var(--panel-2);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:12px;color:var(--accent)}
+  h2{font-size:18px;font-weight:620;margin:44px 0 14px;padding-left:11px;border-left:3px solid var(--accent)}
+  h3{font-size:14.5px;font-weight:600;margin:26px 0 10px;color:var(--fg)}
+  h3 .n{display:inline-block;min-width:20px;color:var(--accent);font-family:var(--mono);font-size:12.5px}
+  p{margin:9px 0;color:#cfd8e0}
+  ul,ol{margin:9px 0;padding-left:22px;color:#cfd8e0}
+  li{margin:5px 0}
+  code{font-family:var(--mono);font-size:12.3px;background:var(--panel-2);padding:1.5px 5px;border-radius:4px;color:#8fd4f7}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;
+    font-family:var(--mono);font-size:12.2px;line-height:1.6;color:#c9d6e2}
+  pre .c{color:var(--fg-mute)}
+  pre .k{color:var(--accent)}
+  pre .s{color:#a5d6a7}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--panel);color:var(--fg-dim);font-weight:600;font-size:12px;letter-spacing:.3px;
+    text-transform:uppercase;border-bottom:1px solid #303a46}
+  tr:hover td{background:rgba(79,195,247,.035)}
+  td code{font-size:11.8px}
+  .tag{display:inline-block;padding:1.5px 7px;border-radius:20px;font-size:11px;font-weight:600;
+    line-height:1.6;white-space:nowrap}
+  .t-done{background:rgba(163,113,247,.15);color:#c4a2ff;border:1px solid rgba(163,113,247,.35)}
+  .t-ok{background:rgba(63,185,80,.13);color:#5fd36f;border:1px solid rgba(63,185,80,.32)}
+  .t-fix{background:rgba(248,81,73,.13);color:#ff7b72;border:1px solid rgba(248,81,73,.32)}
+  .t-new{background:rgba(79,195,247,.13);color:#6fd0f8;border:1px solid rgba(79,195,247,.32)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:16px 0}
+  .card.warn{border-color:rgba(210,153,34,.4);background:rgba(210,153,34,.06)}
+  .card.ok{border-color:rgba(63,185,80,.32);background:rgba(63,185,80,.05)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .kv{display:flex;gap:10px;margin:6px 0;font-size:13px}
+  .kv b{color:var(--fg-dim);font-weight:600;min-width:110px;flex-shrink:0}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0;font-size:12.5px}
+  .flow .step{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:7px 11px;
+    font-family:var(--mono);font-size:11.6px;color:#c9d6e2}
+  .flow .arrow{color:var(--fg-mute);font-size:14px}
+  .foot{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--fg-mute);font-size:12px}
+  .badge-num{display:inline-block;background:rgba(79,195,247,.13);color:var(--accent);border:1px solid rgba(79,195,247,.3);
+    border-radius:6px;padding:0 7px;font-family:var(--mono);font-size:12px;margin-right:6px}
+  .muted{color:var(--fg-mute)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>组件库优化与发布链路分析</h1>
+  <div class="sub">
+    项目 <code>web-craft</code> · 网站编辑器组件库 · 2026-09-20 ·
+    验证基线：<code>tsc</code> 仅 23 项预存错误 · <code>vitest</code> 49 文件 / 446 项全过 · <code>vite build</code> 通过 ·
+    <span class="tag t-ok">未 git commit（遵守用户铁律）</span>
+  </div>
+</header>
+
+<!-- ══════════════ 一 ══════════════ -->
+<h2>一、依赖链核实结论：预览 / 发布如何把代码写进「我的网站」绑定目录</h2>
+
+<p>先给出经过源码核实的完整链路，这是后续所有一致性工作的判据基础——<b>编辑器属性栏写入的 <code>config</code> 是唯一源头</b>，预览与发布是两个消费端，二者必须共用同一份取值口径才能保证「编辑模型 == 预览 == 发布」。</p>
+
+<h3><span class="n">1.1</span> 五个页面的职责边界</h3>
+<table>
+  <thead><tr><th>功能</th><th>文件</th><th>职责</th></tr></thead>
+  <tbody>
+    <tr><td>我的网站</td><td><code>src/pages/WebsitesPage.tsx</code></td><td>场景（Scene）列表，场景 = 一个网站工程</td></tr>
+    <tr><td>网站编辑</td><td><code>src/pages/WebsiteEditorPage.tsx</code></td><td>编辑 Scene DSL（views / layers / components），属性栏写 <code>config</code></td></tr>
+    <tr><td>已发布网站</td><td><code>src/pages/PublishedSitesPage.tsx</code></td><td>已发布场景列表 + 绑定远端站点（<code>bindSite</code>）</td></tr>
+    <tr><td>站点</td><td><code>src/pages/SitesPage.tsx</code> · <code>SiteDetailPage.tsx</code></td><td>远端站点记录，含 <code>local_workdir</code> 字段</td></tr>
+    <tr><td>连接</td><td><code>src/features/connection/components/ConnectionList.tsx</code></td><td>远端 SSH / 部署连接，供 <code>site_deploy</code> 使用</td></tr>
+  </tbody>
+</table>
+
+<h3><span class="n">1.2</span> 绑定关系：唯一真相链（双向同步）</h3>
+<div class="card">
+  <div class="kv"><b>目录绑定</b><span><code>scene.metadata.localWorkDir</code> &nbsp;⇄&nbsp; <code>site.local_workdir</code></span></div>
+  <div class="kv"><b>站点绑定</b><span><code>scene.metadata.boundSiteId</code> &nbsp;→&nbsp; 站点记录</span></div>
+</div>
+<p>两条同步方向都落在 <code>src/store/sceneStore.ts</code>：</p>
+<ul>
+  <li><b>绑定站点时</b>（<code>sceneStore.ts:453–476</code>）：把场景的 <code>localWorkDir</code> 推给站点 —— <span class="muted">场景是源头</span>。</li>
+  <li><b>设置目录时</b>（<code>sceneStore.ts:492–514</code>）：把 <code>localWorkDir</code> 反向同步到已绑定站点，日志 <code>"Site local_workdir synced"</code>。</li>
+</ul>
+<p>因此无论从哪一端改目录，<code>{localWorkDir}/{framework}/</code> 始终是同一个物理路径。</p>
+
+<h3><span class="n">1.3</span> 预览链路（7 步，<code>codegenService.ts:184–254</code>）</h3>
+<div class="flow">
+  <span class="step">resolvePreviewDir</span><span class="arrow">→</span>
+  <span class="step">clean_output_dir</span><span class="arrow">→</span>
+  <span class="step">cleanOtherFrameworkDirs</span><span class="arrow">→</span>
+  <span class="step">resolveSceneIcons</span><span class="arrow">→</span>
+  <span class="step">generateProjectScaffold</span><span class="arrow">→</span>
+  <span class="step">generateHTML(preview:true)</span><span class="arrow">→</span>
+  <span class="step">write_preview_file + get_preview_url</span>
+</div>
+<table>
+  <thead><tr><th>步骤</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td><code>resolvePreviewDir</code></td><td>有绑定 → <code>{localWorkDir}/{framework}</code>；无绑定 → 回退 <code>web-craft-preview/{sceneId}/{framework}</code>（Rust 端拼到 app_data_dir）</td></tr>
+    <tr><td><code>cleanOutputDir</code></td><td>先清空，避免上次发布的已删除页面 / 重命名组件残留</td></tr>
+    <tr><td><code>resolveSceneIcons</code></td><td>预取自定义图标 <code>custom-{id}</code> → data URL，注入生成管线</td></tr>
+    <tr><td><code>generateProjectScaffold</code></td><td>生成完整多文件工程（package.json / src / 构建配置 / 路由）</td></tr>
+    <tr><td><code>generateHTML</code></td><td>CDN 自包含 HTML；<code>combinePreviewPages</code> 把多视图合并成单个 <code>preview.html</code>（SPA 式 hash 切换）</td></tr>
+  </tbody>
+</table>
+
+<h3><span class="n">1.4</span> 发布链路（<code>codegenService.ts:268–307</code>）</h3>
+<p>与预览<b>同一输出目录</b>（<code>resolvePreviewDir ≡ resolvePublishDir</code>，<code>codegenService.ts:150–169</code>），差异只在落盘命令与文件名：</p>
+<pre><span class="c">// 前端：逐文件调用 Rust 命令</span>
+<span class="k">await</span> invoke(<span class="s">"write_publish_file"</span>, { dir, filename: file.path, content: file.content });
+
+<span class="c">// Rust：src-tauri/src/interface/commands/codegen.rs:255–274</span>
+<span class="k">let</span> file_path = output_dir.join(&filename);
+<span class="k">if let</span> Some(parent) = file_path.parent() {
+    std::fs::create_dir_all(parent)?;   <span class="c">// path 含子目录（src/pages/Home.tsx）时自动建链</span>
+}
+std::fs::write(&file_path, &content)?;</pre>
+
+<h3><span class="n">1.5</span> 全链路：发布 → 构建 → 部署（<code>codegenService.ts:536–581</code>）</h3>
+<div class="flow">
+  <span class="step">publishScene</span><span class="arrow">→</span>
+  <span class="step">build_project（npm install + build → dist/）</span><span class="arrow">→</span>
+  <span class="step">site_deploy（蓝绿部署 + Nginx 代理）</span>
+</div>
+<div class="card warn">
+  <b>一句话结论：</b>「我的网站中绑定的目录」就是 <code>{localWorkDir}/{framework}/</code>。预览与发布写的<b>是同一个目录</b>，差别仅在于预览额外产出合并版 <code>preview.html</code>。所以两端视觉一致的唯一保障，就是让编辑区渲染器与发布端 codegen <b>读同一份取值口径纯函数</b>——这正是本轮全部工作的主线。
+</div>
+
+<!-- ══════════════ 二 ══════════════ -->
+<h2>二、本轮代码层优化</h2>
+
+<h3><span class="n">2.1</span> 共享基础设施（先收口，再改造组件）</h3>
+<p>历史上「编辑区与发布不一致」的病根是同一批样式字面量被写在三处（<code>defaultConfig</code> / 渲染器 / codegen）必然漂移。本轮先把口径抽成纯函数，再让两端只读它：</p>
+<table>
+  <thead><tr><th>新增文件</th><th>行数</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><code>editor/data/fieldStyle.ts</code></td><td>164</td><td>表单字段<b>唯一</b>取值口径 <code>resolveFieldStyle</code>（颜色/边框/圆角/字号/标签/帮助文字）</td></tr>
+    <tr><td><code>editor/data/fieldValidate.ts</code></td><td>63</td><td>编辑区校验口径，与 codegen 校验运行时同源</td></tr>
+    <tr><td><code>editor/renderers/fieldShell.tsx</code></td><td>161</td><td>编辑区字段外壳（顶部标签 / 悬浮徽章 / 边框环 / 提示文字）</td></tr>
+    <tr><td><code>codegen/fieldChrome.ts</code></td><td>166</td><td>发布端字段外壳，<b>从 form.ts 抽出</b>，供非 <code>form-</code> 前缀的字段型控件（级联等）复用，杜绝第二份实现</td></tr>
+    <tr><td><code>editor/data/scaleFit.ts</code> + <code>codegen/scaleFit.ts</code></td><td>36 + 64</td><td>「随拖动框等比缩放并居中」的统一口径，两端同源</td></tr>
+    <tr><td><code>editor/data/mediaStyle.ts</code></td><td>127</td><td>媒体族唯一取值口径（图片/视频/音频共用）</td></tr>
+    <tr><td><code>editor/data/cascaderOptions.ts</code></td><td>205</td><td>级联树解析 / 接口数据归一 / 取值路径 / 三种提交口径，两端共用</td></tr>
+    <tr><td><code>editor/renderers/DateTimeField.tsx</code></td><td>137</td><td>日期 / 时间共用受控输入（含 <code>color-scheme</code> 深浅底图标适配）</td></tr>
+  </tbody>
+</table>
+
+<h3><span class="n">2.2</span> 表单组件组（重点）</h3>
+<p>用户要求「从标签组件开始，标签以后的组件都没有完成」。实际清点后按顺序全部补齐：</p>
+<table>
+  <thead><tr><th>组件</th><th>状态</th><th>本轮内容</th></tr></thead>
+  <tbody>
+    <tr><td><code>form-input / textarea / select / checkbox / radio</code></td><td><span class="tag t-ok">既有</span></td><td>作为一致性范式的参照基准，未动</td></tr>
+    <tr><td><code>form-switch / slider / date / time / file / number</code></td><td><span class="tag t-done">已完善</span></td><td>受控同步（面板改值即同步画布）、标签 / 帮助文字 / 校验 / 字段名、圆角口径统一、画布居中随框缩放</td></tr>
+    <tr><td><code>form-cascader</code></td><td><span class="tag t-done">本轮完成</span></td><td>三端收口；选项从 textarea JSON 改为「静态 / 接口」双模式 + <code>authEnabled</code> 认证联动；隐藏 input 参与表单提交；画布 overflow 白名单</td></tr>
+    <tr><td><code>form-segmented</code>（分段控制器）</td><td><span class="tag t-done">本轮完成</span></td><td>补隐藏 <code>input[name]</code> 参与 <code>WCFORM_SUBMIT</code>；状态样式从 inline 改类规则；补标签 / 校验 / 帮助文字 / 水平对齐</td></tr>
+    <tr><td><code>form-rate</code>（评分）</td><td><span class="tag t-done">本轮完成</span></td><td>星状态改「恒双 svg + 类切换」；补标签 / 校验 / 对齐；接入统一缩放</td></tr>
+  </tbody>
+</table>
+
+<h3><span class="n">2.3</span> 修复的真实缺陷（非顺手重构，均有证据）</h3>
+<div class="card">
+  <div class="kv"><span class="tag t-fix">P1</span><b>authEnabled 被压成布尔</b></div>
+  <p style="margin:4px 0 12px">编辑区 <code>useApiDataFetch</code> 用三态（<code>null</code>=跟随全局 / <code>true</code>=强制带 token / <code>false</code>=强制不带），而级联 codegen 写成 <code>=== true</code>，导致「跟随全局」被误判为「不带 token」。<br><span class="muted">证据：契约测试断言失败 → 打印产物确认 → 已改三态透传（<code>codegen/components/cascader.ts</code>），并 grep 确认其余 codegen 本就是三态口径。</span></p>
+  <div class="kv"><span class="tag t-fix">P1</span><b>评分：编辑区缩放、发布端固定</b></div>
+  <p style="margin:4px 0 12px">编辑区 rate 随框缩放，发布端却按固定尺寸渲染 —— 拖大设计盒后两端视觉分叉。已抽 <code>scaleFit</code> 两端同源。<br><span class="muted">证据：两端产物尺寸对照探针。</span></p>
+  <div class="kv"><span class="tag t-fix">P1</span><b>图片圆角双端口径差 10 倍</b></div>
+  <p style="margin:4px 0 0">编辑区 <code>sx</code> 数字圆角走主题 <code>shape.borderRadius=10</code>（×10），发布端按字面 px 输出。面板填 3 时，编辑区 30px、发布端 3px。已由 <code>mediaStyle</code> 统一。<br><span class="muted">证据：headless 量取编辑区圆角 30px vs 发布端 3px。</span></p>
+</div>
+
+<h3><span class="n">2.4</span> 居中显示 + 随拖动框缩放</h3>
+<p>用户要求「组件在拖动框中居中显示，可随拖动框拖动放大缩小」。统一为 <code>scaleFit</code> 口径：内容按自然尺寸在铺满设计盒的 stage 中整体等比缩放并居中，编辑区（<code>editor/data/scaleFit.ts</code>）与发布端（<code>codegen/scaleFit.ts</code>）同源，率组件与后续组件共用。</p>
+
+<h3><span class="n">2.5</span> 媒体组件组</h3>
+<table>
+  <thead><tr><th>组件</th><th>版本</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td><code>image</code></td><td>1.0.0 → <span class="tag t-new">2.0.0</span></td><td>alt / 链接 / 对齐 / 懒加载 / 题注 / 空态 / 边框 / 阴影 / 透明度 / 悬浮放大，并支持接口动态取图</td></tr>
+    <tr><td><code>video</code></td><td>1.0.0 → <span class="tag t-new">2.0.0</span></td><td>封面 poster / 播放开关（自动播放·静音·控件·循环）/ 倍速·音量·起播位置 / 样式 / 题注 / 空态；自动播放时兜底静音（浏览器策略）</td></tr>
+    <tr><td><code>audio</code></td><td><span class="tag t-new">新增</span></td><td>封面 / 图标 + 标题 + 原生控件 + 空态</td></tr>
+  </tbody>
+</table>
+<p>发布端媒体实现拆到独立模块 <code>codegen/components/media.ts</code>（350 行），并从 <code>basic.ts</code> 移出旧实现。</p>
+
+<h3><span class="n">2.6</span> 动态数据 × 认证联动（灵活全面接入）</h3>
+<ul>
+  <li><b>双模式取数</b>：静态（面板条目 / JSON / 逐行文本自动迁移）与接口（<code>apiUrl</code>/<code>apiPath</code>）统一由共享解析器归一。</li>
+  <li><b>三态认证</b>：<code>authEnabled = null | true | false</code> —— 跟随全局 / 强制带 token / 强制不带，与认证组件组联动，支持<b>认证与非认证两种接入</b>。</li>
+  <li><b>取数运行时</b>统一走 <code>dataLoaderScript</code>，带 token 时注入 <code>Authorization</code> 头。</li>
+</ul>
+
+<!-- ══════════════ 三 ══════════════ -->
+<h2>三、验证结果</h2>
+<table>
+  <thead><tr><th>关卡</th><th>结果</th></tr></thead>
+  <tbody>
+    <tr><td><code>tsc --noEmit</code></td><td><span class="tag t-ok">通过</span> 仅 23 项预存 <code>__measure__</code> 错误（既有，非本轮引入）</td></tr>
+    <tr><td><code>vitest run</code></td><td><span class="tag t-ok">通过</span> 49 文件 / 446 项全过（本轮新增 4 文件 +53 项）</td></tr>
+    <tr><td><code>vite build</code></td><td><span class="tag t-ok">通过</span> 需 <code>env -u NODE_OPTIONS npx vite build --emptyOutDir</code>（宿主 fs shim 拦截 ESM mkdir）</td></tr>
+    <tr><td>真实浏览器 DOM 探针</td><td><span class="tag t-ok">通过</span> 级联三级选择与提交值 <code>zj / hz / xh</code>、分段点击换类与 change 事件、评分点击取值、缩放 2 倍对照、图片/视频/音频几何与状态</td></tr>
+    <tr><td>git 提交</td><td><b>未提交</b>（遵守用户铁律，等明确批准）</td></tr>
+  </tbody>
+</table>
+<p class="muted">注：jsdom 不实现 CSS 级联，状态类规则必须用真实浏览器探针验证；探针须在 <code>--window-size=1920,1080</code> 下运行，否则页面等比缩放脚本会让几何读数全部失真。</p>
+
+<div class="card ok">
+  <b>本轮新增回归锁（4 个文件 / 53 项）</b>
+  <ul style="margin-bottom:0">
+    <li><code>src/codegen/__test__/cascader.test.ts</code> —— 级联契约（24 项）</li>
+    <li><code>src/codegen/__test__/segmented-rate.test.ts</code> —— 分段 / 评分契约（22 项）</li>
+    <li><code>src/codegen/__test__/media.test.ts</code> —— 图片 / 视频 / 音频契约</li>
+    <li><code>src/editor/__test__/cascader-options.test.ts</code> —— 共享解析器单测</li>
+  </ul>
+</div>
+
+<!-- ══════════════ 四 ══════════════ -->
+<h2>四、下一轮起点（按用户指定顺序）</h2>
+<table>
+  <thead><tr><th>分组</th><th>现状</th><th>待办</th></tr></thead>
+  <tbody>
+    <tr><td>表格组件组</td><td><code>table</code>(17 key) / <code>pagination</code>(15) / <code>calendar</code>(16) / <code>descriptions</code>(12) / <code>tree</code>(10)</td><td>属性仍偏薄，按本轮范式改造并补动态数据 + 认证联动</td></tr>
+    <tr><td>图标组件组</td><td><span class="tag t-fix">完全不存在</span></td><td>新建 <code>ccat_icon</code> 分类 + 图标组件（单图标 / 图标列表 / 图标按钮 / 图标组合），与 <code>resolveIcon</code> / <code>renderMenuIcon</code> 图标管线打通</td></tr>
+    <tr><td>装饰组件组</td><td>20 个组件，属性项仅 5~10 条</td><td>系统性补齐（尺寸 / 颜色 / 圆角 / 透明度 / 动画 / 层级）</td></tr>
+    <tr><td>形状组件组</td><td>仅 <code>shape</code>（5 key）</td><td>扩展形状种类与样式属性</td></tr>
+  </tbody>
+</table>
+
+<div class="card">
+  <b>复用要点（避免重蹈覆辙）</b>
+  <ol style="margin-bottom:0">
+    <li>新增 / 改造组件一律走四件套：<b>唯一取值口径解析器 + 共享字段外壳 + 类规则承载状态 + 隐藏 input 参与提交</b>。</li>
+    <li>状态切换的属性（<code>display</code>/<code>background</code>/<code>left</code>/<code>opacity</code>…）绝不能写 inline —— inline 恒胜过非 <code>!important</code> 的样式表规则，会把状态规则永久压死。</li>
+    <li>三重验证缺一不可：codegen 契约测试 + 共享解析器单测 + 真实浏览器 DOM 探针。</li>
+  </ol>
+</div>
+
+<div class="foot">
+  web-craft 组件库优化 · 自动化任务执行记录 #2 · 生成于 2026-09-20 ·
+  所有改动保持未提交状态，等用户明确批准后再行提交。
+</div>
+
+</div>
+</body>
+</html>

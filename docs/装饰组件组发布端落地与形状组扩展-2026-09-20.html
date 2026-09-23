@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>装饰组件组发布端落地 + 形状组扩展 · 2026-09-20</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161c24; --panel-2:#1c242e; --line:#26303c;
+    --fg:#e6edf3; --fg-dim:#9aa7b4; --fg-mute:#6b7885;
+    --accent:#4fc3f7; --ok:#3fb950; --warn:#d29922; --err:#f85149; --done:#a371f7;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 28px 80px}
+  header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:32px}
+  h1{margin:0 0 10px;font-size:26px;font-weight:650;letter-spacing:.2px}
+  .sub{color:var(--fg-dim);font-size:13px}
+  .sub code{background:var(--panel-2);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:12px;color:var(--accent)}
+  h2{font-size:18px;font-weight:620;margin:44px 0 14px;padding-left:11px;border-left:3px solid var(--accent)}
+  h3{font-size:14.5px;font-weight:600;margin:26px 0 10px;color:var(--fg)}
+  p{margin:9px 0;color:#cfd8e0}
+  ul,ol{margin:9px 0;padding-left:22px;color:#cfd8e0}
+  li{margin:5px 0}
+  code{font-family:var(--mono);font-size:12.3px;background:var(--panel-2);padding:1.5px 5px;border-radius:4px;color:#8fd4f7}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;
+    font-family:var(--mono);font-size:12.2px;line-height:1.6;color:#c9d6e2}
+  pre .c{color:var(--fg-mute)}
+  pre .k{color:var(--accent)}
+  pre .good{color:#5fd36f}
+  pre .bad{color:#ff7b72}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--panel);color:var(--fg-dim);font-weight:600;font-size:12px;letter-spacing:.3px;
+    text-transform:uppercase;border-bottom:1px solid #303a46}
+  tr:hover td{background:rgba(79,195,247,.035)}
+  td code{font-size:11.8px}
+  .tag{display:inline-block;padding:1.5px 7px;border-radius:20px;font-size:11px;font-weight:600;
+    line-height:1.6;white-space:nowrap}
+  .t-done{background:rgba(163,113,247,.15);color:#c4a2ff;border:1px solid rgba(163,113,247,.35)}
+  .t-ok{background:rgba(63,185,80,.13);color:#5fd36f;border:1px solid rgba(63,185,80,.32)}
+  .t-fix{background:rgba(248,81,73,.13);color:#ff7b72;border:1px solid rgba(248,81,73,.32)}
+  .t-new{background:rgba(79,195,247,.13);color:#6fd0f8;border:1px solid rgba(79,195,247,.32)}
+  .t-todo{background:rgba(210,153,34,.13);color:#e3b341;border:1px solid rgba(210,153,34,.32)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:16px 0}
+  .card.warn{border-color:rgba(210,153,34,.4);background:rgba(210,153,34,.06)}
+  .card.ok{border-color:rgba(63,185,80,.32);background:rgba(63,185,80,.05)}
+  .card.err{border-color:rgba(248,81,73,.35);background:rgba(248,81,73,.05)}
+  .kv{display:flex;gap:10px;margin:6px 0;font-size:13px}
+  .kv b{color:var(--fg-dim);font-weight:600;min-width:120px;flex-shrink:0}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0;font-size:12.5px}
+  .flow .step{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:7px 11px;
+    font-family:var(--mono);font-size:11.6px;color:#c9d6e2}
+  .flow .arrow{color:var(--fg-mute);font-size:14px}
+  .foot{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--fg-mute);font-size:12px}
+  .badge-num{display:inline-block;background:rgba(79,195,247,.13);color:var(--accent);border:1px solid rgba(79,195,247,.3);
+    border-radius:6px;padding:0 7px;font-family:var(--mono);font-size:12px;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>装饰组件组发布端落地（0 → 1）+ 形状组件组扩展 + 表单组遗留缺陷清理</h1>
+  <div class="sub">
+    WebCraft 网站编辑器 · 组件库优化 第四轮 ·
+    <code>tsc --noEmit</code> 仅剩预存 23 个 <code>__measure__</code> 错误 ·
+    <code>vitest 650 passed / 57 files</code> ·
+    <code>env -u NODE_OPTIONS npx vite build --emptyOutDir</code> ✓ 11.79s ·
+    Chrome headless 真实几何取证 ✓
+  </div>
+</header>
+
+<p>
+本轮先按要求把「网站编辑 → 我的网站 → 已发布网站 → 站点 → 连接」的依赖链与「预览/发布各自把代码写到哪」逐行核实了一遍，
+再按核实结论定位组件库的真实缺口。核实过程中查出一个 <b>P0 级一致性缺陷</b>：
+<b><code>ccat_decoration</code> 整组（45 个组件）在发布端根本没有实现</b> —— 预览是一块橙色「codegen 待实现」占位，
+发布产物里则是一个<b>空 div</b>，也就是说装饰组件在正式站点上<b>彻底消失</b>。本轮把这个洞补上（20 个原生形状），
+并顺手扩展了形状组件组、清掉了表单组上一轮遗留的 3 处不一致。
+</p>
+
+<h2>一、发布链路复核：点击「预览」和「发布」之后代码到底写到哪</h2>
+
+<h3>1. 五个页面的职责</h3>
+<table>
+  <thead><tr><th>界面</th><th>文件</th><th>职责</th></tr></thead>
+  <tbody>
+    <tr><td>我的网站</td><td><code>src/pages/WebsitesPage.tsx</code></td><td>场景（网站）列表：新建 / 打开编辑器 / 绑定站点 / 设置本地工作目录</td></tr>
+    <tr><td>网站编辑</td><td><code>src/pages/WebsiteEditorPage.tsx</code></td><td>画布 + 组件库 + 属性栏；预览 / 发布入口</td></tr>
+    <tr><td>已发布网站</td><td><code>src/pages/PublishedSitesPage.tsx</code></td><td>已部署结果的浏览与运维入口</td></tr>
+    <tr><td>站点</td><td><code>src/pages/SitesPage.tsx</code> / <code>SiteDetailPage.tsx</code></td><td>远端站点实体（域名、部署目标、<code>local_workdir</code>）</td></tr>
+    <tr><td>连接</td><td><code>src/pages/ConnectionPage.tsx</code></td><td>远端主机/凭据（部署通道），供站点引用</td></tr>
+  </tbody>
+</table>
+
+<h3>2. 绑定关系的唯一真相链</h3>
+<p>
+<code>scene.metadata.boundSiteId</code> 指向站点；目录则双向同步、<b>场景是源头</b>
+（<code>src/store/sceneStore.ts:450-516</code>）：
+</p>
+<pre><span class="c">// bindSite：绑定站点时，把场景的 localWorkDir 推到站点</span>
+scene.metadata.localWorkDir  ──▶  site.local_workdir      <span class="c">// sceneStore.ts:465-475</span>
+<span class="c">// setLocalWorkDir：改目录时，反向同步给已绑定站点</span>
+scene.metadata.localWorkDir  ──▶  site.local_workdir      <span class="c">// sceneStore.ts:493-510</span></pre>
+
+<h3>3. 「绑定目录」= <code>{localWorkDir}/{framework}/</code>，预览与发布<b>同一目录</b></h3>
+<p>
+<code>src/services/codegenService.ts:150-168</code> 里 <code>resolvePreviewDir</code> 与
+<code>resolvePublishDir</code> 的<b>函数体逐字相同</b>（有 <code>localWorkDir</code> → 用它；没有 → 落到 app_data_dir 下的预览沙箱）。
+所以「预览」与「发布」写的是同一个目录，差别只在预览多产出一份自包含的 <code>preview.html</code> / 合并页。
+</p>
+<div class="flow">
+  <span class="step">publishScene(scene, {framework})</span><span class="arrow">→</span>
+  <span class="step">clean_output_dir</span><span class="arrow">→</span>
+  <span class="step">cleanOtherFrameworkDirs</span><span class="arrow">→</span>
+  <span class="step">generateProjectScaffold</span><span class="arrow">→</span>
+  <span class="step">generateHTML(每视图)</span><span class="arrow">→</span>
+  <span class="step">write_publish_file</span><span class="arrow">→</span>
+  <span class="step">{localWorkDir}/{framework}/…</span>
+</div>
+<p class="sub">
+落盘在 Rust 侧：<code>src-tauri/src/interface/commands/codegen.rs:255-274</code> ——
+绝对路径直用、相对路径拼 app_data_dir，逐级 <code>create_dir_all</code> 后 <code>fs::write</code>。
+发布到远端时再走 <code>build_project</code>（npm install + build → dist/）→ <code>site_deploy</code>（蓝绿 + Nginx），
+见 <code>codegenService.ts:497</code> / <code>:543-568</code>。
+</p>
+
+<div class="card">
+  <b>由链路推导出的组件库铁律</b>
+  <p style="margin-bottom:0">
+    预览与发布<b>消费的是同一份 <code>component.config</code></b>，走的是同一套 codegen。
+    因此「编辑区所见」与「发布后所得」要一致，<b>只能</b>靠两端共用同一份取值口径（纯函数），
+    任何一处字面量被写进两份代码，迟早分叉。本轮的装饰组件组就是这条铁律的最大反面教材（见下）。
+  </p>
+</div>
+
+<h2>二、P0 缺陷：装饰组件组在发布端<b>不存在</b></h2>
+<div class="card err">
+  <div class="kv"><b>现象</b><span>装饰组件组拖进画布能正常显示；点预览只看到橙色「xxx (codegen 待实现)」占位块；发布出去的站点上该组件<b>什么都没有</b>。</span></div>
+  <div class="kv"><b>根因</b><span><code>src/codegen/components/index.ts</code> 的注册表里<b>没有任何 <code>decoration-*</code></b>；
+  未注册类型走 <code>engine.ts</code> 的 <code>generateUnsupportedComponent</code>：预览分支输出占位块（<code>:358-366</code>），
+  非预览分支输出<b>空 div</b>（<code>:368-372</code>）。</span></div>
+  <div class="kv"><b>影响面</b><span>实测探针输出：<code>ccat_decoration</code> 共 <b>45</b> 个组件（20 个原生 + 25 个 datav），<b>有 codegen 的 0 个</b>。</span></div>
+</div>
+
+<pre><span class="c">// 修复前的取证（临时探针，现已删除）</span>
+分类统计: [ [ 'ccat_decoration', 45 ] ]
+[ccat_decoration] 数量=45
+  有 codegen: <span class="bad">(无)</span>
+  缺 codegen: decoration-rect,decoration-circle,…,<span class="c">(20 个原生)</span>,datav-border-1…13,datav-decoration-1…12 <span class="c">(25 个 datav)</span>
+decoration-rect codegen: <span class="bad">NONE</span></pre>
+
+<h2>三、实现：把几何收口成「一份声明」，两端各取所需</h2>
+<p>
+单纯给 20 个形状补 20 份 codegen 字面量是<b>错的解法</b> —— 那等于把几何写进第二处，只是把分叉推迟到下一次改版。
+本轮的做法（沿用本仓库既定的「唯一取值口径」范式）：
+</p>
+
+<table>
+  <thead><tr><th>文件</th><th>角色</th><th>状态</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>src/editor/data/decorationShape.ts</code></td>
+      <td><b>唯一取值口径</b>：<code>decorationShape(kind, config, opts)</code> 输出 <code>DecorShapeSpec</code>
+        （viewBox / preserveAspectRatio / defs 渐变 / 图元列表 / 自动贴合尺寸 / 关键帧）；
+        另含 <code>shapeSpec()</code>（形状组映射）、<code>SHAPE_KIND_OPTIONS</code>、<code>SHAPE_SHADOWS</code>、
+        发布端字符串化工具 <code>svgAttrText/svgPrimitiveText/svgDefText</code></td>
+      <td><span class="tag t-new">新建</span></td>
+    </tr>
+    <tr>
+      <td><code>src/editor/renderers/DecorationShapeRenderer.tsx</code></td>
+      <td>编辑区：<code>DecorationSvg</code>（图元 → React 元素，装饰组与形状组共用）+ <code>createDecorationShapeRenderer(kind)</code> 工厂（保留 <code>DecorationWrapper</code> 动画与 <code>_autoFitSize</code> 回写）</td>
+      <td><span class="tag t-new">新建</span></td>
+    </tr>
+    <tr>
+      <td><code>src/codegen/components/decoration.ts</code></td>
+      <td>发布端：<code>renderDecorSpec(spec, ctx, extraBoxCss)</code> 单一发射器 + <code>decorationShapeCodegen</code>（20 个形状共用）+ <code>DECORATION_SHAPE_KINDS</code> 清单</td>
+      <td><span class="tag t-new">新建</span></td>
+    </tr>
+    <tr>
+      <td>20 个 <code>*DecorationRenderer.tsx</code></td>
+      <td>由各自实现几何（平均 60~100 行）<b>瘦身为 1 行绑定</b>：<code>export const X = createDecorationShapeRenderer("decoration-x")</code></td>
+      <td><span class="tag t-done">重构</span></td>
+    </tr>
+    <tr>
+      <td><code>src/codegen/components/index.ts</code></td>
+      <td>按清单批量注册 20 个形状的 codegen</td>
+      <td><span class="tag t-fix">修复</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>顺手修掉一个「面板说谎」的既有问题：</p>
+<div class="card warn">
+  <b><code>decoration-arrow</code> 的 <code>arrowShape</code> / <code>arrowCount</code> 两个字段此前渲染器完全不读</b>
+  <p style="margin-bottom:0">
+    面板提供「菱形双向 / 三角箭头」与「箭头数量 1~10」，旧渲染器恒定画三角头、恒定 1/2 个箭头。
+    现在两端都按面板渲染：<code>triangle</code> 保持原几何（30° 半角），<code>diamond</code> 画出真正的菱形箭头，
+    <code>arrowType=chain</code> 沿线路均匀排布 <code>arrowCount</code> 个箭头。
+  </p>
+</div>
+
+<h2>四、形状组件组扩展（<code>shape</code> 1.0.0 → 2.0.0）</h2>
+<p>形状组此前只有 3 种形状、5 个属性；现在复用装饰组的几何，形状与属性都补齐：</p>
+<table>
+  <thead><tr><th>分组</th><th>字段</th></tr></thead>
+  <tbody>
+    <tr><td>内容</td><td>形状类型（矩形/圆形/椭圆/线条/三角/菱形/五角星/正多边形/十字/虚线框）、边数、角数、内径比、笔画粗细（十字）、线条方向、虚线段长/间隔</td></tr>
+    <tr><td>填充</td><td>渐变填充开关、填充色、渐变起止色、渐变方向（含径向）</td></tr>
+    <tr><td>描边</td><td>描边色、描边粗细、描边样式（实线/虚线/点线/无）、圆角</td></tr>
+    <tr><td>效果</td><td>透明度、阴影（按轮廓 <code>drop-shadow</code>，镂空形状不会变成方块阴影）</td></tr>
+  </tbody>
+</table>
+<p class="sub">
+字段数 <code>5 → 20</code>；<b>几何零重复</b>：<code>shapeSpec()</code> 把面板配置映射成装饰组的图元声明，
+所以「形状-矩形」与「装饰-矩形」在同一份配置下画出来必然一致（有测试锁）。
+</p>
+
+<h2>五、表单组件组：清掉上一轮遗留的 3 处不一致</h2>
+<table>
+  <thead><tr><th>问题</th><th>证据</th><th>处置</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>form-checkbox</code> 的 <code>defaultSize.height</code> 与缩放基准脱钩</td>
+      <td>注册表写 <code>32</code>，<code>CHECKBOX_FIT.refH = 42</code>（其注释明确写「注册表 defaultSize.height 亦为 42」）→ 默认框装不下自己的内容</td>
+      <td><span class="tag t-fix">已修</span> 改为 <code>42</code></td>
+    </tr>
+    <tr>
+      <td>面板 <code>align</code> 默认值与舞台默认摆放不一致</td>
+      <td><code>STAGE_ALIGN_DEFAULT = "center"</code>（既定观感：内容在框内居中），但 checkbox/radio/label/switch/segmented 的面板默认值仍是 <code>"left"</code></td>
+      <td><span class="tag t-fix">已修</span> 五处统一为 <code>"center"</code>，并新增契约锁（面板默认值必须 == <code>STAGE_ALIGN_DEFAULT</code>）</td>
+    </tr>
+    <tr>
+      <td><code>codegen/components/segmented.ts</code> 留了两个未使用导入</td>
+      <td><code>tsc</code> TS6133 ×2</td>
+      <td><span class="tag t-fix">已修</span> 删除</td>
+    </tr>
+  </tbody>
+</table>
+<p class="sub">
+另有 3 个测试文件（<code>form-label-schema</code> / <code>form-label</code> / <code>form-group-scale</code>）里
+仍按旧实现断言（<code>LabelStyle.justify</code> 字段、非法 align 回退 <code>flex-start</code>、checkbox 高 32），
+一并按新口径更新 —— 现在 <code>vitest</code> 全绿。
+</p>
+
+<h2>六、验证矩阵（本轮全部实测）</h2>
+<table>
+  <thead><tr><th>关卡</th><th>命令 / 手段</th><th>结果</th></tr></thead>
+  <tbody>
+    <tr><td>类型</td><td><code>npx tsc --noEmit</code></td><td><span class="tag t-ok">通过</span> 仅剩 23 个预存 <code>__measure__</code> 错误，非 <code>__measure__</code> 错误 <b>0</b></td></tr>
+    <tr><td>单测</td><td><code>npx vitest run</code></td><td><span class="tag t-ok">650 passed / 57 files</span>（本轮新增 24 例：装饰 19 + 编辑区一致性 5；形状 7）</td></tr>
+    <tr><td>构建</td><td><code>env -u NODE_OPTIONS npx vite build --emptyOutDir</code></td><td><span class="tag t-ok">✓ built in 11.79s</span></td></tr>
+    <tr><td>真实浏览器</td><td>Chrome <code>--headless=new --dump-dom --window-size=1920,1080</code> 读取真实 DOM 几何</td><td><span class="tag t-ok">见下</span></td></tr>
+  </tbody>
+</table>
+
+<pre><span class="c"># 发布产物真实读数（探针页，已验证后删除）</span>
+d1 rect  geo=192x115 x=2 rx=10 stroke=#2196F3 sw=4        <span class="c">// 200×120 框：96/100×200 = 192 ✓，描边内缩 2 ✓，圆角按像素 ✓</span>
+d1 boxCss opacity=0.8                                       <span class="c">// 透明度落在外层容器，与编辑区同一层</span>
+d2 star  geo=125x144 dLen=267                               <span class="c">// meet：保持比例、居中，不拉伸变形</span>
+d3 pathCount=4 rotate=rotate(-90 50 50)                     <span class="c">// chain(3 箭头)+线 = 4 条；direction=up 生效 ✓</span>
+d4 polygon=50,5 95,95 5,95 filter=drop-shadow(…) opacity=0.9<span class="c">// 形状组：三角 + 阴影 + 透明度 ✓</span>
+d5 grad=deco-grad-dd5 fill=url(#deco-grad-dd5) rx=12        <span class="c">// 渐变填充：defs 与引用成对 ✓</span>
+d6 stage justify=<span class="good">center</span> align=<span class="good">center</span>                    <span class="c">// 表单标签：拖动框内居中 ✓</span>
+d6 inner transform=matrix(2.5,0,0,2.5,0,0)                  <span class="c">// 300×60 框 vs 基准 120×24 → 等比 2.5 倍 ✓</span>
+unsupportedCount=<span class="good">0</span>                                         <span class="c">// 不再出现「codegen 待实现」占位</span></pre>
+<p class="sub">
+最后两行是对用户「组件在拖动框中居中显示 + 随框拖动放大缩小」要求的<b>发布端</b>取证：
+缩放与居中都发生在<b>发布出去的页面</b>里，不只是编辑器画布上的效果。
+</p>
+
+<h2>七、本轮未完成（下一轮起点，按优先级）</h2>
+<table>
+  <thead><tr><th>#</th><th>项</th><th>现状 / 缺口</th><th>规模</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-num">1</span></td>
+      <td><b>25 个 <code>datav-*</code> 装饰在发布端仍缺失</b></td>
+      <td><code>datav-border-1…13</code> + <code>datav-decoration-1…12</code>（科技感边框/流光/雕花/雷达…）渲染依赖 <code>@jiaminghi/data-view-react</code> 运行时，静态复刻工作量大；预览仍是占位块、发布仍是空 div</td>
+      <td>大</td>
+    </tr>
+    <tr>
+      <td><span class="badge-num">2</span></td>
+      <td><b>装饰动画 / 线条特效的发布端</b></td>
+      <td><code>animation</code> 与 <code>lineEffect</code>（12 种动画 + 8 种线条特效）目前只有编辑区 <code>DecorationWrapper</code> 实现，发布端未落地（默认值 <code>none</code>，故默认场景已一致）</td>
+      <td>中大</td>
+    </tr>
+    <tr>
+      <td><span class="badge-num">3</span></td>
+      <td><b>表单组「字段型」组件的 <code>scaleFit</code></b></td>
+      <td>input/textarea/select/date/time/file/number/cascader 按设计<b>铺满</b>拖动框（无自然尺寸，铺满即已随框缩放）；如需与标签/复选框一致的<b>等比缩放</b>选项，可补成默认关闭的开关</td>
+      <td>中</td>
+    </tr>
+    <tr>
+      <td><span class="badge-num">4</span></td>
+      <td>媒体组 / 表格组属性栏再丰富</td>
+      <td>媒体组 23~26 项、表格组 18~29 项，已可用；装饰组剩余 20 个原生形状属性栏仍偏薄（5~14 项）</td>
+      <td>中</td>
+    </tr>
+    <tr>
+      <td><span class="badge-num">5</span></td>
+      <td>工作树里的 4 个临时探针文件</td>
+      <td><code>src/codegen/__test__/_dump.test.ts</code> / <code>_dump_standalone.test.ts</code> / <code>_probe_form_scale.test.ts</code> / <code>_tmp_debug.ts</code>（均未纳入 git）建议清理</td>
+      <td>小</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>八、可复用要点</h2>
+<ul>
+  <li><b>补发布端实现的第一原则</b>：先把几何/取值抽成纯函数口径，再让两端去读它；直接写第二份字面量等于制造下一次分叉。</li>
+  <li><b>「自然尺寸内容」与「铺满型内容」的取舍</b>：形状/图标/评分/徽标类保持比例居中（<code>preserveAspectRatio="meet"</code> 或 <code>scaleStageCss</code> 等比缩放）；
+    矩形/椭圆/线条/网格类铺满（<code>preserveAspectRatio="none"</code>）—— 用错会得到「圆被拉成椭圆」这类结果。</li>
+  <li><b>属性栏不许说谎</b>：面板给了选项，渲染器与 codegen 就必须读它（本轮修掉箭头 <code>arrowShape/arrowCount</code>）。</li>
+  <li><b>缩放/居中的验证要在发布端做</b>：编辑器画布正确不代表发布页正确（rate 曾出现「编辑区缩放、发布端固定」的历史缺陷）。</li>
+  <li>验证配方沿用既有两档：<code>--dump-dom</code> 静态几何探针（本项目本轮用法）+ CDP 真实鼠标事件（证明 <code>:hover</code> 类规则没被 inline 压死）。探针文件用完即删。</li>
+</ul>
+
+<div class="foot">
+  WebCraft · 组件库优化第四轮 · 未执行 git commit（按既有约定，改动留在工作树待批准）<br>
+  本轮改动：新增 3 个文件（装饰口径 / 渲染器 / codegen）+ 2 个测试文件；重构 20 个装饰渲染器；修改
+  <code>codegen/components/index.ts</code> / <code>basic.ts</code> / <code>segmented.ts</code>、
+  <code>editor/registerBasicComponents.ts</code>（shape 块）、<code>editor/registerFormComponents.ts</code>（默认值 6 处）、3 个测试文件。
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>表单组属性栏深化：标签与滑块 · 2026-09-20</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#fff; --ink:#1c1f24; --ink2:#4a5058; --ink3:#7a828c;
+    --line:#e3e6eb; --accent:#1976d2; --warn:#c62828; --ok:#1b7f4b; --code:#f1f3f6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.7 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 24px 72px}
+  header{border-bottom:2px solid var(--ink);padding-bottom:16px;margin-bottom:28px}
+  h1{margin:0 0 6px;font-size:24px;letter-spacing:.2px}
+  .sub{color:var(--ink3);font-size:12.5px}
+  h2{font-size:16px;margin:36px 0 12px;padding-left:9px;border-left:3px solid var(--accent)}
+  h3{font-size:13.5px;margin:22px 0 8px;color:var(--ink2)}
+  p{margin:8px 0}
+  ul{margin:8px 0;padding-left:20px}
+  li{margin:4px 0}
+  code{background:var(--code);padding:1px 5px;border-radius:3px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  pre{background:#20242b;color:#dfe4ea;padding:12px 14px;border-radius:6px;overflow-x:auto;
+    font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  table{border-collapse:collapse;width:100%;background:var(--panel);margin:10px 0;font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+  th{background:#eef1f5;font-weight:600;white-space:nowrap}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:12px 0}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;border:1px solid var(--line);
+    background:#eef1f5;color:var(--ink2);margin-right:6px}
+  .tag.p1{background:#fdecea;border-color:#f5c6c0;color:var(--warn)}
+  .tag.ok{background:#e8f5ee;border-color:#bfe3ce;color:var(--ok)}
+  .tag.new{background:#e8f1fb;border-color:#c2dcf6;color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  .k{color:var(--ink3);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+  .v{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;word-break:break-all}
+  .ev{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--ok);
+    border-radius:0 6px 6px 0;padding:10px 14px;margin:8px 0}
+  .ev.bad{border-left-color:var(--warn)}
+  .muted{color:var(--ink3);font-size:12.5px}
+  .foot{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);color:var(--ink3);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>表单组属性栏深化：标签（form-label）与滑块（form-slider）</h1>
+  <div class="sub">WebCraft 网站编辑器 · 自动化任务 #7 · 2026-09-20 · 未 git commit</div>
+</header>
+
+<h2>一、开工复核：任务描述里的进度是过期的</h2>
+<p>任务原文「从标签组件开始，标签组件以后的组件都没有完成」是 P0 阶段的结论。先用一个临时审计用例把
+<b>全部 142 个组件</b>的字段数、分组、能力标记拉出来核对（<code>/tmp/wc-form-audit.json</code>）：</p>
+
+<table>
+  <thead><tr><th>表单组组件</th><th class="num">字段数</th><th>数据接入</th><th>结论</th></tr></thead>
+  <tbody>
+    <tr><td>标签 form-label</td><td class="num">11</td><td>—</td><td><span class="tag p1">最薄</span>本轮深化 → 27</td></tr>
+    <tr><td>滑块 form-slider</td><td class="num">14</td><td>—</td><td><span class="tag p1">次薄</span>本轮深化 → 19</td></tr>
+    <tr><td>开关 form-switch</td><td class="num">16</td><td>—</td><td>已含对齐/缩放，待加深</td></tr>
+    <tr><td>复选框 form-checkbox</td><td class="num">17</td><td>—</td><td>—</td></tr>
+    <tr><td>按钮 form-button</td><td class="num">19</td><td>—</td><td>待做"点击行为"</td></tr>
+    <tr><td>单选组 / 分段 / 下拉 / 级联</td><td class="num">30 / 39 / 41 / 46</td><td>✅ 全有</td><td>已是水位线</td></tr>
+    <tr><td>其余（输入/文本域/日期/时间/数字/文件）</td><td class="num">27 ~ 32</td><td>—</td><td>字段型，按设计不缩放</td></tr>
+  </tbody>
+</table>
+<p class="muted">注册表层面 17 个表单组件全部有 codegen（第 1~2 轮已补齐），所以本轮做的是<b>深度</b>而不是补注册。
+审计同时也确认：数据接入（全局数据源 + 静态/接口 + 认证三态）原本只有 单选/分段/下拉/级联 四个组件具备。</p>
+
+<h2>二、form-label：11 → 27 字段</h2>
+
+<div class="grid">
+  <div class="card">
+    <div class="k">内容</div>
+    <ul>
+      <li><code>text</code> 文字（接口模式下作占位文案）</li>
+      <li><span class="tag new">新</span><code>suffix</code> 后缀文字（如「：」，排在必填星号之前）</li>
+      <li><code>required</code> 必填标记 / <code>errorColor</code> 星号色</li>
+    </ul>
+    <div class="k" style="margin-top:10px">布局</div>
+    <ul>
+      <li><code>scaleFit</code> 随拖动框等比缩放</li>
+      <li><code>align</code> 文字对齐 / <code>vAlign</code> 垂直对齐</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="k">样式</div>
+    <ul>
+      <li><code>textColor</code> / <code>fontSize</code> / <code>fontWeight</code> / <code>lineHeight</code> / <code>letterSpacing</code></li>
+      <li><span class="tag new">新</span><code>textDecoration</code> 文字装饰（下划线 / 删除线）</li>
+    </ul>
+    <div class="k" style="margin-top:10px">外观（新分组）</div>
+    <ul>
+      <li><span class="tag new">新</span><code>bgColor</code> / <code>paddingX</code> / <code>paddingY</code> / <code>borderRadius</code> / <code>opacity</code></li>
+    </ul>
+    <div class="k" style="margin-top:10px">数据源（新分组）</div>
+    <ul>
+      <li><span class="tag new">新</span>全局数据源绑定 + 静态/接口模式 + 全套接口参数 + <code>authEnabled</code>（认证/非认证）+ <code>apiTextField</code> 文字取值字段</li>
+    </ul>
+  </div>
+</div>
+
+<h3>关键设计取舍</h3>
+<ul>
+  <li><b>外观层必须挂在"缩放内层"</b>：只有被 <code>transform: scale()</code> 缩放的那一层，底色与内边距才会跟着拖动框一起等比放大缩小。
+      挂到外层就会出现「框变大、标签底色纹丝不动」。声明统一由 <code>labelInnerCss(s)</code> 给出（圆角走表单族 <code>×SHAPE_RADIUS</code> 口径）。</li>
+  <li><b>文字节点单独包一层 span</b>：接口数据到达时只替换它的 <code>textContent</code> —— 不会连带抹掉后缀与必填星号，
+      且 <code>textContent</code> 赋值天然免疫注入。静态模式与接口模式的结构完全一致。</li>
+  <li><b>拿走整组数据配置的诱因</b>：不给纯文字组件注入通用数据源分组（<code>dataConfigMixin</code> 显式声明制），
+      但这里提供的是<b>真实生效</b>的接口取字能力，并已用「面板控件必须能改变产物」的锁逐字段验证。</li>
+</ul>
+
+<h3>真实浏览器取证（发布端产物）</h3>
+<pre>{
+  "count": 2,
+  "A": { "bg": "rgb(255, 238, 170)", "pl": "8px", "pt": "4px",
+         "radius": "20px", "opacity": "0.8",
+         "transform": "matrix(2, 0, 0, 2, 0, 0)",     ← 240×48 框 / 120×24 基准 = scale(2)
+         "text": "账号信息：*" },                      ← 文字 + 后缀 + 必填星号
+  "B": { "text": "接口昵称" }                          ← dataMode=api 拉取后替换 textContent
+}</pre>
+
+<h3>真实浏览器取证（编辑区真值页）</h3>
+<pre>-- cM    outer 298×54  stage justify=flex-start        inner tf=matrix(2.25,…)  bg=rgba(0,0,0,0)
+-- cM2   stage justify=center  inner bg=rgb(255,238,170) pad=4px 8px radius=20px tf=matrix(2.25,…)
+         html=&lt;span data-wc-label-text&gt;账号信息&lt;/span&gt;&lt;span data-wc-label-suffix&gt;：&lt;/span&gt;&lt;span&gt;*&lt;/span&gt;
+-- cM3   stage justify=flex-end align=flex-end  inner op=0.6  fs=20px  deco=underline
+</pre>
+<p class="muted">外观层与文字节点都落在被缩放的那一层；对齐三项分别映射 flex-start / center / flex-end。</p>
+
+<h2>三、form-slider：14 → 19 字段 + 一个 P1 真 bug</h2>
+
+<h3>3.1 先立唯一口径：<code>editor/data/sliderStyle.ts</code></h3>
+<p>滑块的尺寸档（轨道高 / 填充条高 / 滑块直径 / 交互行高）此前<b>两端各写一份</b>，一致与否全靠人眼；
+编辑区渲染器还自己写死 <code>#333333</code> / <code>14</code> / <code>#8a8f98</code>，并且<b>读不到</b><code>labelColor</code>
+（发布端却把它当辅助文字色）。本轮把这些全部收口成一份纯函数：</p>
+<ul>
+  <li><code>SLIDER_SIZES</code>（唯一尺寸档）、<code>SLIDER_BUBBLE_RESERVE</code>（气泡预留高度常量）</li>
+  <li>声明构建函数：<code>sliderLabelRowCss</code> / <code>sliderLabelCss</code> / <code>sliderValueCss</code> /
+      <code>sliderRowCss</code> / <code>sliderEndpointCss</code> / <code>sliderBubbleCss</code> / <code>sliderValueText</code></li>
+  <li>位移公式：<code>sliderThumbLeft(pct, thumb)</code> —— 初始渲染与交互脚本共用同一表达式</li>
+</ul>
+<p>新增字段：<span class="tag new">数值气泡</span><span class="tag new">端点 min/max 数值</span>
+<span class="tag new">标签字重</span><span class="tag new">标签独立配色</span><span class="tag new">标签独立字号</span></p>
+
+<h3>3.2 P1 缺陷：发布端拖动滑块时画面完全不动</h3>
+<div class="ev bad">
+  <p><b>现象</b>：发布页里拖动滑块，填充条、滑块、数值回显<b>全都不动</b>（原生 range 的 value 本身在变，所以表单提交值是对的，看起来"能用"）。</p>
+  <p><b>根因</b>：产物把 <code>JSON.stringify(suffix)</code> 直接拼进了双引号属性 <code>oninput="…"</code>。
+    <code>JSON.stringify("%")</code> 产出的是带<b>裸双引号</b>的 <code>"%"</code>，
+    属性在第一个 <code>"</code> 处提前闭合 → 处理器被截断成 <code>var txt=this.value+</code>（语法错误，整个 handler 失效），
+    余下内容被解析器吞成垃圾属性。<b>默认配置（<code>suffix:""</code>）同样中招</b>：<code>this.value+""</code>。</p>
+</div>
+<pre>// 修复前（真实浏览器 allAttrs）
+"attrs": "type,id,min,max,step,value,style,oninput,%\";var,lb"   ← 两个垃圾属性
+"oninput": "var t=…;var txt=this.value+"                          ← 被截断，语法错误
+"afterInput": ""                                                  ← 数值回显没更新
+
+// 修复后
+"attrs": "type,id,name,min,max,step,value,style,oninput"          ← 干净
+拖到 80 → trackW=80%  thumbLeft=calc(80% - 8px)  bubbleLeft=80%  bubbleText=80%  labelText=80%
+拖到  3 → trackW=3%   thumbLeft=calc(3% - 8px)   bubbleLeft=3%   bubbleText=3%   labelText=3%
+bubbleVsThumbCenter = 0                                           ← 气泡与滑块中心对齐</pre>
+<p><b>修复</b>：<code>escapeAttr(JSON.stringify(suffix))</code>，并加回归锁覆盖 <code>%</code> <code>"</code> <code>'</code> <code>&lt;b&gt;</code> <code>a"b</code> 五种后缀。
+同类排查命令：<code>grep -n 'oninput="\|onchange="\|onclick="' src/codegen/components/*.ts | grep JSON.stringify</code>（全仓库仅此一处）。</p>
+
+<h3>3.3 两端读数对照（同一次真实浏览器会话）</h3>
+<table>
+  <thead><tr><th>部件</th><th>编辑区（measure 真值页）</th><th>发布端（headless 产物）</th></tr></thead>
+  <tbody>
+    <tr><td>标签</td><td>18px · rgb(194,24,91) · 700</td><td>18px · rgb(194,24,91) · 700</td></tr>
+    <tr><td>数值回显</td><td>#ff5722 · fw500 · 30%</td><td>#ff5722 · fw500 · 30%</td></tr>
+    <tr><td>数值气泡</td><td>bg #ff5722 · 11px · left 30% · 与滑块中心差 0</td><td>bg #ff5722 · 11px · left 30% · 差 0</td></tr>
+    <tr><td>端点数值</td><td>12px · #8a8f98 · 0 / 100</td><td>12px · #8a8f98 · 0 / 100</td></tr>
+    <tr><td>轨道/填充/滑块</td><td>4px / 6px / 16px（medium 档）</td><td>4px / 6px / 16px</td></tr>
+  </tbody>
+</table>
+
+<h2>四、顺带发现的两处"面板骗人"问题</h2>
+<div class="grid">
+  <div class="card">
+    <div class="k">1 · 认证开关的默认值</div>
+    <p>共享片段 <code>apiFields()</code> 里的 <code>authEnabled</code> 是 toggle：<code>undefined</code> 在面板上渲染成 <b>OFF</b>，
+    而 codegen 把 <code>undefined</code> 解释为「<b>跟随站点全局认证态</b>」。站点全局开着认证时，用户看到"关闭"、请求却带着 Token。</p>
+    <p><b>本轮对策</b>：form-label 显式落 <code>authEnabled:false</code>（与图片/视频/音频同做法），让面板与行为一致。</p>
+  </div>
+  <div class="card">
+    <div class="k">2 · 第三态在 UI 上无法表达</div>
+    <p>数据模型是 <code>true</code> 注入 / <code>false</code> 明确不注入 / <code>null|undefined</code> 跟随全局，
+    但 toggle 只能表达两态。要真正"灵活全面"需要面板 select 支持 <code>optionValues</code>（字符串↔真值映射）——
+    涉及 1 处共享片段 + 5 处内联 toggle + 约 10 个 normalize 点，<b>建议单独一轮做</b>，本轮未动。</p>
+  </div>
+</div>
+
+<h2>五、契约锁（新增/扩充的测试）</h2>
+<table>
+  <thead><tr><th>锁</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td><code>form-label-parity.test.ts</code></td><td>逐值对照：8 组配置下产物声明 == <code>labelTextCss</code>/<code>labelInnerCss</code>/<code>scaleStageCss</code>；后缀两端同构；外观只在缩放内层</td></tr>
+    <tr><td><code>form-label-schema.test.ts</code></td><td>新字段齐备 + 外观字段依赖显隐（没底色就不暴露内边距/圆角）+ 数据字段显隐 + <code>authEnabled</code> 默认显式 false + 0 是合法值</td></tr>
+    <tr><td><code>form-label.test.ts</code></td><td>外观层 / 文字装饰 / 后缀 / 接口取数（认证三态 null·true·false 透传）/ <b>20 条「改了产物就变」假能力锁</b></td></tr>
+    <tr><td><code>form-slider.test.ts</code>（新）</td><td>七个部件声明逐项 == 口径函数；拖动脚本同步四处；<b>值后缀引号不破坏 oninput</b>（5 种后缀）；尺寸档唯一；取值夹紧；18 条假能力锁</td></tr>
+  </tbody>
+</table>
+
+<h2>六、验证结果</h2>
+<table>
+  <thead><tr><th>关卡</th><th>结果</th></tr></thead>
+  <tbody>
+    <tr><td><code>tsc --noEmit</code>（排除 <code>__measure__</code>）</td><td><span class="tag ok">0 错误</span></td></tr>
+    <tr><td><code>vitest run</code></td><td><span class="tag ok">768 passed / 64 files</span>（本轮 +32 项 / +1 文件）</td></tr>
+    <tr><td><code>vite build --emptyOutDir</code></td><td><span class="tag ok">✓ 10.66s</span></td></tr>
+    <tr><td>发布端真实浏览器取证</td><td><span class="tag ok">label 外观 + 接口文案替换；slider 交互四处同步</span></td></tr>
+    <tr><td>编辑区真值页取证</td><td><span class="tag ok">与发布端读数逐项相同</span></td></tr>
+    <tr><td>git</td><td><span class="tag">未 commit（铁律）</span></td></tr>
+  </tbody>
+</table>
+
+<h2>七、变更文件</h2>
+<ul>
+  <li><code>src/editor/data/labelStyle.ts</code> — 扩展：后缀 / 文字装饰 / 外观层（<code>labelInnerCss(s)</code>）</li>
+  <li><code>src/editor/data/sliderStyle.ts</code> <span class="tag new">新增</span> — 滑块唯一口径</li>
+  <li><code>src/shared/apiFieldValue.ts</code> <span class="tag new">新增</span> — 接口响应取字段的唯一口径 <code>digApiField</code></li>
+  <li><code>src/editor/registerFormComponents.ts</code> — form-label / form-slider 字段与默认值</li>
+  <li><code>src/editor/renderers/FormLabelRenderer.tsx</code> · <code>FormSliderRenderer.tsx</code> — 两端同源改造</li>
+  <li><code>src/codegen/components/form.ts</code> — <code>formLabelCodegen</code> 重写 + <code>formSliderCodegen</code> 重写 + <code>escapeAttr</code> 修复</li>
+  <li><code>src/editor/__test__/form-label-*.test.ts</code> · <code>src/codegen/__test__/form-label.test.ts</code> · <code>form-slider.test.ts</code>（新）</li>
+  <li><code>src/__measure__/main.tsx</code> — 编辑区真值页新增 label/slider 测量函数与用例</li>
+</ul>
+
+<h2>八、下一轮起点</h2>
+<ol>
+  <li>表单组继续：<b>开关(16) / 复选框(17) / 按钮(19)</b> 属性栏加深；按钮建议先把"点击行为"落地。</li>
+  <li><b>authEnabled 三态</b> 面板可表达（面板 select 的 <code>optionValues</code>）——"认证接入灵活全面"的最后一块。</li>
+  <li>媒体组 <code>audio</code> 是否需要动态资源（image/video 已有）。</li>
+  <li>工作树里的历史临时探针文件建议清理（本轮自建的已删）。</li>
+</ol>
+
+<div class="foot">
+  报告由自动化任务 #7 生成 · 所有读数来自真实 Chrome headless（发布端 <code>--dump-dom</code> 探针 / 编辑区 measure 真值页）与 vitest 契约锁，非推断。
+</div>
+
+</div>
+</body>
+</html>

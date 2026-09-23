@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>datav 装饰族发布端落地 + 装饰动画一致性 · 2026-09-20（第五轮）</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161c24; --panel-2:#1c242e; --line:#26303c;
+    --fg:#e6edf3; --fg-dim:#9aa7b4; --fg-mute:#6b7885;
+    --accent:#4fc3f7; --ok:#3fb950; --warn:#d29922; --err:#f85149; --done:#a371f7;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 28px 80px}
+  header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:32px}
+  h1{margin:0 0 10px;font-size:26px;font-weight:650;letter-spacing:.2px}
+  .sub{color:var(--fg-dim);font-size:13px}
+  .sub code{background:var(--panel-2);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:12px;color:var(--accent)}
+  h2{font-size:18px;font-weight:620;margin:44px 0 14px;padding-left:11px;border-left:3px solid var(--accent)}
+  h3{font-size:14.5px;font-weight:600;margin:26px 0 10px;color:var(--fg)}
+  p{margin:9px 0;color:#cfd8e0}
+  ul,ol{margin:9px 0;padding-left:22px;color:#cfd8e0}
+  li{margin:5px 0}
+  code{font-family:var(--mono);font-size:12.3px;background:var(--panel-2);padding:1.5px 5px;border-radius:4px;color:#8fd4f7}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;
+    font-family:var(--mono);font-size:12.2px;line-height:1.6;color:#c9d6e2}
+  pre .c{color:var(--fg-mute)}
+  pre .k{color:var(--accent)}
+  pre .good{color:#5fd36f}
+  pre .bad{color:#ff7b72}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--panel);color:var(--fg-dim);font-weight:600;font-size:12px;letter-spacing:.3px;
+    text-transform:uppercase;border-bottom:1px solid #303a46}
+  tr:hover td{background:rgba(79,195,247,.035)}
+  td code{font-size:11.8px}
+  .tag{display:inline-block;padding:1.5px 7px;border-radius:20px;font-size:11px;font-weight:600;
+    line-height:1.6;white-space:nowrap}
+  .t-done{background:rgba(163,113,247,.15);color:#c4a2ff;border:1px solid rgba(163,113,247,.35)}
+  .t-ok{background:rgba(63,185,80,.13);color:#5fd36f;border:1px solid rgba(63,185,80,.32)}
+  .t-fix{background:rgba(248,81,73,.13);color:#ff7b72;border:1px solid rgba(248,81,73,.32)}
+  .t-new{background:rgba(79,195,247,.13);color:#6fd0f8;border:1px solid rgba(79,195,247,.32)}
+  .t-todo{background:rgba(210,153,34,.13);color:#e3b341;border:1px solid rgba(210,153,34,.32)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:16px 0}
+  .card.warn{border-color:rgba(210,153,34,.4);background:rgba(210,153,34,.06)}
+  .card.ok{border-color:rgba(63,185,80,.32);background:rgba(63,185,80,.05)}
+  .card.err{border-color:rgba(248,81,73,.35);background:rgba(248,81,73,.05)}
+  .kv{display:flex;gap:10px;margin:6px 0;font-size:13px}
+  .kv b{color:var(--fg-dim);font-weight:600;min-width:120px;flex-shrink:0}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0;font-size:12.5px}
+  .flow .step{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:7px 11px;
+    font-family:var(--mono);font-size:11.6px;color:#c9d6e2}
+  .flow .arrow{color:var(--fg-mute);font-size:14px}
+  .foot{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--fg-mute);font-size:12px}
+  .badge-num{display:inline-block;background:rgba(79,195,247,.13);color:var(--accent);border:1px solid rgba(79,195,247,.3);
+    border-radius:6px;padding:0 7px;font-family:var(--mono);font-size:12px;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>datav 装饰族（25 个）发布端落地 + 装饰动画 / 线条特效发布端补齐</h1>
+  <div class="sub">
+    WebCraft 网站编辑器 · 组件库优化 第五轮 ·
+    <code>tsc --noEmit</code> 仅剩预存 23 个 <code>__measure__</code> 错误 ·
+    <code>vitest 672 passed / 59 files</code>（本轮 +22 项）·
+    <code>env -u NODE_OPTIONS npx vite build --emptyOutDir</code> ✓ 11.29s ·
+    Chrome headless 真实几何 + 计算样式取证 ✓
+  </div>
+</header>
+
+<p>
+本轮的主题是<b>「发布和预览的效果和编辑模型相同」</b>这条硬要求。上一轮把装饰组的 20 个原生形状接上了发布端，
+但同组的 <b>25 个 <code>datav-*</code> 组件（13 边框 + 12 装饰）在 <code>codegen</code> 注册表里一个都没有</b> ——
+预览是橙色「codegen 待实现」占位，<b>发布产物是一个空 div</b>。本轮把这 25 个从 0 到 1 补齐；
+补齐过程中又顺着同一条线索挖出 <b>3 个真实缺陷</b>（装饰动画只有编辑区生效、线条粗细在部分组件上是假控件、
+特效颜色解析把 0 通道改成默认值）。全部有回归锁与真实浏览器取证。
+</p>
+
+<h2>一、先复核：组件库六组的实际完成度</h2>
+
+<p>不靠记忆下结论，直接读注册表与 codegen 注册表做交叉比对，得到本轮开工前的真实缺口：</p>
+
+<table>
+  <thead><tr><th>组件组</th><th>结论</th><th>依据</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>表单 <code>ccat_form</code>（17）</td>
+      <td><span class="tag t-ok">已完成</span></td>
+      <td><code>form-container / button / input / textarea / select / checkbox / radio / label /
+          switch / slider / date / time / file / number / segmented / rate / cascader</code>
+          在 <code>codegen/components/index.ts</code> 中<b>全部已注册</b>；面板字段数 8~31，动态数据与认证三态已接。
+          「标签组件以后的都没完成」是<b>过期结论</b>（那是 P0 交付时的状态，第 1~2 轮已补齐）。</td>
+    </tr>
+    <tr><td>媒体 <code>ccat_media</code></td><td><span class="tag t-ok">已完成</span></td><td>image 2.0.0 / video 2.0.0 / audio 均已注册并共用 <code>mediaStyle.ts</code></td></tr>
+    <tr><td>表格 <code>ccat_table</code>（5）</td><td><span class="tag t-ok">已完成</span></td><td>table / pagination / calendar / descriptions / tree 均已注册，共用 <code>tableData.ts</code> + <code>tableStyle.ts</code></td></tr>
+    <tr><td>图标 <code>ccat_icon</code>（3）</td><td><span class="tag t-ok">已完成</span></td><td>icon / icon-list / icon-button，六种图标引用形态打通</td></tr>
+    <tr><td>形状 <code>shape</code></td><td><span class="tag t-ok">已完成</span></td><td>复用装饰组几何口径，20 个字段</td></tr>
+    <tr>
+      <td>装饰 <code>ccat_decoration</code></td>
+      <td><span class="tag t-fix">本轮修复</span></td>
+      <td>20 个原生形状上一轮已补；<b>25 个 datav 组件发布端缺失</b>（本轮补齐）；
+          <b>动画 / 线条特效发布端缺失</b>（本轮补齐）</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card warn">
+  <b>判断口径（避免再次误判）：</b>「编辑器里能拖出来」不等于「做完」。唯一可信的判据是查
+  <code>src/codegen/components/index.ts</code> 的注册表 —— 装饰组上一轮整组 45 个组件就是在这里查出来的。
+</div>
+
+<h2>二、P0 缺陷：25 个 datav 组件发布端为「空 div」</h2>
+
+<h3>1. 缺陷定位</h3>
+<pre><span class="c">// 开工前：codegen/components/index.ts 中与 datav 相关的注册 —— 一条都没有</span>
+registerCodegen(<span class="k">"decoration-rect"</span>, decorationShapeCodegen);   <span class="c">// 原生 20 个 ✓</span>
+<span class="bad">// datav-border-1..13 / datav-decoration-1..12  →  registry 未命中</span>
+
+<span class="c">// engine.ts 未命中即走 generateUnsupportedComponent：</span>
+<span class="c">//   preview = true  → 橙色「codegen 待实现」占位块</span>
+<span class="c">//   preview = false → 一个空 div（正式站点上组件彻底消失）</span></pre>
+
+<h3>2. 修复思路：不做「第二份 SVG 字符串版」</h3>
+
+<p>
+这 25 个组件的图形在编辑区由约 1900 行手写 React SVG 产出（<code>DataVRenderer.tsx</code> +
+<code>datavScalable.tsx</code> + 两个雕花框）。若按老办法「把几何再手抄一份字符串版」，必然产生第二份会漂移的字面量 ——
+本仓库已经因为同类做法栽过两次（20 个装饰渲染器各写一遍几何、图标组的状态规则被 inline 压死）。
+</p>
+
+<p>
+因此改成：<b>发布端直接复用编辑区那一个 React 组件做静态渲染</b>（<code>react-dom/server</code> 的
+<code>renderToStaticMarkup</code>）。几何、配色、SVG 属性、SMIL 动画由<b>构造</b>保证逐字一致，不存在两端各写一份的可能。
+</p>
+
+<p>唯一的差别是<b>尺寸来源</b>：编辑区靠 <code>ResizeObserver</code> 实测容器像素，静态渲染时没有浏览器测量。
+解法是把尺寸收口成一个 Context：</p>
+
+<pre><span class="c">// src/editor/renderers/datavRenderSize.ts（新增）</span>
+<span class="k">export const</span> DatavRenderSizeContext = createContext&lt;DatavRenderSize | <span class="k">null</span>&gt;(<span class="k">null</span>);
+
+<span class="c">// 容器尺寸的唯一取用口：发布端注入值优先，否则 ResizeObserver 实测</span>
+<span class="k">export function</span> useDatavBoxSize(ref) {
+  <span class="k">const</span> override = useDatavRenderSize();
+  <span class="k">const</span> [size, setSize] = useState(DATAV_FALLBACK_SIZE);
+  useEffect(() =&gt; { <span class="k">if</span> (override) <span class="k">return</span>; <span class="c">/* ResizeObserver 实测 */</span> }, [!!override]);
+  <span class="k">return</span> override ?? size;      <span class="c">// ← 同一段几何代码，只有尺寸输入不同</span>
+}
+
+<span class="c">// src/codegen/components/datavDecor.ts（新增）</span>
+renderToStaticMarkup(createElement(DataVRenderer, {
+  config, componentId: component.id, mode: <span class="k">"preview"</span>,
+  sizeOverride: { width: 400, height: 300 },   <span class="c">// 来自 component.transform</span>
+  uidOverride: <span class="k">"datvc1"</span>,                       <span class="c">// 发布端 id 必须可确定</span>
+}));</pre>
+
+<div class="card ok">
+  <b>顺带收益：</b>动画是 SVG SMIL（<code>&lt;animate&gt;</code>）与 CSS keyframes，都是<b>声明式</b>的 ——
+  静态 HTML 里照常播放，不需要任何运行时脚本。<code>&lt;animate&gt;</code> 在产物里完整保留（浏览器实测已确认）。
+</div>
+
+<h3>3. 新建 / 修改的文件</h3>
+<table>
+  <thead><tr><th>文件</th><th>动作</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td><code>editor/data/datavDecor.ts</code></td><td><span class="tag t-new">新增</span></td>
+      <td>datav 族的<i>唯一取值口径</i>：13+12 元数据表（尺寸/配色/开关）、type 解析、默认值、
+          静态线宽表、线条粗细可用性判据、容器 CSS 生成</td></tr>
+    <tr><td><code>editor/renderers/datavRenderSize.ts</code></td><td><span class="tag t-new">新增</span></td>
+      <td>尺寸 Context + <code>useDatavBoxSize</code>（消灭三份逐字重复的测量代码）</td></tr>
+    <tr><td><code>codegen/components/datavDecor.ts</code></td><td><span class="tag t-new">新增</span></td>
+      <td>25 个类型的发布端实现（一个共用函数，类型由 <code>component.type</code> 决定）</td></tr>
+    <tr><td><code>codegen/__test__/datav-decor.test.ts</code></td><td><span class="tag t-new">新增</span></td>
+      <td>12 项回归锁（见第四节）</td></tr>
+    <tr><td><code>editor/renderers/DataVRenderer.tsx</code></td><td><span class="tag t-done">改</span></td>
+      <td>接 <code>sizeOverride</code>/<code>uidOverride</code>；删除本地重复的 <code>BORDER_DEFAULTS</code> 等三份表；
+          删除恒不可达的 fill-stroke 死代码（含一个常驻 MutationObserver）</td></tr>
+    <tr><td><code>editor/renderers/datavScalable.tsx</code></td><td><span class="tag t-done">改</span></td>
+      <td><code>useElementSize</code> 改为读取 Context；13 个组件零改动即获得静态渲染能力</td></tr>
+    <tr><td><code>editor/renderers/ornamentalFrame.tsx</code> / <code>ornamentalDiamondFrame.tsx</code></td><td><span class="tag t-done">改</span></td>
+      <td>两处重复的测量逻辑改为共用 <code>useDatavBoxSize</code></td></tr>
+    <tr><td><code>editor/registerDecorationComponents.ts</code></td><td><span class="tag t-done">改</span></td>
+      <td>元数据表改为从口径文件读取；type 字面量改用 <code>datavTypeOf()</code>；线条粗细字段改由判据决定</td></tr>
+    <tr><td><code>codegen/components/index.ts</code></td><td><span class="tag t-done">改</span></td>
+      <td>注册 <code>DATAV_DECOR_TYPES</code> 全部 25 项</td></tr>
+  </tbody>
+</table>
+
+<h2>三、顺带挖出并修掉的 3 个真实缺陷</h2>
+
+<h3>缺陷 1 <span class="tag t-fix">P1</span> 装饰动画 / 线条特效「只有编辑区生效」</h3>
+
+<p>
+<code>ANIMATION_SCHEMA</code>（动画 12 种）与线条特效（14 种）此前<b>只由编辑区的 <code>DecorationWrapper</code> 实现</b>，
+发布端 <code>codegen/components/decoration.ts</code> 没有任何对应逻辑 —— 面板上改了动画，编辑区在动，
+<b>正式站点一动不动</b>。这是同一类「发布 ≠ 编辑」缺陷，只是没有空 div 那么显眼。
+</p>
+
+<p>修复方式仍是「口径收口」：把 <code>config → 容器 CSS 声明</code> 与 <code>config → 描边克隆属性</code> 抽成纯函数，两端共读一份。</p>
+
+<pre><span class="c">// editor/renderers/decorationAnimation.ts（新增公共出口）</span>
+<span class="k">export function</span> buildDecorationContainerDecls(config, base) {   <span class="c">// 动画名 + filter + --neon-color + overflow:visible</span>
+<span class="k">export function</span> decorationOverlayAttrs(effectProps, source) {   <span class="c">// 克隆图元的描边属性</span>
+<span class="k">export function</span> decorationOverlayCss(effectProps) {             <span class="c">// 克隆图元的动画节奏</span>
+<span class="k">export const</span> SVG_OVERLAY_EFFECTS;                             <span class="c">// 需要克隆描边的 7 种特效</span>
+
+<span class="c">// codegen/components/decoration.ts：把同一批纯函数的结果拼成字符串</span>
+body += `&lt;g data-datav-effect-overlay=<span class="k">"true"</span> pointer-events=<span class="k">"none"</span>&gt;${overlays.map(svgPrimitiveText)}&lt;/g&gt;`;</pre>
+
+<div class="card ok">
+  <b>Chrome headless 实测（发布产物，非编辑区）：</b>
+  <pre>animation=pulse + lineEffect=glow
+  → computed animation-name = <span class="good">deco-pulse</span>
+  → computed filter = <span class="good">drop-shadow(0 0 6px ...) drop-shadow(0 0 12px ...)</span>
+  → computed overflow = <span class="good">visible</span>
+
+lineEffect=flow
+  → <span class="good">overlay 节点 1 个</span>，其 computed animation-name = <span class="good">deco-dash-flow</span>
+  → stroke-dasharray = <span class="good">12px, 6px</span>（流动虚线真的在跑）</pre>
+</div>
+
+<h3>缺陷 2 <span class="tag t-fix">P1</span> 「线条粗细」在部分组件上是假控件</h3>
+
+<p>
+<code>DATAV_STROKE_RULES</code> 是一张<b>手写的</b>「选择器 → 基准线宽」表，用来给手写死线宽的 SVG 做 CSS 覆盖。
+但这些 SVG 后来被重写过，选择器指向的元素已经不存在了 —— 整张表<b>全部失效</b>：
+</p>
+
+<pre><span class="c">// 表里写的（已失效）              // 组件实际产出的</span>
+"deco-7": polyline[stroke-width=4]  →  <span class="bad">path</span>（双翼装饰重写后已无 polyline）
+"deco-8": polyline[stroke-width=2]  →  <span class="bad">path / ellipse</span>
+"deco-9": circle[stroke-width=10]   →  <span class="bad">path</span>
+"deco-12": path[stroke-width=2]     →  已由几何 <code>* sw</code> 内部驱动（不该出现在表里，否则平方级放大）</pre>
+
+<p>修法是让表从真实产物<b>反推</b>并加锁：只有「不随 <code>strokeWidth</code> 变化」的静态线宽字面量才进表。
+同时把「面板要不要显示这条控件」也交给同一个判据函数：</p>
+
+<pre><span class="c">// editor/data/datavDecor.ts</span>
+<span class="k">export function</span> datavStrokeWidthSupported(kind, idx) {
+  <span class="k">if</span> (kind === <span class="k">"border"</span>) <span class="k">return</span> Number(idx) &gt;= 2;   <span class="c">// 边框 1 是纯填充多边形，一根描边都没有</span>
+  <span class="k">return</span> Number(idx) !== 10;                  <span class="c">// 装饰 10 雕花边框是纯填充路径（参考 SVG 明确「无描边」）</span>
+}</pre>
+
+<div class="card err">
+  <b>契约测试当场抓到的：</b>新增的「面板显示了这条控件，就必须能改变产物」用例，
+  第一次运行就报出 <code>datav-decoration-10</code> 是假控件 ——
+  雕花边框是纯填充路径，没有任何线宽可调。据判据把它从面板隐藏（而不是保留一个点了没反应的滑块）。
+</div>
+
+<h3>缺陷 3 <span class="tag t-fix">P1</span> 线条特效颜色解析把「0 通道」改成默认值</h3>
+
+<pre><span class="c">// 原实现：|| 兜底把合法的 0 也吃掉了</span>
+r: parseInt(hex.slice(1,3),16) <span class="bad">|| 33</span>,     <span class="c">// "#00ff00" → 0 || 33 = 33</span>
+g: parseInt(hex.slice(3,5),16) <span class="bad">|| 150</span>,
+b: parseInt(hex.slice(5,7),16) <span class="bad">|| 243</span>,    <span class="c">// → rgb(33,255,243)：绿色变青色</span>
+
+<span class="c">// 修法：只在格式非法时兜底</span>
+<span class="k">const</span> v = parseInt(hex.slice(1,7), 16);
+<span class="k">if</span> (Number.isNaN(v)) <span class="k">return</span> FALLBACK;
+<span class="k">return</span> { r:(v&gt;&gt;16)&amp;0xff, g:(v&gt;&gt;8)&amp;0xff, b:v&amp;0xff };</pre>
+
+<p>
+影响面：<code>#ff0000</code>（纯红）会渲染成粉色、<code>#0000ff</code> 会渲染成青色。
+因为编辑区与发布端<b>一起错</b>，所以一直没人发现 —— 这也正是「两端一致」不等于「两端正确」的典型例子。
+</p>
+
+<h2>四、回归锁（本轮 +22 项，共 672 项）</h2>
+
+<table>
+  <thead><tr><th>测试</th><th>锁住什么</th></tr></thead>
+  <tbody>
+    <tr><td>注册表中的每个 <code>datav-*</code> 都有 codegen（且清单双向一致）</td>
+      <td>25 个类型一个都不能漏；清单里也不能出现注册表里没有的类型</td></tr>
+    <tr><td>25 个组件全部产出非空 svg</td><td>不允许再出现占位 / 空 div</td></tr>
+    <tr><td>容器 id 可确定且与注入 CSS 选择器一致</td><td>发布端 id 由组件 id 派生，CSS 才挂得上</td></tr>
+    <tr><td>静态渲染尺寸来自 transform</td><td>800×40 的装饰物必须产出 <code>viewBox="0 0 800 40"</code></td></tr>
+    <tr><td>尺寸缺失时回退元数据默认尺寸</td><td>绝不产出 0 尺寸的不可见组件</td></tr>
+    <tr><td>动画关键帧只注入一次</td><td>同页多个带装饰的组件不会重复灌 CSS</td></tr>
+    <tr><td>线条粗细倍率 → stroke-width 覆盖规则</td><td>边框 3 倍率 2 → 基准 3px/1px 变成 6px/2px</td></tr>
+    <tr><td><b>面板显示了「线条粗细」，就必须能改变产物</b></td><td>逐组件实测，假控件立刻红（本轮抓到 deco-10）</td></tr>
+    <tr><td><b>静态线宽表与真实产物严格一致</b></td><td>组件改了 SVG 却忘改表 → 测试红并打印差异</td></tr>
+    <tr><td>动画 / 光晕 / 流光 / 霓虹的产物断言</td><td>容器声明、关键帧、克隆图元三项都要在</td></tr>
+    <tr><td>默认（无动画无特效）零动画痕迹</td><td>保证老场景升级后画面不变</td></tr>
+    <tr><td>特效颜色：0 通道不得被兜底污染</td><td><code>#00ff00</code> → <code>rgba(0,255,0,0.8)</code>；非法值回退且不产出 NaN</td></tr>
+  </tbody>
+</table>
+
+<h2>五、验证证据</h2>
+
+<div class="flow">
+  <span class="step">tsc --noEmit</span><span class="arrow">→</span>
+  <span class="step">仅 23 个预存 __measure__ 错误</span><span class="arrow">→</span>
+  <span class="step">vitest run</span><span class="arrow">→</span>
+  <span class="step">672 passed / 59 files</span><span class="arrow">→</span>
+  <span class="step">vite build --emptyOutDir</span><span class="arrow">→</span>
+  <span class="step">✓ 11.29s</span><span class="arrow">→</span>
+  <span class="step">Chrome headless 取证</span>
+</div>
+
+<pre><span class="c">// Chrome --headless=new --dump-dom（1920×1080，发布产物，非编辑区）</span>
+datvb1    w=400 h=300  svg=1  viewBox=0 0 400 300
+datvb12   w=400 h=300  svg=1  viewBox=0 0 400 300   animate=<span class="good">1</span>
+datvd2    w=800 h=40   svg=1  viewBox=<span class="good">0 0 800 40</span>     animate=<span class="good">2</span>
+datvd12   w=200 h=200  svg=1  viewBox=<span class="good">0 0 200 200</span>    animate=<span class="good">2</span>
+keyframes hasDecoPulse=<span class="good">true</span>
+
+anim1(animation=pulse, lineEffect=glow)  animationName=<span class="good">deco-pulse</span>  filter=<span class="good">drop-shadow ×2</span>  overflow=<span class="good">visible</span>
+anim2(lineEffect=flow)                   overlay=<span class="good">1</span>  overlayAnim=<span class="good">deco-dash-flow</span>  overlayDash=<span class="good">12px,6px</span></pre>
+
+<p>
+<code>w/h</code> 是发布产物里容器的<b>布局尺寸</b>，与组件 <code>transform</code> 完全一致；
+<code>viewBox</code> 就是从该尺寸推导出来的 —— 说明「发布端注入尺寸」这条链路真的生效，
+而不是退回了 <code>400×300</code> 的兜底值。
+</p>
+
+<h2>六、遗留与下一轮起点</h2>
+
+<table>
+  <thead><tr><th>#</th><th>项</th><th>级别</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>datav 边框内部的 <code>pointer-events:none</code></td><td><span class="tag t-todo">P2</span></td>
+      <td>与编辑区严格一致（编辑区容器本身也是 <code>pointer-events:none</code>），但意味着<b>放在 datav 边框里的表单/按钮点不动</b>。
+          原因是注册时 <code>capabilities.embeddable:false</code> —— 边框本就不该接收子组件，属设计取舍；若要开放嵌入需要连同事件模型一起改。</td></tr>
+    <tr><td>2</td><td><code>DataVRenderer</code> 被 codegen 静态引用</td><td><span class="tag t-todo">P2</span></td>
+      <td>构建产物里 <code>DataVRenderer</code> chunk 586 kB，此前是纯 lazy。功能上无影响（编辑器本来就会加载），
+          但 <code>codegenService</code> chunk 变重。若要瘦身可把「静态渲染入口」拆成单独 chunk。</td></tr>
+    <tr><td>3</td><td>装饰族 20 个原生形状的属性栏仍偏薄（5~14 项）</td><td><span class="tag t-todo">P2</span></td>
+      <td>可把形状组新增的填充/描边/效果片段搬过来。</td></tr>
+    <tr><td>4</td><td>未使用的窗体 <code>diamond</code></td><td><span class="tag t-todo">P2</span></td>
+      <td><code>src/editor/windows/…/diamond</code> 空目录。</td></tr>
+    <tr><td>5</td><td>工作树中的历史临时探针文件</td><td><span class="tag t-todo">P2</span></td>
+      <td><code>_dump.test.ts</code> / <code>_dump_standalone.test.ts</code> / <code>_probe_form_scale.test.ts</code> / <code>_tmp_debug.ts</code>（均未入 git）。
+          本轮自己新增的两个探针已在验证后删除，工作树保持干净。</td></tr>
+  </tbody>
+</table>
+
+<div class="card">
+  <div class="kv"><b>本轮改动</b><span>新增 4 个源文件 + 2 个测试文件；改 6 个文件</span></div>
+  <div class="kv"><b>破坏性改动</b><span>无（默认值路径全部保持不变，老场景画面不变）</span></div>
+  <div class="kv"><b>git 状态</b><span>按用户铁律：<b>未 commit</b>，工作树保持待批状态</span></div>
+</div>
+
+<div class="foot">
+  WebCraft · 组件库优化第五轮 · 2026-09-20 · 全部结论均可由 <code>npx vitest run</code> 与
+  <code>Chrome --headless=new --dump-dom</code> 复现
+</div>
+
+</div>
+</body>
+</html>

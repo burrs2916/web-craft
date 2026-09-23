@@ -50,3 +50,7 @@ src-tauri/notes/
 # Dev scripts
 dev.sh
 start.sh
+
+# Temp dirs (icon generation intermediates, batch6 decision)
+.tmp/
+.tmp-theme-demo/

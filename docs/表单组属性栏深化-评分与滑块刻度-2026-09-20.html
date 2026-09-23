@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>表单组属性栏深化：评分收口 / 滑块刻度 / 数据感知认证三态 · 2026-09-20</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#fff; --ink:#1c1f24; --ink2:#4a5058; --ink3:#7a828c;
+    --line:#e3e6eb; --accent:#1976d2; --warn:#c62828; --ok:#1b7f4b; --code:#f1f3f6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.7 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 24px 72px}
+  header{border-bottom:2px solid var(--ink);padding-bottom:16px;margin-bottom:28px}
+  h1{margin:0 0 6px;font-size:24px;letter-spacing:.2px}
+  .sub{color:var(--ink3);font-size:12.5px}
+  h2{font-size:16px;margin:36px 0 12px;padding-left:9px;border-left:3px solid var(--accent)}
+  h3{font-size:13.5px;margin:22px 0 8px;color:var(--ink2)}
+  p{margin:8px 0}
+  ul,ol{margin:8px 0;padding-left:20px}
+  li{margin:4px 0}
+  code{background:var(--code);padding:1px 5px;border-radius:3px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  pre{background:#20242b;color:#dfe4ea;padding:12px 14px;border-radius:6px;overflow-x:auto;
+    font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  table{border-collapse:collapse;width:100%;background:var(--panel);margin:10px 0;font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+  th{background:#eef1f5;font-weight:600;white-space:nowrap}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:12px 0}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;border:1px solid var(--line);
+    background:#eef1f5;color:var(--ink2);margin-right:6px}
+  .tag.p1{background:#fdecea;border-color:#f5c6c0;color:var(--warn)}
+  .tag.p2{background:#fff4e5;border-color:#f3d9b5;color:#a35b00}
+  .tag.ok{background:#e8f5ee;border-color:#bfe3ce;color:var(--ok)}
+  .tag.new{background:#e8f1fb;border-color:#c2dcf6;color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  .k{color:var(--ink3);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+  .v{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;word-break:break-all}
+  .ev{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--ok);
+    border-radius:0 6px 6px 0;padding:10px 14px;margin:8px 0}
+  .ev.bad{border-left-color:var(--warn)}
+  .muted{color:var(--ink3);font-size:12.5px}
+  .foot{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);color:var(--ink3);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>表单组属性栏深化：评分收口 · 滑块刻度 · 数据感知认证三态</h1>
+  <div class="sub">web-craft 网站编辑器 · 第 9 轮（自动化连续迭代） · 2026-09-20 · 未 git commit（用户铁律）</div>
+</header>
+
+<h2>0. 开工先复核：任务描述里的完成度是过期结论</h2>
+<p>任务原文「从标签组件开始，标签组件以后的组件都没有完成」是 <b>P0 时期</b>的状态。开工先做了全量审计（142 个组件的字段数 / 分组 / 能力标记 + <code>codegen/components/index.ts</code> 注册表比对）：</p>
+<table>
+  <tr><th>组</th><th class="num">组件数</th><th>发布端注册</th><th>本轮开工前状态</th></tr>
+  <tr><td>表单 ccat_form</td><td class="num">17</td><td>全绿</td><td>属性栏 19~46 字段；<b>评分是唯一未接入统一缩放/摆放口径的成员</b></td></tr>
+  <tr><td>媒体 ccat_media</td><td class="num">3</td><td>全绿</td><td>23~38 字段</td></tr>
+  <tr><td>表格 ccat_table</td><td class="num">5</td><td>全绿</td><td>29~40 字段</td></tr>
+  <tr><td>图标 ccat_icon</td><td class="num">3</td><td>全绿</td><td>27~38 字段</td></tr>
+  <tr><td>装饰 ccat_decoration</td><td class="num">45</td><td>全绿</td><td>11~19 字段（datav 族偏薄）</td></tr>
+  <tr><td>形状 ccat_shape</td><td class="num">1</td><td>全绿</td><td>19 字段</td></tr>
+</table>
+<p><b>结论：本轮做「深度」而不是「补注册」。</b>按任务点名的四条硬要求（居中+随框缩放 / 属性栏丰富 / 动态数据与认证联动 / 预览发布一致）逐条找缺口，命中三处：</p>
+<ol>
+  <li><span class="tag p1">P1</span><b>form-rate 未接入表单族横切口径</b> —— 自写 <code>alignMap</code> + 缺省左对齐、无 <code>vAlign</code>、无 <code>scaleFit</code> 开关、<code>RATE_FIT</code> 与注册表 <code>defaultSize</code> 不符。</li>
+  <li><span class="tag p1">P1</span><b>数据感知族（骨架屏/加载动画/空态占位）的认证接入只有两态</b> —— 面板无法表达「跟随站点全局」，与内容数据源的三态口径不一致。</li>
+  <li><span class="tag p2">P2</span><b>form-slider 属性栏最薄</b>（19 字段，全表单组最低），且没有刻度标记。</li>
+</ol>
+
+<h2>1. form-rate：从「表单组唯一异类」收口到全族同源</h2>
+
+<h3>1.1 改造前的四处分叉（均已逐项核实）</h3>
+<table>
+  <tr><th>项</th><th>改造前</th><th>改造后</th></tr>
+  <tr><td>取值口径</td><td>图标路径表 / 尺寸档位表 / 分值文案表在 <code>RateRenderer.tsx</code> 与 <code>codegen/rate.ts</code> <b>各一份</b>，靠注释「与发布端同一张表」维持</td><td>新增唯一口径 <code>editor/data/rateStyle.ts</code>，两端只 import</td></tr>
+  <tr><td>舞台摆放</td><td>两端各写一份 <code>alignMap</code>，缺省兜成 <code>"left"</code>（全族默认是 <code>STAGE_ALIGN_DEFAULT="center"</code>）</td><td>两端改调 <code>stageAlignOf</code> / <code>stageVAlignOf</code></td></tr>
+  <tr><td>缩放基准</td><td><code>RATE_FIT = 126×30</code>，而注册表 <code>defaultSize = 220×40</code> → 默认框里星条被放大 <b>1.33×</b>，破坏「拖进来即 1 倍」不变式</td><td><code>RATE_FIT = 220×40</code>，与 label/checkbox/radio/switch/segmented/button 同一约定</td></tr>
+  <tr><td>面板三件套</td><td>只有 <code>align</code>（在「样式」组），无 <code>vAlign</code>、无 <code>scaleFit</code></td><td>补齐 <code>scaleFit</code> + <code>vAlign</code>（同处「布局」组），纳入 <code>FIT_CASES</code> 契约锁</td></tr>
+</table>
+
+<h3>1.2 属性栏 25 → 32 字段（新增分组「外观」）</h3>
+<table>
+  <tr><th>分组</th><th>字段</th></tr>
+  <tr><td>内容</td><td>字段名 / 标签 / 标签位置 / 默认分值 / 最大星数 / 允许半星 / 图标 / 显示文字 / 必填 / 帮助文字</td></tr>
+  <tr><td>校验</td><td>额外校验 / 数值上下限 / 正则 / 错误提示 / 错误颜色（共用 <code>validationSchema</code>）</td></tr>
+  <tr><td>样式</td><td>激活颜色 / 未激活颜色 / 尺寸档 / 自定义大小 / 间距 / 文字字号 / 文字颜色</td></tr>
+  <tr><td class="v">布局 <span class="tag new">新</span></td><td class="v">随拖动框等比缩放 / 水平对齐 / 垂直对齐</td></tr>
+  <tr><td class="v">外观 <span class="tag new">新</span></td><td class="v">背景色 / 左右内边距 / 上下内边距 / 圆角 / 不透明度</td></tr>
+  <tr><td>状态</td><td>只读</td></tr>
+</table>
+<p>外观层（底色/内边距/圆角/不透明度）挂在<b>缩放内层</b>上，因此随内容一起被 <code>transform: scale()</code> 缩放 —— 与 <code>labelStyle.labelInnerCss</code> 结构同构。圆角沿用表单族口径「面板档位 × 10」。</p>
+
+<h2>2. 真实缺陷：评分在编辑区被<b>双重缩放</b>（只有真实浏览器能抓到）</h2>
+<div class="ev bad">
+  <p><b>现象</b>：改造后编辑区 300×150 容器里，评分内层实测 <code>223.5×40.4</code>，而发布端是 <code>170.7×29.8</code> —— 两端差 1.35 倍。</p>
+  <p><b>根因</b>：旧编辑区渲染器把 <code>factor</code> <b>乘进每个 width/height/fontSize</b>（不做 transform），发布端却是 transform。两套机制恰好等价，所以历史上没暴露。本轮把编辑区统一到 <code>transform: scale(factor)</code> 后，旧的「乘进尺寸」没删 → <code>1.35 × 1.35</code> 双重缩放。</p>
+  <p><b>处置</b>：编辑区星/文字一律写<b>自然尺寸</b>，缩放只由内层一次 transform 完成。修复后两端逐项相同（下表）。</p>
+  <p><b>教训</b>：jsdom 不实现布局，单测永远抓不到这类几何分叉；必须走 <code>--dump-dom</code> 真值页 + 发布产物双端取证。</p>
+</div>
+
+<h3>2.1 双端逐项取证（Chrome headless，容器同构 300×150 + 1px 边框 → 舞台 298×148）</h3>
+<table>
+  <tr><th>读数</th><th>编辑区（真值页 cR）</th><th>发布端（产物 cR）</th></tr>
+  <tr><td>舞台</td><td class="v">298×148 justify=center align=center</td><td class="v">298×148 justify=center align=center</td></tr>
+  <tr><td>内层</td><td class="v">170.7×29.8 tf=matrix(1.35455)</td><td class="v">170.7×29.8 tf=matrix(1.35455)</td></tr>
+  <tr><td>内层外观</td><td class="v">bg transparent / pad 0 / radius 0 / op 1</td><td class="v">bg transparent / pad 0 / radius 0 / op 1</td></tr>
+  <tr><td>星间距</td><td class="v">gap 4px</td><td class="v">gap 4px</td></tr>
+  <tr><td>cR2 摆放</td><td class="v">justify=flex-end align=flex-end</td><td class="v">justify=flex-end align=flex-end</td></tr>
+  <tr><td>cR2 外观</td><td class="v">259.5×40.6 · bg rgb(255,238,170) · pad 4px 10px · radius 20px · op 0.8</td><td class="v">259.5×40.6 · bg rgb(255,238,170) · pad 4px 10px · radius 20px · op 0.8</td></tr>
+</table>
+<p class="muted">圆角 2 档 × 10 = 20px，与表单族口径一致；发布端 <code>paint: on=3</code>（value=3 三颗实心）、<code>half=1</code>（value=2.5）、隐藏 input <code>name=rating value=2.5</code> 均正确。</p>
+
+<h2>3. 数据感知族：认证接入升级为三态（与内容数据源同一口径）</h2>
+<p>骨架屏 / 加载动画 / 空态占位这三个组件不渲染数据、而是轮询探测一个接口来决定显隐，其认证字段是 <code>bindAuthEnabled</code>。改造前它是<b>两态 toggle</b>：</p>
+<ul>
+  <li>缺省渲染成 <b>OFF</b>；而运行时把 <code>undefined</code> 当「不带 Token」。</li>
+  <li>面板<b>无法表达「跟随站点全局」</b>这一最常用意图；站点全局开着时，面板说「不改」，行为却与站点配置无关 —— 正是本仓库记录在案的「面板骗人」形态。</li>
+</ul>
+<p><b>处置</b>：<code>authEnabledField()</code> 增加 <code>key</code> 形参（默认仍是 <code>authEnabled</code>），<code>bindAuthEnabled</code> 改为复用同一份 <code>AUTH_ENABLED_OPTIONS</code> 与 <code>readAuthEnabled</code>；三处 codegen（skeleton / spin / emptyState）与编辑区 <code>useBindVisibility</code> 全部改为<b>三态原样透传</b>（不再 <code>=== true</code>）。</p>
+<table>
+  <tr><th>配置取值</th><th>产物</th><th>语义</th></tr>
+  <tr><td>未设置</td><td class="v">var authEnabled = null</td><td>跟随站点全局（运行时读 <code>window.__WC_AUTH_ENABLED</code>）</td></tr>
+  <tr><td>true / "true"</td><td class="v">var authEnabled = true</td><td>强制注入 Token</td></tr>
+  <tr><td>false / "false"</td><td class="v">var authEnabled = false</td><td>公开接口，明确不带</td></tr>
+</table>
+<p class="muted">兼容性：站点全局默认关闭时，历史场景（<code>undefined</code>）行为不变；显式 <code>false</code> 的场景也完全不变。只有「站点全局开启 + 从未设置过该字段」的场景会开始带 Token —— 这正是「跟随全局」的正确语义。</p>
+
+<h2>4. form-slider：新增刻度标记（属性栏 19 → 23，全表单组最低 → 中位）</h2>
+<p>刻度位置与<b>填充条 / 滑块 / 数值气泡共用同一百分比原点</b>（都以轨道宽度为 100%），因此拖动时不会错位；两端共用 <code>sliderTicksOf()</code> 生成同一组百分比。</p>
+<table>
+  <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+  <tr><td>刻度标记</td><td>toggle</td><td>关闭（默认）时完全不产出刻度层 → 默认态零回归</td></tr>
+  <tr><td>刻度数量</td><td>number</td><td>含两端；夹在 2~21，非整数取整</td></tr>
+  <tr><td>刻度高度</td><td>number</td><td>px；越界回默认 8（高于轨道高度才露得出来）</td></tr>
+  <tr><td>刻度颜色</td><td>color</td><td>留空跟随滑块强调色</td></tr>
+</table>
+<h3>双端几何取证（容器同构 300×150）</h3>
+<table>
+  <tr><th>读数</th><th>编辑区（cJ3）</th><th>发布端（cJ3）</th></tr>
+  <tr><td>刻度数</td><td class="v">n=5</td><td class="v">n=5</td></tr>
+  <tr><td>首 / 末刻度</td><td class="v">16,3083.1,2,10 / 314,3083.1,2,10</td><td class="v">16,518.5,2,10 / 314,518.5,2,10</td></tr>
+  <tr><td>与轨道两端偏移</td><td class="v">firstCxO=0 · lastCxRight=0</td><td class="v">firstCxO=0 · lastCxRight=0</td></tr>
+  <tr><td>样式</td><td class="v">h=10px bg=rgb(255,0,0) op=0.45 pe=none</td><td class="v">h=10px bg=rgb(255,0,0) op=0.45 pe=none</td></tr>
+  <tr><td>滑块 / 轨道</td><td class="v">thumb 16×16 rgb(25,118,210) · rail h=4 op=0.38 · track h=6</td><td class="v">thumb 16×16 rgb(25,118,210) · rail h=4 op=0.38 · track h=6</td></tr>
+</table>
+<p class="muted">刻度层 <code>pointer-events:none</code> —— 它压在隐形的原生 <code>range</code> 之上，若吃事件会破坏拖动。</p>
+
+<h2>5. 验证</h2>
+<div class="grid">
+  <div class="card"><div class="k">typecheck</div><div class="v">npx tsc --noEmit → 非 __measure__ 错误 <b>0</b></div></div>
+  <div class="card"><div class="k">unit / contract</div><div class="v">vitest <b>850 passed / 64 files / 0 failed</b>（本轮 +18）</div></div>
+  <div class="card"><div class="k">build</div><div class="v">env -u NODE_OPTIONS npx vite build --emptyOutDir ✓ 11.16s</div></div>
+  <div class="card"><div class="k">browser</div><div class="v">Chrome headless 双端 dump-dom 取证（见 §2.1 / §4）</div></div>
+</div>
+<p><b>新增/加强的回归锁</b>：</p>
+<ul>
+  <li><code>form-group-scale.test.ts</code>：<code>FIT_CASES</code> 纳入 <code>form-rate</code>（17 项自动套用：三层骨架 / 关闭缩放无脚本 / 舞台声明同源 / 默认摆放居中 / refW-refH == defaultSize）；源码守卫 <code>PAIRS</code> 纳入 <code>RateRenderer.tsx</code>（不得再写硬编码摆放回退字面量）。</li>
+  <li><code>segmented-rate.test.ts</code>：+4 项 —— 三张表不得在两端各自复制（源码守卫）+ 外观层挂缩放内层 + 默认态零回归 + 只读态 opacity 与面板值相乘且不另写同类类规则。</li>
+  <li><code>bind-visibility.test.ts</code>：+4 项 —— 字段类型必须是 select、选项必须含 null/true/false 且与 <code>AUTH_ENABLED_OPTIONS</code> 逐值相等、未设置必须产出 <code>null</code>、显式三态（含字符串 "false"）原样透传。</li>
+  <li><code>form-slider.test.ts</code>：+7 项 —— 默认态无刻度层、等距百分比、首尾 0%/100%、声明逐字比对、不吃指针事件、颜色回退、取值收敛；「面板控件必须能改变产物」锁加入 4 个新键（防假控件）。</li>
+</ul>
+
+<h2>6. 变更文件</h2>
+<pre>新增
+  src/editor/data/rateStyle.ts                 评分唯一取值口径（图标表/尺寸表/文案表/外观层/文案函数）
+
+修改
+  src/editor/data/scaleFit.ts                  RATE_FIT 126×30 → 220×40（= defaultSize），补修正说明
+  src/editor/data/authMode.ts                  authEnabledField() 支持 key 覆写
+  src/editor/dataSourceFields.ts               bindAuthEnabled: toggle → 三态 select
+  src/editor/data/sliderStyle.ts               + showTicks/tickCount/tickSize/tickColor + 3 个声明函数 + sliderTicksOf
+  src/editor/renderers/RateRenderer.tsx        接统一骨架、去掉自写 alignMap、修双重缩放、+ data-wc-rate-stage/inner
+  src/editor/renderers/FormSliderRenderer.tsx  + 刻度层
+  src/editor/registerFormComponents.ts         form-rate 面板 25→32（布局/外观）、form-slider 19→23（刻度组）
+  src/codegen/components/rate.ts               读唯一口径 + scaleSkeleton + stageAlignOf/stageVAlignOf
+  src/codegen/components/form.ts               formSliderCodegen 输出刻度层
+  src/codegen/components/skeleton.ts           bindAuthEnabled 三态透传
+  src/codegen/components/spin.ts               同上
+  src/codegen/components/emptyState.ts         同上
+  src/editor/hooks/useBindVisibility.ts        同上（编辑区侧）
+  src/__measure__/main.tsx                     真值页 + cR/cR2/cJ3 三格与刻度读数
+  src/codegen/__test__/{form-group-scale,segmented-rate,bind-visibility,form-slider}.test.ts   +18 项</pre>
+
+<h2>7. 下一轮起点（复核后的准确清单）</h2>
+<ol>
+  <li><b>装饰组 45 个组件的属性栏偏薄</b>（原生 13~19 / datav 11~16）—— 把形状组的「填充 / 描边 / 效果」片段搬到装饰族；这是剩余最大的属性栏缺口。</li>
+  <li><b>form-button 的「点击行为」已由事件系统承载</b>（<code>__action</code> → ButtonActionEditor → <code>view.eventBindings</code> → 引擎事件脚本），本轮核实为<b>已落地</b>，无需重做；但可考虑把常用动作（跳转/提交/调用接口）做成按钮面板内的一键式配置。</li>
+  <li><b>表单「字段型」组件（input/textarea/select/date/time/number/file）的 <code>scaleFit</code> 开关</b>：现按设计铺满框（铺满即已随框缩放），如需与标签一致的等比缩放，补一个默认关闭的开关。</li>
+  <li><b>媒体组 audio 的动态资源</b>（image/video 已有接口取图/取视频，audio 尚无）—— 待确认是否需要。</li>
+  <li><b>历史场景显式 <code>authEnabled: false</code> 的一次性迁移</b>（把从未被用户触碰过的 false 还原为 null），消除「旧默认值掩盖跟随全局」的残留。</li>
+  <li><code>DataVRenderer</code> 被 codegen 静态引用 → 该 chunk 586 kB，可拆 chunk（功能无影响）。</li>
+</ol>
+
+<div class="foot">
+  验证命令：<code>npx tsc --noEmit</code> · <code>env -u NODE_OPTIONS npx vitest run</code> · <code>env -u NODE_OPTIONS npx vite build --emptyOutDir</code> ·
+  真值页 <code>env -u NODE_OPTIONS npx vite build --config measure.vite.config.ts</code>（<b>改完源文件必须重新 build</b>，且需 http 服务，file:// 下 ES module 会被 CORS 拦）。
+</div>
+
+</div>
+</body>
+</html>

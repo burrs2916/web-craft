@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 10 轮 · 属性栏诚实性全量审计与死循环修复 — 2026-09-20</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #0d1117; color: #d4d9e0; line-height: 1.75; padding: 40px 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 26px; color: #f0f4f8; margin-bottom: 6px; }
+  h1 .amber { color: #EF9F27; }
+  .meta { color: #7d8590; font-size: 13px; margin-bottom: 32px; }
+  h2 { font-size: 19px; color: #EF9F27; margin: 36px 0 14px; padding-bottom: 6px; border-bottom: 1px solid #21262d; }
+  h3 { font-size: 15px; color: #e6edf3; margin: 20px 0 8px; }
+  p { margin-bottom: 10px; }
+  code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; background: #161b22; border: 1px solid #21262d; border-radius: 4px; padding: 1px 6px; color: #79c0ff; }
+  .card { background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 18px 20px; margin-bottom: 14px; }
+  .card.p0 { border-left: 3px solid #f85149; }
+  .card.p1 { border-left: 3px solid #d29922; }
+  .card.p2 { border-left: 3px solid #3fb950; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 4px; padding: 1px 8px; margin-right: 8px; vertical-align: 1px; }
+  .tag.p0 { background: rgba(248,81,73,.15); color: #f85149; }
+  .tag.p1 { background: rgba(210,153,34,.15); color: #d29922; }
+  .tag.p2 { background: rgba(63,185,80,.15); color: #3fb950; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; }
+  th, td { border: 1px solid #21262d; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #161b22; color: #e6edf3; font-weight: 600; }
+  td code { white-space: nowrap; }
+  .good { color: #3fb950; }
+  .warn { color: #d29922; }
+  ul { padding-left: 22px; margin-bottom: 10px; }
+  li { margin-bottom: 5px; }
+  .num { font-size: 30px; font-weight: 700; color: #EF9F27; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0 24px; }
+  .stat { background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 16px; text-align: center; }
+  .stat .label { font-size: 12px; color: #7d8590; margin-top: 4px; }
+  .note { background: rgba(239,159,39,.08); border: 1px solid rgba(239,159,39,.25); border-radius: 8px; padding: 12px 16px; font-size: 13px; margin: 14px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>第 <span class="amber">10</span> 轮 · 属性栏诚实性全量审计与死循环修复</h1>
+  <div class="meta">web-craft 组件体系 · 2026-09-20 · 自动化续跑 · 未 git commit</div>
+
+  <div class="grid">
+    <div class="stat"><div class="num">142</div><div class="label">组件全量扫描</div></div>
+    <div class="stat"><div class="num">43 → 0</div><div class="label">假控件（真死字段）清零</div></div>
+    <div class="stat"><div class="num">2</div><div class="label">P1 死循环修复</div></div>
+    <div class="stat"><div class="num">883</div><div class="label">测试全绿（+33）</div></div>
+  </div>
+
+  <h2>一、方法：可执行的诚实性审计</h2>
+  <p>本轮不再逐组件人眼排查，而是写了一个<strong>可执行的扫描器</strong>（现已成为永久回归锁
+  <code>src/codegen/__test__/panel-honesty-scan.test.ts</code>）：对六组（表单/媒体/表格/图标/装饰/形状）共
+  142 个组件的每个标量面板字段，换一组对照值渲染两次 codegen，比对<strong>全量产物</strong>
+  （html + pageStyles + pageScripts）。改了面板值而产物逐字不变的，就是「假控件」——
+  面板承诺了却改不动画面的字段。</p>
+
+  <div class="note">开发探针阶段先后踩掉 4 个扫描器自身的大坑，全部记录在案（见第五节）——
+  这些坑不排掉，审计结论全是噪音：第一次跑出「415 项假控件」，真实数字是 0。</div>
+
+  <h2>二、P1 修复：两处发布端死循环（面板可触发的挂死）</h2>
+  <div class="card p0"><span class="tag p0">P1</span><strong>decoration-grid / dots-pattern：spacing=0 死循环</strong><br>
+  面板把「间距」声明为 <code>min: 0</code>，而几何实现是
+  <code>for (let x = spacing; x &lt; 100; x += spacing)</code> —— 用户填 0，
+  <code>x += 0</code> 无限推进，发布端渲染直接<strong>堆栈耗尽挂死</strong>（实测 12GB 堆都撑不住）。
+  修复：<code>editor/data/decorationShape.ts</code> 两处步长加 <code>Math.max(spacing, 1)</code> 护栏。
+  取证：spacing=0 现正常产出 29KB 产物。</div>
+
+  <h2>三、真死字段：修接线或摘除（11 项）</h2>
+  <table>
+    <tr><th>字段</th><th>实证</th><th>处置</th></tr>
+    <tr><td><code>datav-decoration-9.dur</code> 动画时长</td><td>DataVRenderer 1171 行正确读 config，但 JSX 调用点硬编码 <code>dur={3}</code></td><td class="good">接线 <code>dur={dur}</code>（面板「动画时长」变真）</td></tr>
+    <tr><td><code>icon.href / linkTarget</code> 跳转链接</td><td>resolveIconStyle 产出 href，但编辑区渲染器与发布端 codegen <strong>两端都不消费</strong></td><td class="good">发布端包装 <code>&lt;a href target rel&gt;</code>（<code>display:contents</code> 不破坏布局）；编辑区 href 非空时 cursor:pointer</td></tr>
+    <tr><td><code>table.density</code> 密度</td><td>defaultConfig 显式预置 cellPadY=8/cellPadX=12，density 只是 clampNum 的兜底 → 恒无效</td><td class="good">defaultConfig 摘除预置值（DENSITY_PADDING["default"]=[8,12] 与原值逐字相同，零回归）→ density 变真</td></tr>
+    <tr><td><code>pagination.color</code> 主题色</td><td>activeBgColor 显式预置 #2196F3，主题色只作它的兜底 → 恒无效</td><td class="good">activeBgColor 改为空串回落主题色（同色零回归）</td></tr>
+    <tr><td><code>datav-decoration-8.reverse</code> 反转方向</td><td>meta hasReverse:true，但 CurlingBranchBand 不消费 reverse</td><td class="good">meta 改 hasReverse:false，面板不再出假开关</td></tr>
+    <tr><td><code>datav-decoration-8/10.color2</code> 副色</td><td>CurlingBranchBand 不吃 color2；CarvedFrameDeco10 接收后丢弃（<code>color2: _color2</code>）</td><td class="good">面板按 idx 不再暴露副色</td></tr>
+    <tr><td><code>decoration-arrow.color2</code> 副色</td><td>decorationShape 的 arrow 分支从不消费</td><td class="good">摘除面板字段</td></tr>
+    <tr><td><code>form-file.fontWeight / labelBgColor / labelRadius</code></td><td>file 的代码路径两端都不读这三个键</td><td class="good">摘除</td></tr>
+    <tr><td><code>form-segmented / form-rate.labelPlacement</code></td><td>两端渲染器与 codegen 均不消费</td><td class="good">摘除</td></tr>
+  </table>
+
+  <h2>四、条件激活字段：hidden 条件或诚实文案（8 项）</h2>
+  <p>这些字段<strong>条件成立后真实生效</strong>，不摘除，改为让面板如实反映生效条件：</p>
+  <ul>
+    <li><code>labelGap</code> ×8（input/textarea/select/date/time/number/cascader/file）→ <code>hidden: labelPlacement !== "top"</code>（内置悬浮模式的标签是绝对定位，间距不参与）。</li>
+    <li><code>form-rate.fontSize</code> → hidden until showText（分值文案关闭时无文字可调）。</li>
+    <li><code>decoration-arrow.arrowCount</code> → hidden until arrowType==="chain"（单/双向恒 1 个箭头）。</li>
+    <li><code>decoration-gradient.speed</code> → hidden until animated（无动画则无速度）。</li>
+    <li><code>icon-button.borderWidth</code> → hidden until variant==="outline"（实心/文字形态无边框）。</li>
+    <li><code>form-container.showHeader / columns</code> → help 文案诚实化（标题区需标题/副标题；列数只是空态占位示意，发布端自由画布定位）。</li>
+  </ul>
+
+  <h2>五、方法论沉淀：扫描器本身的 4 个坑</h2>
+  <table>
+    <tr><th>#</th><th>坑</th><th>教训</th></tr>
+    <tr><td>1</td><td>组件级 codegen 返回 <strong>string</strong>，且会向 ctx.pageStyles/pageScripts 追加内容（datav 边框 strokeWidth 就在 pageStyles）</td><td>必须每次渲染用全新 ctx、比对全量产物，只看 HTML 会漏一整族</td></tr>
+    <tr><td>2</td><td>codegen uid 用 Math.random，两次渲染序列位置不同 → uid 必然漂移</td><td>每次渲染前重置随机序列起点</td></tr>
+    <tr><td>3</td><td>布尔候选被 String 化成 "false" 后，<code>c.showSubmit !== false</code> 严格比较恒真 → 候选失效，<strong>一次性制造 400+ 误报</strong></td><td>候选值必须保留原始类型</td></tr>
+    <tr><td>4</td><td>defaultConfig 常缺键（undefined），有效默认值来自解析函数兜底（<code>?? "none"</code>、<code>num(c.opacity,1)</code>）</td><td>单候选对照值容易恰好命中有效默认值 → 每字段试 min/max 等多候选</td></tr>
+  </table>
+
+  <h2>六、验证</h2>
+  <ul>
+    <li><code>tsc --noEmit</code> 非 <code>__measure__</code> 错误 <strong>0</strong>；</li>
+    <li>vitest <strong>883 passed / 67 files / 0 failed</strong>（上轮 850 → +33，含新永久锁 6 项）；</li>
+    <li><code>vite build --emptyOutDir</code> ✓ 12.50s；</li>
+    <li>发布端取证：icon 无链接时零回归（不产 &lt;a&gt;）、配链接产出 <code>&lt;a href target&gt;</code> ✓；
+        datav-9 dur=6 时 SMIL <code>dur="12s"</code>（内部 2 段派生）≠ 默认 3 → <code>dur="6s"</code> ✓；
+        grid spacing=0 正常返回 29KB ✓；<strong>未 git commit</strong>。</li>
+  </ul>
+
+  <h2>七、遗留与下一轮</h2>
+  <ul>
+    <li>表单字段型组件的 <code>scaleFit</code> 开关（按设计铺满框，如需等比缩放补默认关闭的开关）。</li>
+    <li>媒体组 audio 的动态资源（image/video 已有 dataMode 接线）。</li>
+    <li>历史场景显式 <code>authEnabled:false</code> 一次性迁移为 null（跟随站点全局）。</li>
+    <li><code>DataVRenderer</code> chunk 586 kB 可拆；table 密度可考虑做成 onChange 联动 cellPad 的预设。</li>
+  </ul>
+</div>
+</body>
+</html>

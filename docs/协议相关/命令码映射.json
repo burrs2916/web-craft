@@ -1,0 +1,1487 @@
+{
+  "0030": {
+    "name": "设备注册",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "设备向服务器注册（保留功能）"
+  },
+  "0031": {
+    "name": "设备注销",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "设备向服务器注销（保留功能）"
+  },
+  "0032": {
+    "name": "注册注销响应",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器返回注册注销结果（保留功能）"
+  },
+  "0035": {
+    "name": "服务器推送应用软件升级",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "appVersion",
+          "length": "variable",
+          "offset": 0,
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "appPath",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        }
+      ]
+    },
+    "description": "服务器推送应用程序升级信息"
+  },
+  "0036": {
+    "name": "服务器推送Kernel升级",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "kernelVersion",
+          "length": "variable",
+          "offset": 0,
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "kernelPath",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        }
+      ]
+    },
+    "description": "服务器推送Kernel升级信息"
+  },
+  "0037": {
+    "name": "服务器推送文件系统升级",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "fileSystemVersion",
+          "length": "variable",
+          "offset": 0,
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "fileSystemPath",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        }
+      ]
+    },
+    "description": "服务器推送文件系统升级信息"
+  },
+  "0038": {
+    "name": "服务器推送系统文件升级",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "systemFilePath",
+          "length": "variable",
+          "offset": 0,
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        }
+      ]
+    },
+    "description": "服务器推送系统文件升级信息"
+  },
+  "0060": {
+    "name": "服务器推送图片资源",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "imageVersion",
+          "length": "variable",
+          "offset": 0,
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "imagePath",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        }
+      ]
+    },
+    "description": "服务器推送图片资源升级信息"
+  },
+  "0061": {
+    "name": "系统升级返回结果",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "upgradeType",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备返回系统升级结果"
+  },
+  "0122": {
+    "name": "索要日期时间",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "设备向服务器请求日期时间"
+  },
+  "0123": {
+    "name": "服务器推送日期时间",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "second",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "minute",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "hour",
+          "length": 1,
+          "offset": 2,
+          "encoding": "uint"
+        },
+        {
+          "name": "day",
+          "length": 1,
+          "offset": 3,
+          "encoding": "uint"
+        },
+        {
+          "name": "month",
+          "length": 1,
+          "offset": 4,
+          "encoding": "uint"
+        },
+        {
+          "name": "year",
+          "length": 1,
+          "offset": 5,
+          "encoding": "uint"
+        },
+        {
+          "name": "lunarDesc",
+          "length": "variable",
+          "offset": 6,
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        }
+      ]
+    },
+    "description": "服务器向设备推送日期时间"
+  },
+  "0124": {
+    "name": "系统版本获取",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "设备向服务器请求系统版本信息"
+  },
+  "0125": {
+    "name": "系统版本上传",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "appVersion",
+          "length": "variable",
+          "offset": 0,
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "kernelVersion",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "fileSystemVersion",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "boardVersion",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        }
+      ]
+    },
+    "description": "设备上传系统版本信息"
+  },
+  "0126": {
+    "name": "服务器回复心跳",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "服务器回复设备心跳"
+  },
+  "0127": {
+    "name": "设备发送心跳",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "设备定时发送心跳包（15秒）"
+  },
+  "0280": {
+    "name": "系统版本返回",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器返回系统版本上传结果"
+  },
+  "0605": {
+    "name": "获取所有设置信息",
+    "direction": "双向",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "获取或上传所有设置信息"
+  },
+  "0606": {
+    "name": "获取集控器基本信息设置",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "服务器获取集控器基本信息"
+  },
+  "0607": {
+    "name": "集控器基本信息设置",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "wirelessAddress",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "windDirection",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "scene",
+          "length": 1,
+          "offset": 2,
+          "encoding": "uint"
+        },
+        {
+          "name": "routeInterval",
+          "length": 1,
+          "offset": 3,
+          "encoding": "uint"
+        },
+        {
+          "name": "wirelessSpeed",
+          "length": 1,
+          "offset": 4,
+          "encoding": "uint"
+        },
+        {
+          "name": "supportCount",
+          "length": 1,
+          "offset": 5,
+          "encoding": "uint"
+        },
+        {
+          "name": "repeaterCount",
+          "length": 1,
+          "offset": 6,
+          "encoding": "uint"
+        },
+        {
+          "name": "subControllerGroupCount",
+          "length": 1,
+          "offset": 7,
+          "encoding": "uint"
+        },
+        {
+          "name": "runMode",
+          "length": 1,
+          "offset": 8,
+          "encoding": "uint"
+        },
+        {
+          "name": "useXi",
+          "length": 1,
+          "offset": 9,
+          "encoding": "uint"
+        },
+        {
+          "name": "useDing",
+          "length": 1,
+          "offset": 10,
+          "encoding": "uint"
+        },
+        {
+          "name": "coalMachineDelayTime",
+          "length": 2,
+          "offset": 11,
+          "encoding": "uint"
+        },
+        {
+          "name": "alias",
+          "length": "variable",
+          "offset": 13,
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        }
+      ]
+    },
+    "description": "服务器设置集控器基本信息"
+  },
+  "0608": {
+    "name": "集控器基本信息设置返回",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备返回集控器基本信息设置结果"
+  },
+  "0609": {
+    "name": "获取所有分控器信息",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "服务器获取所有分控器信息"
+  },
+  "060a": {
+    "name": "分控器设置信息",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "subControllerCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "controllers",
+          "type": "array",
+          "itemType": "controller",
+          "itemFields": [
+            {
+              "name": "controllerId",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            },
+            {
+              "name": "controllerType",
+              "fromField": "controllerId",
+              "bitPattern": "wirelessAddressRules"
+            },
+            {
+              "name": "alarmSensorInfo",
+              "length": 2,
+              "offset": 1,
+              "encoding": "alarmSensorType"
+            },
+            {
+              "name": "repeater",
+              "length": 1,
+              "offset": 3,
+              "encoding": "uint"
+            },
+            {
+              "name": "routeInterval",
+              "length": 1,
+              "offset": 4,
+              "encoding": "uint"
+            },
+            {
+              "name": "alias",
+              "length": "variable",
+              "offset": 5,
+              "encoding": "utf8",
+              "lengthPrefix": 2
+            }
+          ],
+          "arrayLengthFrom": "subControllerCount"
+        }
+      ]
+    },
+    "description": "设备上传分控器设置信息"
+  },
+  "060b": {
+    "name": "分控器设置信息返回",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备返回分控器设置信息结果"
+  },
+  "060e": {
+    "name": "获取传感器设置",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "服务器获取传感器设置信息"
+  },
+  "060f": {
+    "name": "添加传感器",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "sensorCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "sensors",
+          "type": "array",
+          "itemType": "sensor",
+          "itemFields": [
+            {
+              "name": "sensorType",
+              "length": 1,
+              "offset": 0,
+              "encoding": "sensorType"
+            },
+            {
+              "name": "sensorId",
+              "length": 1,
+              "offset": 1,
+              "encoding": "uint"
+            },
+            {
+              "name": "sensorAlias",
+              "length": "variable",
+              "offset": 2,
+              "encoding": "utf8",
+              "lengthPrefix": 2
+            },
+            {
+              "name": "minRange",
+              "length": 4,
+              "offset": "variable",
+              "encoding": "uint"
+            },
+            {
+              "name": "maxRange",
+              "length": 4,
+              "offset": "variable",
+              "encoding": "uint"
+            },
+            {
+              "name": "alarmLow",
+              "length": 4,
+              "offset": "variable",
+              "encoding": "uint"
+            },
+            {
+              "name": "alarmHigh",
+              "length": 4,
+              "offset": "variable",
+              "encoding": "uint"
+            },
+            {
+              "name": "calibrationZero",
+              "length": 4,
+              "offset": "variable",
+              "encoding": "uint"
+            }
+          ],
+          "arrayLengthFrom": "sensorCount"
+        }
+      ]
+    },
+    "description": "服务器添加或修改传感器"
+  },
+  "0610": {
+    "name": "添加传感器返回",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备返回添加传感器结果"
+  },
+  "0611": {
+    "name": "删除传感器",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "sensorCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "sensorIds",
+          "type": "array",
+          "itemType": "sensorId",
+          "itemFields": [
+            {
+              "name": "sensorId",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            }
+          ],
+          "arrayLengthFrom": "sensorCount"
+        }
+      ]
+    },
+    "description": "服务器删除传感器"
+  },
+  "0612": {
+    "name": "删除传感器返回",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备返回删除传感器结果"
+  },
+  "0613": {
+    "name": "获取喷雾参数",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "服务器获取喷雾参数"
+  },
+  "0614": {
+    "name": "传感器喷雾参数设置",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "sensorType",
+          "length": 1,
+          "offset": 0,
+          "encoding": "spraySensorType"
+        },
+        {
+          "name": "sprayPosition",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "windDirection",
+          "length": 1,
+          "offset": 2,
+          "encoding": "uint"
+        },
+        {
+          "name": "waterCurtainInterval",
+          "length": 1,
+          "offset": 3,
+          "encoding": "uint"
+        },
+        {
+          "name": "waterCurtainCount",
+          "length": 1,
+          "offset": 4,
+          "encoding": "uint"
+        },
+        {
+          "name": "sprayDelayTime",
+          "length": 2,
+          "offset": 5,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器设置传感器喷雾参数"
+  },
+  "0615": {
+    "name": "传感器喷雾参数设置返回",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备返回传感器喷雾参数设置结果"
+  },
+  "0616": {
+    "name": "获取工作时间段",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "服务器获取工作时间段"
+  },
+  "0617": {
+    "name": "工作时间段设置",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "timeSlotCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "timeSlots",
+          "type": "array",
+          "itemType": "timeSlot",
+          "itemFields": [
+            {
+              "name": "enabled",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            },
+            {
+              "name": "startTime",
+              "length": 2,
+              "offset": 1,
+              "encoding": "uint"
+            },
+            {
+              "name": "endTime",
+              "length": 2,
+              "offset": 3,
+              "encoding": "uint"
+            }
+          ],
+          "arrayLengthFrom": "timeSlotCount"
+        }
+      ]
+    },
+    "description": "服务器设置工作时间段"
+  },
+  "0618": {
+    "name": "定时回馈",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "设备返回定时设置结果"
+  },
+  "0619": {
+    "name": "喷洒控制",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "controlMode",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "controlWord",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "controlPosition",
+          "length": 1,
+          "offset": 2,
+          "encoding": "uint"
+        },
+        {
+          "name": "totalCount",
+          "length": 1,
+          "offset": 3,
+          "encoding": "uint"
+        },
+        {
+          "name": "controllerIds",
+          "type": "array",
+          "itemType": "controllerId",
+          "itemFields": [
+            {
+              "name": "controllerId",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            }
+          ],
+          "arrayLengthFrom": "totalCount"
+        }
+      ]
+    },
+    "description": "服务器控制喷洒操作"
+  },
+  "061a": {
+    "name": "喷洒控制返回",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备返回喷洒控制结果"
+  },
+  "061b": {
+    "name": "循环喷洒设置",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "continuousCurtainCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "sprayDuration",
+          "length": 2,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "stopDuration",
+          "length": 2,
+          "offset": 3,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器设置循环喷洒参数"
+  },
+  "061c": {
+    "name": "循环喷洒设置返回",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备返回循环喷洒设置结果"
+  },
+  "061d": {
+    "name": "实时状态",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "服务器请求设备实时状态"
+  },
+  "061e": {
+    "name": "返回实时状态",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "motionDirection",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "coalPosition",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "coalPositionDisplay",
+          "length": "variable",
+          "offset": 2,
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "controllerCount",
+          "length": 1,
+          "offset": "variable",
+          "encoding": "uint"
+        },
+        {
+          "name": "controllers",
+          "type": "array",
+          "itemType": "controller",
+          "itemFields": [
+            {
+              "name": "controllerId",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            },
+            {
+              "name": "controllerState",
+              "length": 1,
+              "offset": 1,
+              "encoding": "raw"
+            },
+            {
+              "name": "batteryWarning",
+              "length": 2,
+              "offset": 2,
+              "encoding": "raw"
+            },
+            {
+              "name": "alarmSensors",
+              "length": 2,
+              "offset": 4,
+              "encoding": "alarmSensorType"
+            },
+            {
+              "name": "frequencySensorCount",
+              "length": 1,
+              "offset": 6,
+              "encoding": "uint"
+            },
+            {
+              "name": "frequencySensors",
+              "type": "array",
+              "itemType": "frequencySensor",
+              "itemFields": [
+                {
+                  "name": "sensorId",
+                  "length": 1,
+                  "offset": 0,
+                  "encoding": "uint"
+                },
+                {
+                  "name": "sensorType",
+                  "length": 1,
+                  "offset": 1,
+                  "encoding": "sensorType"
+                },
+                {
+                  "name": "sensorFrequency",
+                  "length": 4,
+                  "offset": 2,
+                  "encoding": "uint"
+                },
+                {
+                  "name": "sensorValue",
+                  "length": 4,
+                  "offset": 6,
+                  "encoding": "uint"
+                },
+                {
+                  "name": "sensorStatusCode",
+                  "length": 2,
+                  "offset": 10,
+                  "encoding": "raw"
+                }
+              ],
+              "arrayLengthFrom": "frequencySensorCount"
+            }
+          ],
+          "arrayLengthFrom": "controllerCount"
+        },
+        {
+          "name": "sensorCount",
+          "length": 1,
+          "offset": "variable",
+          "encoding": "uint"
+        },
+        {
+          "name": "sensors",
+          "type": "array",
+          "itemType": "sensor",
+          "itemFields": [
+            {
+              "name": "sensorId",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            },
+            {
+              "name": "sensorFrequency",
+              "length": 4,
+              "offset": 1,
+              "encoding": "uint"
+            },
+            {
+              "name": "sensorValue",
+              "length": 4,
+              "offset": 5,
+              "encoding": "uint"
+            },
+            {
+              "name": "sensorStatusCode",
+              "length": 2,
+              "offset": 9,
+              "encoding": "raw"
+            }
+          ],
+          "arrayLengthFrom": "sensorCount"
+        },
+        {
+          "name": "moveSupport",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "dropSupport",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "topCoal",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        },
+        {
+          "name": "clean",
+          "length": "variable",
+          "offset": "variable",
+          "encoding": "utf8",
+          "lengthPrefix": 2
+        }
+      ]
+    },
+    "description": "设备返回实时状态信息"
+  },
+  "061f": {
+    "name": "实时状态补充",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "totalCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "ids",
+          "type": "array",
+          "itemType": "id",
+          "itemFields": [
+            {
+              "name": "id",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            }
+          ],
+          "arrayLengthFrom": "totalCount"
+        }
+      ]
+    },
+    "description": "设备返回补充的实时状态信息"
+  },
+  "0620": {
+    "name": "获取分控器工作时间段",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "position",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器获取分控器工作时间段"
+  },
+  "0621": {
+    "name": "分控器工作时间段设置",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "position",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "timeSlotCount",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "timeSlots",
+          "type": "array",
+          "itemType": "timeSlot",
+          "itemFields": [
+            {
+              "name": "enabled",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            },
+            {
+              "name": "startTime",
+              "length": 2,
+              "offset": 1,
+              "encoding": "uint"
+            },
+            {
+              "name": "endTime",
+              "length": 2,
+              "offset": 3,
+              "encoding": "uint"
+            }
+          ],
+          "arrayLengthFrom": "timeSlotCount"
+        }
+      ]
+    },
+    "description": "服务器设置分控器工作时间段"
+  },
+  "0622": {
+    "name": "分控器定时回馈",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "设备返回分控器定时设置结果"
+  },
+  "0623": {
+    "name": "栈桥循环标志",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "cycleFlag",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器设置栈桥循环标志"
+  },
+  "0624": {
+    "name": "栈桥循环参数",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "continuousCurtainCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "cycleCount",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "sprayDuration",
+          "length": 2,
+          "offset": 2,
+          "encoding": "uint"
+        },
+        {
+          "name": "stopDuration",
+          "length": 2,
+          "offset": 4,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器设置栈桥循环参数"
+  },
+  "0625": {
+    "name": "栈桥定时",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "startHour",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "startMinute",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "interval",
+          "length": 1,
+          "offset": 2,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器设置栈桥定时"
+  },
+  "0626": {
+    "name": "流量数据",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "instantFlow",
+          "length": 4,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "totalFlow",
+          "length": 4,
+          "offset": 4,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备上传流量计数据"
+  },
+  "0627": {
+    "name": "压力泵数据上传",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "startStatus",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备上传压力泵数据"
+  },
+  "0628": {
+    "name": "喷洒控制2",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "controlWord",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "controlPosition",
+          "length": 1,
+          "offset": 1,
+          "encoding": "uint"
+        },
+        {
+          "name": "totalCount",
+          "length": 1,
+          "offset": 2,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器控制喷洒操作（简化版）"
+  },
+  "0629": {
+    "name": "喷洒控制2返回",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "result",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备返回喷洒控制2结果"
+  },
+  "062a": {
+    "name": "粉尘联动",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "totalCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "items",
+          "type": "array",
+          "itemType": "item",
+          "itemFields": [
+            {
+              "name": "id",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            },
+            {
+              "name": "value",
+              "length": 2,
+              "offset": 1,
+              "encoding": "uint"
+            }
+          ],
+          "arrayLengthFrom": "totalCount"
+        }
+      ]
+    },
+    "description": "服务器设置粉尘联动参数"
+  },
+  "062b": {
+    "name": "清除设置",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "empty"
+    },
+    "description": "服务器清除设备设置"
+  },
+  "062c": {
+    "name": "温度联动",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "totalCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "items",
+          "type": "array",
+          "itemType": "item",
+          "itemFields": [
+            {
+              "name": "id",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            },
+            {
+              "name": "value",
+              "length": 2,
+              "offset": 1,
+              "encoding": "uint"
+            }
+          ],
+          "arrayLengthFrom": "totalCount"
+        }
+      ]
+    },
+    "description": "服务器设置温度联动参数"
+  },
+  "062d": {
+    "name": "CO联动",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "totalCount",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        },
+        {
+          "name": "items",
+          "type": "array",
+          "itemType": "item",
+          "itemFields": [
+            {
+              "name": "id",
+              "length": 1,
+              "offset": 0,
+              "encoding": "uint"
+            },
+            {
+              "name": "value",
+              "length": 2,
+              "offset": 1,
+              "encoding": "uint"
+            }
+          ],
+          "arrayLengthFrom": "totalCount"
+        }
+      ]
+    },
+    "description": "服务器设置CO联动参数"
+  },
+  "062e": {
+    "name": "廊桥运行模式",
+    "direction": "服务器→设备",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "mode",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "服务器设置廊桥运行模式"
+  },
+  "062f": {
+    "name": "皮带状态",
+    "direction": "设备→服务器",
+    "dataSchema": {
+      "type": "object",
+      "fields": [
+        {
+          "name": "status",
+          "length": 1,
+          "offset": 0,
+          "encoding": "uint"
+        }
+      ]
+    },
+    "description": "设备上传皮带运行状态"
+  }
+}

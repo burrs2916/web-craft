@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebCraft 认证组件闭环分析报告</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d29;
+    --card-hover: #232636;
+    --border: #2d3148;
+    --text: #e4e7f0;
+    --text-dim: #8b90a8;
+    --accent: #5b8def;
+    --accent-dim: #3d6bc8;
+    --red: #ef5350;
+    --orange: #ffa726;
+    --green: #66bb6a;
+    --purple: #ab47bc;
+    --cyan: #26c6da;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.7;
+    padding: 40px 20px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .subtitle { color: var(--text-dim); font-size: 14px; margin-bottom: 32px; }
+  h2 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 40px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+    color: var(--accent);
+  }
+  h3 { font-size: 17px; font-weight: 600; margin: 24px 0 12px; color: var(--text); }
+  p { margin-bottom: 12px; color: var(--text-dim); font-size: 14px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--accent-dim); }
+
+  /* ── 结论 banner ── */
+  .verdict {
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .verdict-fail {
+    background: linear-gradient(135deg, rgba(239,83,80,0.15), rgba(239,83,80,0.05));
+    border: 1px solid rgba(239,83,80,0.3);
+  }
+  .verdict-icon {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .verdict-fail .verdict-icon { background: rgba(239,83,80,0.2); color: var(--red); }
+  .verdict-text h3 { color: var(--text); margin: 0 0 4px; }
+  .verdict-text p { margin: 0; color: var(--text-dim); }
+
+  /* ── 架构图 ── */
+  .arch-diagram {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 24px;
+    overflow-x: auto;
+  }
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    min-width: 700px;
+  }
+  .arch-side { display: flex; flex-direction: column; gap: 12px; }
+  .arch-side h4 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-dim); margin-bottom: 4px;
+  }
+  .arch-layer {
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    border: 1px solid;
+  }
+  .arch-config { background: rgba(91,141,239,0.08); border-color: rgba(91,141,239,0.25); }
+  .arch-renderer { background: rgba(102,187,106,0.08); border-color: rgba(102,187,106,0.25); }
+  .arch-codegen { background: rgba(171,71,188,0.08); border-color: rgba(171,71,188,0.25); }
+  .arch-store { background: rgba(38,198,218,0.08); border-color: rgba(38,198,218,0.25); }
+  .arch-layer b { color: var(--text); }
+  .arch-layer .layer-tag { float: right; font-size: 11px; opacity: 0.6; }
+  .arch-arrow {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 20px;
+    margin: 2px 0;
+  }
+
+  /* ── 组件表 ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--card);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--border);
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:hover td { background: var(--card-hover); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 2px 0;
+  }
+  .badge-p0 { background: rgba(239,83,80,0.15); color: var(--red); }
+  .badge-p1 { background: rgba(255,167,38,0.15); color: var(--orange); }
+  .badge-p2 { background: rgba(102,187,106,0.15); color: var(--green); }
+  .badge-ok { background: rgba(102,187,106,0.15); color: var(--green); }
+  .badge-broken { background: rgba(239,83,80,0.15); color: var(--red); }
+  .badge-warn { background: rgba(255,167,38,0.15); color: var(--orange); }
+
+  /* ── 事件流图 ── */
+  .event-flow {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .flow-chain {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+  .flow-node {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .flow-trigger { background: rgba(91,141,239,0.12); border-color: rgba(91,141,239,0.3); color: var(--accent); }
+  .flow-event { background: rgba(255,167,38,0.12); border-color: rgba(255,167,38,0.3); color: var(--orange); font-weight: 600; }
+  .flow-consume { background: rgba(102,187,106,0.12); border-color: rgba(102,187,106,0.3); color: var(--green); }
+  .flow-broken { background: rgba(239,83,80,0.12); border-color: rgba(239,83,80,0.3); color: var(--red); }
+  .flow-arrow { color: var(--text-dim); font-size: 16px; }
+  .flow-broken-arrow { color: var(--red); font-size: 16px; }
+  .flow-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+
+  /* ── 问题清单 ── */
+  .issue {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+  }
+  .issue-p0 { border-left-color: var(--red); }
+  .issue-p1 { border-left-color: var(--orange); }
+  .issue-p2 { border-left-color: var(--green); }
+  .issue-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .issue-header h4 { font-size: 15px; font-weight: 600; color: var(--text); margin: 0; flex: 1; }
+  .issue-body { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
+  .issue-fix {
+    font-size: 13px;
+    color: var(--text);
+    background: rgba(91,141,239,0.06);
+    border-radius: 6px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--accent);
+  }
+  .issue-fix b { color: var(--accent); }
+  .issue-evidence {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: "SF Mono", "Fira Code", monospace;
+    margin-top: 6px;
+    opacity: 0.7;
+  }
+
+  /* ── 存储键矩阵 ── */
+  .storage-matrix td { font-size: 12px; }
+  .key-match { color: var(--green); }
+  .key-mismatch { color: var(--red); font-weight: 600; }
+  .key-na { color: var(--text-dim); }
+
+  /* ── summary ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .summary-stat {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+  }
+  .summary-stat .num { font-size: 32px; font-weight: 700; }
+  .summary-stat .label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .stat-red .num { color: var(--red); }
+  .stat-orange .num { color: var(--orange); }
+  .stat-green .num { color: var(--green); }
+  .stat-blue .num { color: var(--accent); }
+
+  code, .mono {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    font-size: 12px;
+    background: rgba(91,141,239,0.08);
+    color: var(--accent);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .evidence-block {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 12px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 8px;
+    color: var(--text-dim);
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>WebCraft 认证组件闭环分析报告</h1>
+<p class="subtitle">审查范围：7 个认证组件 × 三层架构（configSchema / renderer / codegen）+ websiteAuthStore + HttpAdapter &nbsp;|&nbsp; 审查时间：2026-09-10</p>
+
+<!-- ════════ 核心结论 ════════ -->
+<div class="verdict verdict-fail">
+  <div class="verdict-icon">✕</div>
+  <div class="verdict-text">
+    <h3>核心结论：7 个认证组件目前无法形成完整闭环</h3>
+    <p>登录→守卫→用户信息→登出主链路基本通畅，但 <b>Token 刷新链路存在 3 处断裂</b>，<b>存储键命名存在系统性不一致</b>（expiresAt 键名在不同组件中不同），<b>memory 存储模式下各 codegen IIFE 的 memoryCache 互相隔离</b>导致跨组件状态不可见。这 3 个 P0 级问题会在特定配置下导致认证状态断裂。</p>
+  </div>
+</div>
+
+<!-- ════════ 统计概览 ════════ -->
+<div class="summary-grid">
+  <div class="summary-stat stat-red"><div class="num">6</div><div class="label">P0 断裂</div></div>
+  <div class="summary-stat stat-orange"><div class="num">7</div><div class="label">P1 不一致</div></div>
+  <div class="summary-stat stat-green"><div class="num">5</div><div class="label">P2 改进</div></div>
+  <div class="summary-stat stat-blue"><div class="num">7</div><div class="label">组件总数</div></div>
+</div>
+
+<!-- ════════ 架构图 ════════ -->
+<h2>一、架构总览</h2>
+<p>7 个认证组件各自遵循三层架构。编辑态走 renderer → websiteAuthStore（Zustand 内存态）；发布态走 codegen → 独立 IIFE memoryCache + Storage。两条路径的存储实现完全不同，是闭环断裂的根源之一。</p>
+
+<div class="arch-diagram">
+<div class="arch-grid">
+  <div class="arch-side">
+    <h4>编辑态（Renderer → Store）</h4>
+    <div class="arch-layer arch-config">
+      <span class="layer-tag">Layer 1</span>
+      <b>registerAuthComponents.ts</b><br>
+      configSchema + defaultConfig + field.group
+    </div>
+    <div class="arch-arrow">↓ 读取 config</div>
+    <div class="arch-layer arch-renderer">
+      <span class="layer-tag">Layer 2</span>
+      <b>Renderer（7 个 .tsx）</b><br>
+      AuthGuard / UserProfile / LogoutButton<br>
+      LoginForm / OAuthButton / SSOButton / ApiKeyConfig
+    </div>
+    <div class="arch-arrow">↓ 调用 setLogin / setCachedValue</div>
+    <div class="arch-layer arch-store">
+      <span class="layer-tag">共享</span>
+      <b>websiteAuthStore.ts</b><br>
+      Zustand store（内存态）<br>
+      memoryCache 对象 + Storage<br>
+      <span style="color:var(--green)">✓ 所有 renderer 共享同一 store</span>
+    </div>
+  </div>
+  <div class="arch-side">
+    <h4>发布态（Codegen → 独立 IIFE）</h4>
+    <div class="arch-layer arch-config">
+      <span class="layer-tag">Layer 1</span>
+      <b>registerAuthComponents.ts</b><br>
+      同一 configSchema
+    </div>
+    <div class="arch-arrow">↓ 读取 config</div>
+    <div class="arch-layer arch-codegen">
+      <span class="layer-tag">Layer 3</span>
+      <b>auth.ts codegen（8 个函数）</b><br>
+      每个 codegen 生成独立 IIFE<br>
+      各自有 <code>var memoryCache = {}</code><br>
+      <span style="color:var(--red)">✗ IIFE 间 memoryCache 不共享</span>
+    </div>
+    <div class="arch-arrow">↓ 读写 Storage</div>
+    <div class="arch-layer arch-store">
+      <span class="layer-tag">共享</span>
+      <b>localStorage / sessionStorage</b><br>
+      唯一跨组件共享渠道<br>
+      <span style="color:var(--red)">✗ 键名不一致（见问题 #1）</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ════════ 组件角色矩阵 ════════ -->
+<h3>组件角色矩阵</h3>
+<table>
+<thead>
+<tr><th>组件</th><th>角色</th><th>触发事件</th><th>消费事件</th><th>Store 方法</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><b>LoginForm</b></td>
+  <td>登录入口（密码/短信/动态参数）</td>
+  <td><code>auth-state-change</code><br><code>webcraft-token-refreshed</code></td>
+  <td><code>webcraft-show-login</code><br><code>auth-state-change</code><br><code>webcraft-token-expired</code></td>
+  <td>setLogin, setConfig, setError</td>
+</tr>
+<tr>
+  <td><b>RegisterForm</b></td>
+  <td>注册入口</td>
+  <td><code>auth-state-change</code><span class="badge badge-ok"> 仅 autoLogin</span></td>
+  <td>—</td>
+  <td>setLogin, setCachedValue</td>
+</tr>
+<tr>
+  <td><b>OAuthButton</b></td>
+  <td>OAuth 2.0 跳转 + 回调</td>
+  <td><code>auth-state-change</code><span class="badge badge-ok"> via setLogin</span></td>
+  <td>—</td>
+  <td>setLogin, setCachedValue</td>
+</tr>
+<tr>
+  <td><b>SSOButton</b></td>
+  <td>SSO 跳转 + 回调（OIDC/CAS/SAML）</td>
+  <td><code>auth-state-change</code><span class="badge badge-ok"> via setLogin</span></td>
+  <td>—</td>
+  <td>setLogin, setCachedValue</td>
+</tr>
+<tr>
+  <td><b>ApiKeyConfig</b></td>
+  <td>API Key 输入 + 存储</td>
+  <td><code>auth-state-change</code><span class="badge badge-ok"> via setLogin</span></td>
+  <td>—</td>
+  <td>setLogin, setCachedValue</td>
+</tr>
+<tr>
+  <td><b>AuthGuard</b></td>
+  <td>路由守卫（门禁）</td>
+  <td><code>webcraft-show-login</code><br><code>webcraft-token-expired</code></td>
+  <td><code>auth-state-change</code><br><code>webcraft-token-refreshed</code></td>
+  <td>isAuthenticated（只读）</td>
+</tr>
+<tr>
+  <td><b>UserProfile</b></td>
+  <td>用户信息展示</td>
+  <td>—</td>
+  <td><code>auth-state-change</code></td>
+  <td>user, isAuthenticated（只读）<br>setConfig（同步 userDisplayConfig）</td>
+</tr>
+<tr>
+  <td><b>LogoutButton</b></td>
+  <td>退出登录</td>
+  <td><code>auth-state-change</code><span class="badge badge-ok"> via logout()</span></td>
+  <td>—</td>
+  <td>logout, token（只读）</td>
+</tr>
+</tbody>
+</table>
+
+<!-- ════════ 事件流图 ════════ -->
+<h2>二、事件流图</h2>
+<p>4 个自定义事件构成认证组件间的通信骨架。以下逐个分析每个事件的触发→消费路径，标注断裂点。</p>
+
+<!-- auth-state-change -->
+<h3>事件 1：auth-state-change <span class="badge badge-ok">主链路</span></h3>
+<div class="event-flow">
+<div class="flow-label">编辑态（renderer → store → renderer）</div>
+<div class="flow-chain">
+  <span class="flow-node flow-trigger">LoginForm Renderer</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-trigger">setLogin()</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-event">auth-state-change</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">AuthGuard</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">UserProfile</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">LoginForm（自隐藏）</span>
+</div>
+<div class="flow-label" style="margin-top:12px">发布态（codegen IIFE → IIFE）</div>
+<div class="flow-chain">
+  <span class="flow-node flow-trigger">Login Codegen</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-trigger">dispatchEvent</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-event">auth-state-change</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">AuthGuard Codegen</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">UserProfile Codegen</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">LoginForm Codegen（自隐藏）</span>
+</div>
+<div class="flow-chain" style="margin-top:8px">
+  <span class="flow-node flow-trigger">LogoutButton</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-trigger">logout()</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-event">auth-state-change</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">AuthGuard → fallback</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">UserProfile → 未登录</span>
+</div>
+<p style="margin-top:12px"><span class="badge badge-ok">✓ 通畅</span> auth-state-change 是最核心事件，编辑态和发布态的触发→消费链路完整。所有登录组件（LoginForm/RegisterForm/OAuth/SSO/ApiKey）通过 setLogin() 或直接 dispatch 触发，AuthGuard 和 UserProfile 监听消费。</p>
+</div>
+
+<!-- webcraft-show-login -->
+<h3>事件 2：webcraft-show-login <span class="badge badge-ok">通畅</span></h3>
+<div class="event-flow">
+<div class="flow-chain">
+  <span class="flow-node flow-trigger">AuthGuard（未认证）</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-event">webcraft-show-login</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">LoginForm（显示/滚动）</span>
+</div>
+<p style="margin-top:12px"><span class="badge badge-ok">✓ 通畅</span> AuthGuard 在 onUnauthenticatedAction="dispatchEvent" 时触发，LoginForm 监听后 <code>form.style.display = "flex"</code> + <code>scrollIntoView</code>。编辑态 renderer 也实现：AuthGuard dispatch → LoginForm useEffect 监听 setVisible(true)。</p>
+</div>
+
+<!-- webcraft-token-expired -->
+<h3>事件 3：webcraft-token-expired <span class="badge badge-broken">断裂</span></h3>
+<div class="event-flow">
+<div class="flow-chain">
+  <span class="flow-node flow-trigger">AuthGuard Codegen</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-event">webcraft-token-expired</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">LoginForm Codegen</span>
+  <span class="flow-broken-arrow">✗</span>
+  <span class="flow-node flow-broken">HttpAdapter（不监听）</span>
+</div>
+<p style="margin-top:12px"><span class="badge badge-broken">✗ 断裂</span> AuthGuard 检测到 token 过期时 dispatch <code>webcraft-token-expired</code>，但消费方只有 LoginForm codegen 的 <code>performRefresh()</code>。<b>HttpAdapter 不监听此事件</b>（grep 确认 HttpAdapter.ts 中无任何 addEventListener），导致非 LoginForm 场景下的 token 过期无法触发自动刷新。详见 <b>问题 #4</b>。</p>
+</div>
+
+<!-- webcraft-token-refreshed -->
+<h3>事件 4：webcraft-token-refreshed <span class="badge badge-broken">断裂</span></h3>
+<div class="event-flow">
+<div class="flow-chain">
+  <span class="flow-node flow-trigger">LoginForm Codegen</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-event">webcraft-token-refreshed</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node flow-consume">AuthGuard Codegen</span>
+  <span class="flow-broken-arrow">✗</span>
+  <span class="flow-node flow-broken">HttpAdapter（不 dispatch）</span>
+</div>
+<p style="margin-top:12px"><span class="badge badge-broken">✗ 断裂</span> LoginForm codegen 刷新成功后 dispatch <code>webcraft-token-refreshed</code>，AuthGuard codegen 监听后 <code>updateGuard(true)</code>。<b>但 HttpAdapter 的 <code>tryRefreshToken()</code> 成功后不 dispatch 此事件</b>（grep 确认 HttpAdapter.ts 中无任何 dispatchEvent），导致 HttpAdapter 触发的刷新无法通知 AuthGuard 更新 UI。详见 <b>问题 #5</b>。</p>
+</div>
+
+<!-- ════════ 存储键矩阵 ════════ -->
+<h2>三、存储键一致性矩阵</h2>
+<p>下表展示各组件 codegen 写入和读取的存储键。不一致的键名会导致跨组件状态断裂。</p>
+
+<div class="arch-diagram">
+<table class="storage-matrix">
+<thead>
+<tr><th>存储键</th><th>LoginForm</th><th>RegisterForm</th><th>OAuth</th><th>SSO</th><th>ApiKey</th><th>AuthGuard（读）</th><th>UserProfile（读）</th><th>LogoutButton（清）</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>auth_token</code> / tokenKey</td>
+  <td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 读</td><td>—</td><td class="key-match">✓ 清</td>
+</tr>
+<tr>
+  <td><code>__webcraft_auth_mode</code></td>
+  <td class="key-match">✓ 写</td><td>—</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 读</td><td>—</td><td class="key-match">✓ 清</td>
+</tr>
+<tr>
+  <td><code>__webcraft_auth_authenticated</code></td>
+  <td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 读</td><td class="key-match">✓ 读</td><td class="key-match">✓ 清</td>
+</tr>
+<tr>
+  <td><code>__webcraft_auth_user</code></td>
+  <td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td>—</td><td>—</td><td class="key-match">✓ 读</td><td class="key-match">✓ 清</td>
+</tr>
+<tr style="background: rgba(239,83,80,0.05)">
+  <td><code>__webcraft_auth_expires_at</code></td>
+  <td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td class="key-match">✓ 写</td><td>—</td><td class="key-mismatch">✗ 读 "expiresAt"</td><td>—</td><td class="key-match">✓ 清</td>
+</tr>
+<tr style="background: rgba(239,83,80,0.05)">
+  <td><code>expiresAt</code> vs <code>__webcraft_auth_expires_at</code></td>
+  <td class="key-match">写 expires_at</td><td class="key-match">写 expires_at</td><td class="key-match">写 expires_at</td><td class="key-match">写 expires_at</td><td class="key-na">—</td><td class="key-mismatch">读 "expiresAt"</td><td class="key-na">—</td><td class="key-na">—</td>
+</tr>
+<tr style="background: rgba(239,83,80,0.05)">
+  <td><code>__webcraft_api_key_position</code></td>
+  <td class="key-na">—</td><td class="key-na">—</td><td class="key-na">—</td><td class="key-na">—</td><td class="key-match">✓ 写</td><td class="key-na">—</td><td class="key-na">—</td><td class="key-warn">⚠ 不清</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><span class="badge badge-p0">P0</span> <b>expiresAt 键名断裂</b>：所有登录组件写入 <code>__webcraft_auth_expires_at</code>，但 AuthGuard codegen 读取 <code>storage.getItem("expiresAt")</code>（auth.ts:1483），键名不匹配导致过期检查永远读到 0 → 永远不过期。</p>
+<p><span class="badge badge-p1">P1</span> <b>ApiKey position 未清理</b>：LogoutButton 的 <code>clearAuthCache()</code> 扫描 <code>__webcraft_</code> 前缀键能覆盖到 <code>__webcraft_api_key_position</code> 和 <code>__webcraft_api_key_header</code>，但如果 tokenKey 被用户自定义为非 <code>__webcraft_</code> 前缀，则不会被清除。</p>
+
+<!-- ════════ 问题清单 ════════ -->
+<h2>四、问题清单（18 条）</h2>
+
+<!-- P0 -->
+<h3>P0 级 — 闭环断裂 / 安全风险</h3>
+
+<div class="issue issue-p0">
+  <div class="issue-header">
+    <h4>#1 expiresAt 存储键名不一致导致 AuthGuard 过期检查永久失效</h4>
+    <span class="badge badge-p0">P0</span>
+  </div>
+  <div class="issue-body">
+    所有登录组件（LoginForm/RegisterForm/OAuth/SSO）写入 <code>__webcraft_auth_expires_at</code>，但 AuthGuard codegen 在 <code>checkAuth()</code> 中读取 <code>storage.getItem("expiresAt")</code>（auth.ts:1483）。键名不匹配，<code>expiresAt</code> 变量永远是 <code>parseInt("0") = 0</code>，条件 <code>expiresAt > 0 && Date.now() >= expiresAt</code> 永远为 false，导致 JWT token 过期检查永久失效。
+  </div>
+  <div class="issue-evidence">
+    auth.ts:1079  setCachedValue("__webcraft_auth_expires_at", String(expiresAt));  ← Login 写
+    auth.ts:1483  var expiresAt = parseInt(storage.getItem("expiresAt") || "0", 10);  ← Guard 读 ← 键名不匹配！
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>将 auth.ts:1483 的 <code>"expiresAt"</code> 改为 <code>"__webcraft_auth_expires_at"</code>。同时检查 store 侧 <code>setLogin</code>（websiteAuthStore.ts:552）也写入 <code>"expiresAt"</code> 而非 <code>"__webcraft_auth_expires_at"</code>，需统一。
+  </div>
+</div>
+
+<div class="issue issue-p0">
+  <div class="issue-header">
+    <h4>#2 codegen 各 IIFE 的 memoryCache 互相隔离，memory 存储模式下跨组件状态不可见</h4>
+    <span class="badge badge-p0">P0</span>
+  </div>
+  <div class="issue-body">
+    每个 codegen 函数生成独立 IIFE，各自声明 <code>var memoryCache = {}</code>（auth.ts:688, 1957 等）。在 <code>tokenStorage: "memory"</code> 配置下，LoginForm 写入的 token 只存在于 Login IIFE 的 memoryCache 中，AuthGuard/UserProfile/LogoutButton 的 IIFE 各有自己的 memoryCache，读不到对方写入的值。<code>getStorage()</code> 返回 null，导致所有读写都走 memoryCache，但各 IIFE 的 memoryCache 不共享。
+  </div>
+  <div class="issue-evidence">
+    auth.ts:688   var memoryCache = {};  ← Login IIFE
+    auth.ts:1718  function getCachedValue(key) { ... storage.getItem(key) }  ← UserProfile IIFE，无 memoryCache！
+    auth.ts:1957  var memoryCache = {};  ← Logout IIFE
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>在 codegen 生成代码中，将 memoryCache 提升到全局作用域（<code>window.__webcraft_memory_cache = window.__webcraft_memory_cache || {}</code>），所有 IIFE 共享同一个对象。或改为在 <code>tokenStorage: "memory"</code> 时 fallback 到 sessionStorage，避免内存隔离问题。
+  </div>
+</div>
+
+<div class="issue issue-p0">
+  <div class="issue-header">
+    <h4>#3 UserProfile codegen 在 memory 存储模式下无法读取用户信息</h4>
+    <span class="badge badge-p0">P0</span>
+  </div>
+  <div class="issue-body">
+    UserProfile codegen 的 <code>getCachedValue(key)</code>（auth.ts:1718-1722）只从 storage 读取，<b>没有 memoryCache</b>。当 <code>tokenStorage: "memory"</code> 时，<code>getStorage()</code> 返回 null，<code>getCachedValue</code> 恒返回 null，导致 UserProfile 永远显示"未登录"，即使 Login 已经成功登录。这是 #2 的直接后果，但影响面更广。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>统一 UserProfile codegen 的 getCachedValue 实现，加入全局 memoryCache 支持（与 #2 修复联动）。
+  </div>
+</div>
+
+<div class="issue issue-p0">
+  <div class="issue-header">
+    <h4>#4 HttpAdapter 不监听 webcraft-token-expired 事件，token 过期后无法自动刷新</h4>
+    <span class="badge badge-p0">P0</span>
+  </div>
+  <div class="issue-body">
+    AuthGuard codegen 检测到 token 过期时 dispatch <code>webcraft-token-expired</code>（auth.ts:1489），期望触发刷新。但 HttpAdapter 的 <code>tryRefreshToken()</code> 只在 HTTP 401 响应时被动触发（HttpAdapter.ts:155），<b>不监听</b> <code>webcraft-token-expired</code> 事件。发布态下只有 LoginForm codegen 的 <code>performRefresh()</code> 监听此事件——但如果页面上没有 LoginForm 组件（比如只有 OAuth + AuthGuard），token 过期后无人刷新。
+  </div>
+  <div class="issue-evidence">
+    HttpAdapter.ts: grep "addEventListener" → 0 results
+    auth.ts:1337  window.addEventListener("webcraft-token-expired", function(e) { performRefresh() })  ← 只有 LoginForm
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>在 codegen 产物中注入一个独立的 token 刷新 IIFE（不依赖 LoginForm），或在 AuthGuard codegen 中内联 refresh 逻辑（fetch refreshEndpoint → setCachedValue → dispatch webcraft-token-refreshed）。方案二更简单：AuthGuard codegen 已有 dispatch 逻辑，在 dispatch 前直接执行刷新。
+  </div>
+</div>
+
+<div class="issue issue-p0">
+  <div class="issue-header">
+    <h4>#5 HttpAdapter 刷新成功后不 dispatch webcraft-token-refreshed 事件</h4>
+    <span class="badge badge-p0">P0</span>
+  </div>
+  <div class="issue-body">
+    HttpAdapter 的 <code>tryRefreshToken()</code> 成功后调用 <code>authState.setToken(newToken)</code>（HttpAdapter.ts:288），而 <code>setToken</code> 内部只 dispatch <code>auth-token</code> 事件（websiteAuthStore.ts:579），<b>不 dispatch <code>webcraft-token-refreshed</code></b>。AuthGuard codegen 监听的是 <code>webcraft-token-refreshed</code>（auth.ts:1603），不是 <code>auth-token</code>，因此 HttpAdapter 触发的刷新无法通知 AuthGuard 更新 UI（守卫不会从 fallback 切换回内容显示）。
+  </div>
+  <div class="issue-evidence">
+    HttpAdapter.ts:288  authState.setToken(newToken);  ← 内部 dispatch "auth-token" 而非 "webcraft-token-refreshed"
+    auth.ts:1603  window.addEventListener("webcraft-token-refreshed", function(e) { updateGuard(true); });  ← Guard 等的是这个
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>在 HttpAdapter.tryRefreshToken() 成功分支（HttpAdapter.ts:298 后）追加 <code>window.dispatchEvent(new CustomEvent("webcraft-token-refreshed", { detail: { token: newToken } }))</code>。或在 store 的 setToken 方法中追加 dispatch。
+  </div>
+</div>
+
+<div class="issue issue-p0">
+  <div class="issue-header">
+    <h4>#6 LoginForm basic auth 模式 expiresAt:0 传入 setLogin 导致 renderer 侧判定立即过期</h4>
+    <span class="badge badge-p0">P0</span>
+  </div>
+  <div class="issue-body">
+    LoginForm renderer 在 basic auth 模式下调用 <code>setLogin({ token: credentials, user, expiresAt: 0 }, "basic")</code>（LoginFormRenderer.tsx:479）。虽然 <code>checkExpired(0)</code> 返回 false（websiteAuthStore.ts:338），但这依赖于 <code>checkExpired</code> 的 <code>!expiresAt || expiresAt === 0</code> 短路。如果将来有人改 <code>checkExpired</code> 的逻辑（比如 <code>expiresAt <= 0</code>），basic auth 会立即过期。此外 codegen 侧 LoginForm 写入 <code>__webcraft_auth_expires_at</code> 的值为 <code>"0"</code>，AuthGuard 读到 0 后 <code>expiresAt > 0</code> 为 false 跳过过期检查——行为正确但依赖隐式约定。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>LoginForm renderer basic 模式不传 expiresAt（undefined），与 ApiKeyConfig renderer 的修复保持一致。codegen 侧 basic 模式不写 <code>__webcraft_auth_expires_at</code>。
+  </div>
+</div>
+
+<!-- P1 -->
+<h3>P1 级 — 逻辑不一致 / 边界缺陷</h3>
+
+<div class="issue issue-p1">
+  <div class="issue-header">
+    <h4>#7 LogoutButton codegen 不清除 OAuth/SSO 的 state 和 PKCE verifier</h4>
+    <span class="badge badge-p1">P1</span>
+  </div>
+  <div class="issue-body">
+    OAuth codegen 将 <code>__webcraft_oauth_state</code> 和 <code>__webcraft_pkce_verifier</code> 存入 sessionStorage（auth.ts:2471, 2482）。SSO codegen 将 <code>__webcraft_sso_state</code> 存入 sessionStorage。但 LogoutButton 的 <code>clearAuthCache()</code> 只扫描 <code>getStorage()</code> 返回的 storage（由 tokenStorage 配置决定），如果 tokenStorage 是 localStorage，sessionStorage 中的 state/verifier 不会被清除。这些残留的 state/verifier 在下次 OAuth/SSO 登录前可能被误用。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>LogoutButton codegen 的 <code>clearAuthCache()</code> 追加清除 sessionStorage 中的 <code>__webcraft_oauth_state</code>、<code>__webcraft_pkce_verifier</code>、<code>__webcraft_sso_state</code>。
+  </div>
+</div>
+
+<div class="issue issue-p1">
+  <div class="issue-header">
+    <h4>#8 ApiKeyConfig renderer 写入 __webcraft_auth_mode 为 "api-key"，但 store 的 WebsiteAuthMode 类型有 "api-key"</h4>
+    <span class="badge badge-p1">P1</span>
+  </div>
+  <div class="issue-body">
+    Store 类型定义 <code>WebsiteAuthMode = "session" | "jwt" | "basic" | "oauth" | "sso" | "api-key" | "oauth2"</code>（websiteAuthStore.ts:29），ApiKeyConfig renderer 传 <code>"api-key"</code> 是合法的。但 AuthGuard codegen 的 <code>checkAuth()</code> 只识别 <code>"basic"</code> 和 <code>"session"</code> 两个特殊模式（auth.ts:1471-1478），<code>"api-key"</code> 走默认的 JWT 分支（检查 token 存在 + 过期检查），而 API Key 不应该有过期检查（ApiKeyConfig 不写 expiresAt）。虽然 <code>checkTokenExpiry</code> 配置为 true 时会读 <code>expiresAt = 0</code> 然后跳过（0 不触发过期），但这是隐式正确。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>AuthGuard codegen 的 <code>checkAuth()</code> 追加 <code>if (authMode === "api-key") { return authFlag && !!token; }</code> 分支，与 basic 模式同等处理。
+  </div>
+</div>
+
+<div class="issue issue-p1">
+  <div class="issue-header">
+    <h4>#9 RegisterForm renderer 的 authMode 传值不精确</h4>
+    <span class="badge badge-p1">P1</span>
+  </div>
+  <div class="issue-body">
+    RegisterForm renderer 在 autoLogin 后调用 <code>setLogin(result, tokenStorage === "memory" ? "session" : "jwt")</code>（RegisterFormRenderer.tsx:186）。如果用户注册后实际是 OAuth/SSO 流程，authMode 被设为 "jwt" 或 "session" 而非 "oauth2"/"sso"。这会影响 AuthGuard 的模式感知检查和 HttpAdapter 的 header 构建（basic 模式用 Basic 前缀，其他用 Bearer 前缀）。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>RegisterForm 的 autoLoginAfterRegister 应增加 authMode 配置字段（或在 config 中加 <code>autoLoginMode</code>），不硬编码 "jwt"/"session"。
+  </div>
+</div>
+
+<div class="issue issue-p1">
+  <div class="issue-header">
+    <h4>#10 SSOButton codegen 的 token 交换请求缺少 Content-Type header</h4>
+    <span class="badge badge-p1">P1</span>
+  </div>
+  <div class="issue-body">
+    SSOButton codegen 的 token 交换 fetch（auth.ts 约 2990 行附近）发送 <code>application/x-www-form-urlencoded</code> 格式的 body，但 renderer 侧（SSOButtonRenderer.tsx:122-124）设置了 <code>Content-Type: application/x-www-form-urlencoded</code>。需确认 codegen 侧同样设置了此 header——查看 grep 结果 auth.ts:3003 附近确实有设置，但 SAML 协议的 token 交换可能需要不同的 Content-Type（部分 SAML IdP 要求 <code>application/soap+xml</code>）。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>SSO codegen 按 protocol 分支设置 Content-Type：OIDC 用 <code>application/x-www-form-urlencoded</code>，SAML 用 <code>application/soap+xml</code> 或配置驱动。
+  </div>
+</div>
+
+<div class="issue issue-p1">
+  <div class="issue-header">
+    <h4>#11 AuthGuard renderer 编辑模式 fallback 覆盖内容区但不阻止子组件交互</h4>
+    <span class="badge badge-p1">P1</span>
+  </div>
+  <div class="issue-body">
+    AuthGuard renderer 编辑模式下 <code>showFallback = isEdit || !isAuthenticated</code>（AuthGuardRenderer.tsx:100），fallback 用 <code>position: absolute, opacity: 0.55, pointerEvents: "none"</code> 覆盖在内容区上方。虽然 pointerEvents:none 不拦截交互，但视觉上 fallback 的背景色会遮挡子组件。与其他认证组件（RegisterForm/SSO/ApiKey）"编辑模式与预览一致"的约定不同——AuthGuard 编辑模式有虚线边框和路由守卫徽章。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>这是 AuthGuard 作为容器组件的特殊性，徽章和虚线边框是合理的。但 fallback 的 opacity 可以从 0.55 降到 0.3，减少视觉遮挡。或改为只显示 fallback 文字标签，不覆盖背景色。
+  </div>
+</div>
+
+<div class="issue issue-p1">
+  <div class="issue-header">
+    <h4>#12 LoginForm renderer 的 getWebsiteAuthState() 在 useEffect 外调用导致非响应式读取</h4>
+    <span class="badge badge-p1">P1</span>
+  </div>
+  <div class="issue-body">
+    LoginForm renderer 在 <code>handleDynamicLogin</code> 中调用 <code>getWebsiteAuthState()</code>（LoginFormRenderer.tsx:599）获取 <code>state.buildAuthHeaders()</code> 和 <code>state.setCachedValue()</code>。这是直接调用 store 的 getState()，不经过 React 的响应式系统。如果 buildAuthHeaders 依赖的状态在调用前刚被更新（例如 setConfig 的 useEffect 还没执行），可能读到旧值。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>将 <code>buildAuthHeaders</code> 和 <code>setCachedValue</code> 也通过 <code>useWebsiteAuthStore</code> hook 获取，确保响应式。或确保 useEffect 在 handleDynamicLogin 前已执行（React 保证 useEffect 在事件处理前已执行，所以风险较低，但代码可读性应改）。
+  </div>
+</div>
+
+<div class="issue issue-p1">
+  <div class="issue-header">
+    <h4>#13 OAuth/SSO renderer 回调处理时不检查 loginFormId 匹配</h4>
+    <span class="badge badge-p1">P1</span>
+  </div>
+  <div class="issue-body">
+    OAuth/SSO renderer 在 <code>handleOAuthCallback</code>/<code>handleSSOCallback</code> 中检查 URL 参数后直接执行 token 交换（OAuthButtonRenderer.tsx:101, SSOButtonRenderer.tsx:80）。如果页面上有多个 OAuth/SSO 按钮（指向不同 Provider），所有按钮都会尝试处理同一个回调 URL，可能导致重复 token 交换。LoginForm renderer 的 <code>webcraft-show-login</code> 监听也有类似问题（LoginFormRenderer.tsx:319 注释"接受所有"）。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>在 OAuth/SSO 回调处理中，检查 sessionStorage 中的 state 是否由本组件写入（可以在 state 中编码 clientId 前缀）。LoginForm 的 <code>webcraft-show-login</code> 监听应检查 <code>detail.loginFormId</code> 是否匹配自己的 componentId（需要将 componentId 传入 renderer，目前 renderer 拿不到自己的 id）。
+  </div>
+</div>
+
+<!-- P2 -->
+<h3>P2 级 — 改进建议</h3>
+
+<div class="issue issue-p2">
+  <div class="issue-header">
+    <h4>#14 store.logout() 的 clearAllCachedValues 只遍历 memoryCache，不扫描 storage 中非 __webcraft_ 前缀的键</h4>
+    <span class="badge badge-p2">P2</span>
+  </div>
+  <div class="issue-body">
+    store 的 <code>clearAllCachedValues()</code>（websiteAuthStore.ts:678-686）遍历 <code>Object.keys(memoryCache)</code> 并清除对应 storage 键。但如果用户自定义的 tokenKey 不以 <code>__webcraft_</code> 为前缀（如 <code>my_auth_token</code>），且该键只存在于 storage（未读过所以不在 memoryCache 中），则不会被清除。codegen 侧的 LogoutButton 用 <code>storage.length</code> 遍历解决了这个问题，但 store 侧没有。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>store 的 <code>clearAllCachedValues()</code> 追加扫描 storage 中所有以 <code>__webcraft_</code> 前缀的键（与 codegen 侧 LogoutButton 的做法一致），再额外清除配置的 tokenKey。
+  </div>
+</div>
+
+<div class="issue issue-p2">
+  <div class="issue-header">
+    <h4>#15 OAuthButton renderer 的 resolvedRedirectUri 计算在 useCallback 依赖中每次 render 变化</h4>
+    <span class="badge badge-p2">P2</span>
+  </div>
+  <div class="issue-body">
+    <code>resolvedRedirectUri</code>（OAuthButtonRenderer.tsx:98）在每次 render 时计算，如果 <code>redirectUri</code> 为空则拼接 <code>window.location.origin + "/callback"</code>。这导致 <code>handleOAuthCallback</code> 的 useCallback 依赖每次 render 变化，useCallback 失去缓存效果。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>将 <code>resolvedRedirectUri</code> 用 <code>useMemo</code> 包裹。
+  </div>
+</div>
+
+<div class="issue issue-p2">
+  <div class="issue-header">
+    <h4>#16 UserProfile renderer 同步 userDisplayConfig 到 store 的 useEffect 缺少 cleanup</h4>
+    <span class="badge badge-p2">P2</span>
+  </div>
+  <div class="issue-body">
+    UserProfile renderer 的 <code>useEffect(() => { setAuthConfig({ userDisplayConfig }); }, [userDisplayConfig, setAuthConfig])</code>（UserProfileRenderer.tsx:31-33）每次 userDisplayConfig 变化都调用 setAuthConfig，但没有 cleanup。如果 UserProfile 被卸载，store 中的 userDisplayConfig 不会被清除，可能影响 clearAllCachedValues 的行为（它依赖 userDisplayConfig 列表保留缓存键）。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>在 useEffect 的 cleanup 中调用 <code>setAuthConfig({ userDisplayConfig: [] })</code>，或不做（因为 store 是全局的，UserProfile 卸载后其他组件可能仍需 userDisplayConfig）。
+  </div>
+</div>
+
+<div class="issue issue-p2">
+  <div class="issue-header">
+    <h4>#17 LoginForm codegen 的 performRefresh 重试逻辑使用固定数组 [5, 15, 30]（秒），不可配置</h4>
+    <span class="badge badge-p2">P2</span>
+  </div>
+  <div class="issue-body">
+    LoginForm codegen 的 <code>performRefresh()</code> 失败后用 <code>var delays = [5, 15, 30]</code> 做指数退避重试（auth.ts:899）。这些延迟值不可配置，且最大重试次数固定为 3 次。HttpAdapter 侧也有独立的重试逻辑（HttpAdapter.ts:304），两套重试逻辑可能冲突。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>将重试策略统一到 store 层（或 HttpAdapter 层），移除 LoginForm codegen 中的重复重试逻辑。或将 delays 和 maxRetry 暴露为配置项。
+  </div>
+</div>
+
+<div class="issue issue-p2">
+  <div class="issue-header">
+    <h4>#18 ApiKeyConfig renderer 的 pointerEvents:none 在编辑模式下阻止子组件交互，与"编辑/预览一致"约定矛盾</h4>
+    <span class="badge badge-p2">P2</span>
+  </div>
+  <div class="issue-body">
+    ApiKeyConfig renderer 编辑模式用 <code>pointerEvents: "none"</code> 替代 disabled（ApiKeyConfigRenderer.tsx:128）。但 pointerEvents:none 会阻止整个 Box 的所有交互，包括 input 的 focus 和 button 的 hover。虽然编辑模式下不需要实际功能，但与 RegisterForm/SSO 的"编辑模式可交互但 disabled"模式不一致。LoginForm 编辑模式用 <code>disabled</code> 而非 pointerEvents。
+  </div>
+  <div class="issue-fix">
+    <b>修复：</b>统一编辑模式禁用方式。建议全部改为 <code>disabled</code>（MUI 组件原生支持），不使用 pointerEvents:none。ApiKeyConfig 之前的修复用 pointerEvents 是为了避免"灰显"，但 MUI 的 <code>disabled</code> 可以通过 sx 覆盖 <code>&.Mui-disabled { opacity: 1 }</code> 来避免灰显。
+  </div>
+</div>
+
+<!-- ════════ 闭环路径图 ════════ -->
+<h2>五、认证闭环路径图</h2>
+<p>理想认证闭环应覆盖以下 5 条路径。当前实现状态：</p>
+
+<div class="arch-diagram">
+<table>
+<thead>
+<tr><th>路径</th><th>流程</th><th>状态</th><th>断裂点</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><b>1. 密码登录</b></td>
+  <td>LoginForm → setLogin → auth-state-change → AuthGuard 放行 → UserProfile 显示</td>
+  <td><span class="badge badge-ok">✓ 通畅</span></td>
+  <td>—</td>
+</tr>
+<tr>
+  <td><b>2. 退出登录</b></td>
+  <td>LogoutButton → logout() → clearAllCachedValues → auth-state-change → AuthGuard 拦截 → UserProfile 清空</td>
+  <td><span class="badge badge-ok">✓ 通畅</span></td>
+  <td>sessionStorage 中 OAuth/SSO state 残留（#7）</td>
+</tr>
+<tr>
+  <td><b>3. 门禁拦截</b></td>
+  <td>AuthGuard 未认证 → webcraft-show-login → LoginForm 显示 → 登录成功 → auth-state-change → AuthGuard 放行 + LoginForm 自隐藏</td>
+  <td><span class="badge badge-ok">✓ 通畅</span></td>
+  <td>LoginForm 无法匹配 loginFormId（#13）</td>
+</tr>
+<tr>
+  <td><b>4. Token 过期刷新</b></td>
+  <td>AuthGuard 检测过期 → webcraft-token-expired → LoginForm performRefresh → fetch refreshEndpoint → webcraft-token-refreshed → AuthGuard 放行</td>
+  <td><span class="badge badge-broken">✗ 断裂</span></td>
+  <td>expiresAt 键名不匹配（#1）+ HttpAdapter 不监听也不 dispatch（#4, #5）+ memory 隔离（#2）</td>
+</tr>
+<tr>
+  <td><b>5. OAuth/SSO 回调</b></td>
+  <td>OAuth/SSO 跳转 → Provider 回调 → 组件挂载检测 URL → token 交换 → setLogin → auth-state-change → AuthGuard 放行</td>
+  <td><span class="badge badge-warn">⚠ 部分</span></td>
+  <td>多组件重复处理回调（#13）+ memory 存储下 UserProfile 读不到（#3）</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- ════════ 修复优先级 ════════ -->
+<h2>六、修复优先级建议</h2>
+
+<div class="card">
+<h3>第一批（P0 — 必须修复，影响核心功能）</h3>
+<table>
+<thead><tr><th>序号</th><th>问题</th><th>影响范围</th><th>修复复杂度</th></tr></thead>
+<tbody>
+<tr><td>#1</td><td>expiresAt 键名不一致</td><td>AuthGuard 过期检查全部失效</td><td>低（改 1 行字符串）</td></tr>
+<tr><td>#2</td><td>codegen IIFE memoryCache 隔离</td><td>memory 存储模式全部断裂</td><td>中（需统一全局 memoryCache）</td></tr>
+<tr><td>#3</td><td>UserProfile codegen 无 memoryCache</td><td>memory 模式 UserProfile 永远未登录</td><td>低（随 #2 一起修）</td></tr>
+<tr><td>#4</td><td>HttpAdapter 不监听 token-expired</td><td>非 LoginForm 场景 token 无法刷新</td><td>中（AuthGuard 内联刷新或注入独立 IIFE）</td></tr>
+<tr><td>#5</td><td>HttpAdapter 不 dispatch refreshed</td><td>HttpAdapter 刷新后 AuthGuard 不更新</td><td>低（追加 1 行 dispatchEvent）</td></tr>
+<tr><td>#6</td><td>LoginForm basic 模式 expiresAt:0</td><td>依赖隐式约定，脆弱</td><td>低（不传 expiresAt）</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="card">
+<h3>第二批（P1 — 应修复，影响边界场景）</h3>
+<table>
+<thead><tr><th>序号</th><th>问题</th><th>修复复杂度</th></tr></thead>
+<tbody>
+<tr><td>#7</td><td>Logout 不清 sessionStorage state/verifier</td><td>低</td></tr>
+<tr><td>#8</td><td>AuthGuard 不识别 api-key 模式</td><td>低</td></tr>
+<tr><td>#9</td><td>RegisterForm authMode 硬编码</td><td>低</td></tr>
+<tr><td>#10</td><td>SSO SAML Content-Type</td><td>中</td></tr>
+<tr><td>#11</td><td>AuthGuard 编辑模式 fallback 遮挡</td><td>低</td></tr>
+<tr><td>#12</td><td>LoginForm getWebsiteAuthState 非响应式</td><td>低</td></tr>
+<tr><td>#13</td><td>OAuth/SSO 回调不检查组件身份</td><td>中</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="card">
+<h3>第三批（P2 — 改进，非阻塞）</h3>
+<table>
+<thead><tr><th>序号</th><th>问题</th><th>修复复杂度</th></tr></thead>
+<tbody>
+<tr><td>#14</td><td>store.clearAllCachedValues 不扫 storage</td><td>低</td></tr>
+<tr><td>#15</td><td>OAuth resolvedRedirectUri useMemo</td><td>低</td></tr>
+<tr><td>#16</td><td>UserProfile useEffect cleanup</td><td>低</td></tr>
+<tr><td>#17</td><td>刷新重试策略不统一</td><td>中</td></tr>
+<tr><td>#18</td><td>ApiKey 编辑模式 pointerEvents 统一</td><td>低</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ════════ 总结 ════════ -->
+<h2>七、总结</h2>
+<div class="card">
+<p><b>认证闭环当前状态：</b>主链路（登录→守卫→展示→登出）在编辑态和 localStorage/sessionStorage 存储模式下基本通畅。但在以下 3 个维度存在系统性断裂：</p>
+<p><b>① 存储键命名不统一</b>（#1）—— <code>expiresAt</code> vs <code>__webcraft_auth_expires_at</code>，导致 AuthGuard 过期检查永久失效。这是一行代码的修复，但影响面最大。</p>
+<p><b>② memory 存储模式架构缺陷</b>（#2, #3）—— 各 codegen IIFE 的 memoryCache 互相隔离，UserProfile codegen 甚至没有 memoryCache。这不是 bug 而是架构设计缺陷：发布态没有像编辑态的 websiteAuthStore 那样的全局共享 store，需要引入 <code>window.__webcraft_memory_cache</code> 或 fallback 到 sessionStorage。</p>
+<p><b>③ Token 刷新链路断裂</b>（#4, #5）—— HttpAdapter 作为发布态的数据层，既不监听 <code>webcraft-token-expired</code> 也不 dispatch <code>webcraft-token-refreshed</code>，导致 HttpAdapter 触发的刷新与 AuthGuard/UserProfile 完全脱节。当前只有 LoginForm codegen 的 <code>performRefresh()</code> 能处理 token 过期，如果页面没有 LoginForm 组件则刷新链路完全断裂。</p>
+<p style="margin-top:16px"><b>修复后预期：</b>第一批 6 个 P0 问题修复后，5 条闭环路径将全部通畅。第二批和第三批可在后续迭代中逐步处理。</p>
+</div>
+
+</div>
+</body>
+</html>

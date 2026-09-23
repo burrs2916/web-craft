@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>字段型「文字随框缩放」- 2026-09-21</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: "PingFang SC", "Hiragino Sans GB", sans-serif; max-width: 980px; margin: 32px auto; padding: 0 20px; color: #1f2937; line-height: 1.75; background: #fff; }
+  h1 { font-size: 24px; border-bottom: 2px solid #1976d2; padding-bottom: 8px; }
+  h2 { font-size: 18px; margin-top: 32px; color: #0d47a1; }
+  .meta { color: #6b7280; font-size: 13px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-right: 6px; }
+  .p0 { background: #fee2e2; color: #b91c1c; } .ok { background: #dcfce7; color: #15803d; }
+  .note { background: #f8fafc; border-left: 3px solid #1976d2; padding: 10px 14px; margin: 14px 0; font-size: 14px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+  th, td { border: 1px solid #e5e7eb; padding: 7px 12px; text-align: left; }
+  th { background: #f1f5f9; }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<h1>第 11 轮：字段型「文字随框缩放」</h1>
+<p class="meta">2026-09-21 · 自动化续跑 · web-craft 表单组件组深化</p>
+
+<h2>一、开工先复核（三项上轮待办已过期）</h2>
+<ul>
+  <li><b>audio 动态资源</b>：两端已完整落地（编辑区 <code>useApiDataFetch</code> + 发布端 <code>dataLoaderScript</code> + 认证三态），上轮清单过期。</li>
+  <li><b>form-button 一键式动作</b>：<code>ButtonActionEditor</code> 已有 7 种快捷动作（navigate / openDialog / callApi / setVariable…），过期。</li>
+  <li><b>authEnabled:false 迁移</b>：决定<b>不做</b>——迁移会改变历史页面行为（站点全局认证开启时突然开始注入 Token，公开接口可能被拒），defaultConfig 显式 false 是面板诚实且自洽的状态，属产品决策，留待拍板。</li>
+</ul>
+
+<h2>二、本轮交付：7 个字段型组件的「文字随框缩放」</h2>
+<div class="note">
+<b>与 transform 缩放是两种机制，勿混。</b>字段层铺满拖动框、边框环随框走——几何已自动「随框」，
+缺的是<b>排版密度</b>：框放大后字号不动，4K 大屏「框大字小」（煤矿喷雾监控主视图即 3840×2160）。
+开启后字号按「框 / 注册表 defaultSize」倍率缩放；不碰几何、默认关（零回归）。
+</div>
+<h3>设计要点</h3>
+<ul>
+  <li><b>factor 编译期算出</b>：字段型没有缩放骨架、没有运行时量测脚本。编辑区读 props width/height（画布已传 = transform 尺寸），发布端读 <code>component.transform</code> —— 同源、零运行时开销。</li>
+  <li><b>唯一口径</b>：<code>editor/data/scaleFit.ts</code> 新增 <code>FIELD_FITS</code>（7 组件 ref= 各自 defaultSize，夹 0.5~4）+ <code>fieldScaleFactor(type, w, h, enabled)</code>；关闭 / 未知类型 / 尺寸未传恒为 1。</li>
+  <li><b>派生量自动跟随</b>：factor 只乘进 fontSize / labelFontSize 两个变量，图标宽（fontSize×1.2）、行高、占位字号等派生量自动跟随。</li>
+  <li><b>历史结论不冲突</b>：当初「字段型刻意不给 scaleFit」针对的是 transform 骨架方案（会让边框环与字段层脱开）；本方案只乘字号，不碰几何。</li>
+</ul>
+<h3>覆盖范围</h3>
+<p>面板（<code>fieldScaleFitField</code>，布局组）：form-input / textarea / select / date / time / number / file 共 7 个；两端各 7 处接线（date/time 共用 <code>DateTimeField</code> / <code>datetimeInputCodegen</code>）。</p>
+
+<h2>三、验证</h2>
+<table>
+  <tr><th>项</th><th>结果</th></tr>
+  <tr><td>tsc --noEmit（非 __measure__）</td><td>0 错误</td></tr>
+  <tr><td>vitest 全量</td><td><b>890 passed / 68 files</b>（+7，新增 form-field-scale.test.ts 契约锁）</td></tr>
+  <tr><td>诚实性扫描器</td><td>6/6 全绿（扫描器容器改 defaultSize×2，修复 textarea refH 恰好=120 导致 factor=1 的误报）</td></tr>
+  <tr><td>vite build</td><td>✓ 12.88s</td></tr>
+  <tr><td>浏览器双端取证（560×112 框）</td><td><b>编辑区 = 发布端</b>：开启 28px/28px，关闭 14px/14px（label 与 input 一致）</td></tr>
+</table>
+<p><b>未 git commit。</b>扫描器容器改动同步注释进 <code>panel-honesty-scan.test.ts</code>（下次重写必读）。</p>
+
+<h2>四、剩余待办（复核后真实清单）</h2>
+<ul>
+  <li>DataVRenderer chunk 586 kB 拆分（纯性能优化）。</li>
+  <li>authEnabled 迁移（产品决策，等待拍板）。</li>
+</ul>
+</body>
+</html>

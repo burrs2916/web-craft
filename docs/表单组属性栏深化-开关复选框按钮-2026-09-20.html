@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>表单组属性栏深化：开关 / 复选框 / 按钮 · 舞台摆放两端同源修复 · 2026-09-20</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#fff; --ink:#1c1f24; --ink2:#4a5058; --ink3:#7a828c;
+    --line:#e3e6eb; --accent:#1976d2; --warn:#c62828; --ok:#1b7f4b; --code:#f1f3f6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.7 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 24px 72px}
+  header{border-bottom:2px solid var(--ink);padding-bottom:16px;margin-bottom:28px}
+  h1{margin:0 0 6px;font-size:24px;letter-spacing:.2px}
+  .sub{color:var(--ink3);font-size:12.5px}
+  h2{font-size:16px;margin:36px 0 12px;padding-left:9px;border-left:3px solid var(--accent)}
+  h3{font-size:13.5px;margin:22px 0 8px;color:var(--ink2)}
+  p{margin:8px 0}
+  ul,ol{margin:8px 0;padding-left:20px}
+  li{margin:4px 0}
+  code{background:var(--code);padding:1px 5px;border-radius:3px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  pre{background:#20242b;color:#dfe4ea;padding:12px 14px;border-radius:6px;overflow-x:auto;
+    font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  table{border-collapse:collapse;width:100%;background:var(--panel);margin:10px 0;font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+  th{background:#eef1f5;font-weight:600;white-space:nowrap}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:12px 0}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;border:1px solid var(--line);
+    background:#eef1f5;color:var(--ink2);margin-right:6px}
+  .tag.p1{background:#fdecea;border-color:#f5c6c0;color:var(--warn)}
+  .tag.p2{background:#fff4e5;border-color:#f3d9b5;color:#a35b00}
+  .tag.ok{background:#e8f5ee;border-color:#bfe3ce;color:var(--ok)}
+  .tag.new{background:#e8f1fb;border-color:#c2dcf6;color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  .k{color:var(--ink3);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px}
+  .v{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;word-break:break-all}
+  .ev{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--ok);
+    border-radius:0 6px 6px 0;padding:10px 14px;margin:8px 0}
+  .ev.bad{border-left-color:var(--warn)}
+  .muted{color:var(--ink3);font-size:12.5px}
+  .foot{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);color:var(--ink3);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>表单组属性栏深化：开关 / 复选框 / 按钮 · 舞台摆放两端同源修复</h1>
+  <div class="sub">WebCraft 网站编辑器 · 自动化任务 #8 · 2026-09-20 · 未 git commit</div>
+</header>
+
+<h2>一、开工复核：先修好"取证工具"本身</h2>
+<p>本轮开工第一件事是复核前七轮的结论。查 <code>codegen/components/index.ts</code> 注册表确认：表单 17 / 媒体 3 / 表格 5 / 图标 3 / 形状 / 装饰 45 全部有发布端实现，任务原文「从标签组件开始都没完成」确实是 P0 时期的状态。于是本轮做的是<b>深度</b>而不是补注册。</p>
+<p>随后按第 7 轮留下的待办，要对 form-switch / form-checkbox / form-button 做<b>编辑区侧</b>真值取证（与已完成的发布端 headless 探针对照）。结果 <code>src/__measure__</code> 真值页的 <code>#out</code> 始终停在 <code>"boot"</code>（长度 4），意味着 React 应用模块从未执行。</p>
+<div class="ev bad">
+  <span class="tag p1">根因</span>
+  <p>用 <code>--enable-logging=stderr</code> 抓控制台，拿到唯一一条真实错误：</p>
+  <pre>Uncaught ReferenceError: FormButtonRenderer is not defined
+  source: http://127.0.0.1:8791/assets/measure-DqiMdTwM.js (256)</pre>
+  <p><code>src/__measure__/main.tsx</code> 用了 <code>&lt;FormButtonRenderer /&gt;</code> 但漏了 import——模块在<b>求值阶段</b>就抛异常，所以 <code>#out</code> 连 <code>"module-ran"</code> 都写不进去。此前把现象误判为"ES module 在 headless 下加载失败 / dump-dom 时序"，实际是一次普通的漏 import。<b>教训：dump-dom 拿到空结果时，先看控制台，别先怀疑时序。</b></p>
+</div>
+<p>补上 import 后真值页立刻可用，从而拿到了编辑区侧的第一手读数。</p>
+
+<h2>二、form-switch（16 → 28 字段）与 form-checkbox（17 → 26 字段）</h2>
+<p>两者共用一份新口径 <code>src/editor/data/toggleStyle.ts</code>，把"开关/复选框的外观与排版"收成纯函数，编辑区渲染器与发布端 codegen 都只读它。</p>
+
+<h3>新增字段</h3>
+<div class="grid">
+  <div class="card">
+    <div class="k">form-switch <span class="tag new">2.0.0</span> <span class="tag">28 字段</span></div>
+    <ul>
+      <li>外观层：<code>bgColor</code> / <code>borderColor</code> / <code>borderWidth</code> / <code>borderRadius</code>（默认 0）/ <code>paddingX</code> / <code>paddingY</code> / <code>opacity</code> / <code>fontWeight</code></li>
+      <li>开关皮肤：<code>trackOffColor</code>（默认 <code>#ffffff</code>）/ <code>trackOffOpacity</code>（0.3）/ <code>trackOnOpacity</code>（0.5）/ <code>thumbOffColor</code>（<code>#E0E0E0</code>）</li>
+      <li>原有：内容 / 校验 / 布局(<code>scaleFit</code>/<code>align</code>/<code>vAlign</code>) / 状态 / 样式</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="k">form-checkbox <span class="tag new">2.0.0</span> <span class="tag">26 字段</span></div>
+    <ul>
+      <li>外观层：与开关同一组（复用 <code>toggleAppearanceSchemaFields</code>）</li>
+      <li>未选中色：<code>uncheckedColor</code>（缺省跟随 <code>accentColor</code>）</li>
+      <li><code>fontWeight</code> 与未选中色此前只有编辑区认，发布端完全不认 → 已两端同源</li>
+    </ul>
+  </div>
+</div>
+
+<div class="ev">
+  <span class="tag ok">关键约束</span>
+  <b>外观层（底色 / 内边距 / 圆角 / 不透明度 / 边框）必须挂在"缩放内层"</b>才能随拖动框缩放。挂在最外层就成了"框变而底色不动"。本轮的 <code>toggleShellCss()</code> 只输出<b>显式配置过</b>的声明——默认返回空对象，因此零配置的产物与改动前逐字一致（零回归实测见第六节）。
+</div>
+
+<h2>三、form-button（19 → 22 字段）：修掉两个假控件</h2>
+<p>探针实测确认：改动前按钮恒 <code>width/height:100%</code> 铺满容器，面板上的 <code>size</code>（小/中/大）与 <code>fullWidth</code>（宽度撑满）<b>改了产物毫无变化</b>——典型假能力。</p>
+<p>现在默认走「自然尺寸 + 居中 + 随拖动框等比缩放」骨架（与表单组其他成员同一套三层结构）：</p>
+<ul>
+  <li><code>size</code> 兑现为盒高与左右内距：<code>BUTTON_SIZE_BOX</code> = small 32/12、medium 38/16、large 44/22</li>
+  <li>自然宽由文本决定；缩放系数 <code>BUTTON_FIT</code> = refW 120 / refH 40，夹在 0.4~6</li>
+  <li><code>fullWidth=true</code> 时退回铺满模式（此时它在面板上才真正有意义）</li>
+  <li><code>scaleFit=false</code> 仍居中但系数恒 1，且不挂缩放脚本</li>
+</ul>
+<p>发布端改由新的共享构造函数 <code>buildButtonFitHTML()</code> 产出，与编辑区实时渲染走同一份结构。</p>
+
+<h2>四、<span class="tag p1">P1 真 bug</span>舞台摆放两端分叉：画布靠左、发布居中</h2>
+<p>这是本轮挖到的<b>真正打破"发布与预览效果相同"</b>的缺陷，也是本轮最有价值的修复。</p>
+
+<h3>现象</h3>
+<p>第 4 轮已经把默认摆放收口成 <code>STAGE_ALIGN_DEFAULT = "center"</code>，并同步改了面板 <code>defaultConfig</code>。但收口只做了一半——<b>只有发布端读了它</b>：</p>
+<pre>// 编辑区 src/editor/renderers/FormSwitchRenderer.tsx:44
+const align = String(config.align ?? "left");        // ← 回退值写死 left
+
+// 发布端 src/codegen/components/form.ts:1249
+align: String(c.align ?? STAGE_ALIGN_DEFAULT),       // ← center</pre>
+<p>于是配置里<b>没有 <code>align</code> 键</b>时（老场景保存的配置、或面板值被清空），画布靠左、发布端居中。真值页实测证据：</p>
+<pre>修复前 · 编辑区 cN：stage: justify=flex-start
+修复前 · 发布端 cN：stage: justify=center        ← 同一份配置，两种观感</pre>
+
+<h3>波及面审计（不猜，逐文件核实）</h3>
+<table>
+  <thead><tr><th>组件</th><th>编辑区回退</th><th>发布端回退</th><th>判定</th></tr></thead>
+  <tbody>
+    <tr><td>form-switch</td><td><code>?? "left"</code></td><td><code>?? STAGE_ALIGN_DEFAULT</code></td><td><span class="tag p1">分叉</span></td></tr>
+    <tr><td>form-checkbox</td><td><code>?? "left"</code></td><td><code>?? STAGE_ALIGN_DEFAULT</code></td><td><span class="tag p1">分叉</span></td></tr>
+    <tr><td>form-radio</td><td><code>?? "left"</code></td><td><code>?? STAGE_ALIGN_DEFAULT</code></td><td><span class="tag p1">分叉</span></td></tr>
+    <tr><td>form-segmented</td><td><code>?? "left"</code></td><td><code>?? "left"</code></td><td><span class="tag p2">与自身面板默认值(center)相反，两端恰好一致</span></td></tr>
+    <tr><td>form-rate</td><td><code>?? "left"</code></td><td><code>?? "left"</code></td><td><span class="tag ok">一致，不动</span></td></tr>
+    <tr><td>audio</td><td><code>?? "left"</code></td><td><code>?? "left"</code></td><td><span class="tag ok">一致（语义是内容行 justify，非舞台）</span></td></tr>
+  </tbody>
+</table>
+
+<h3>修复：把"回退"这一步也收成唯一口径</h3>
+<p>根因不是常量没定，而是<b>"对 <code>align</code> 求值"这件事被写了两遍</b>。所以在 <code>editor/data/scaleFit.ts</code> 增加唯一入口，两端都必须调它：</p>
+<pre>export function stageAlignOf(config: Record&lt;string, unknown&gt;): string {
+  return String(config.align ?? STAGE_ALIGN_DEFAULT);
+}
+export function stageVAlignOf(config: Record&lt;string, unknown&gt;): string {
+  return String(config.vAlign ?? STAGE_VALIGN_DEFAULT);
+}</pre>
+<p>编辑区 5 个渲染器（switch / checkbox / radio / button / segmented）与发布端 2 处 codegen（<code>form.ts</code> 4 个组件点位 + <code>segmented.ts</code>）全部改调它。</p>
+
+<h3>顺带修掉第二个同类缺陷：切 <code>scaleFit</code> 开关内容会跳位</h3>
+<p>审计中还发现 <code>codegen/shared/scaleSkeleton.ts</code> 里有一层<b>重复映射</b>：</p>
+<pre>// 修复前：两条分支用两套映射，对未知值的处理不同
+function toAlign(v){ return v==="right"?"right" : v==="left"?"left" : "center"; }  // 未知 → center
+// 而唯一口径 alignToFlex() 是：未知 → flex-start
+
+if (o.scaleFit) { ...align: toAlign(o.align)... }   // 走 toAlign
+else            { ...scaleStageCss(o.align, ...) }  // 走 alignToFlex</pre>
+<p>同一个 <code>align</code> 值，<code>scaleFit</code> 开时居中、关时靠左——<b>切一个开关内容就跳位</b>。<code>toAlign</code> / <code>toVAlign</code> 已删除，两条分支统一把原始值交给 <code>scaleStageCss</code>（它对 <code>undefined</code> 用形参缺省取 <code>STAGE_ALIGN_DEFAULT</code>）；<code>scaleFitStage</code> 里硬编码的 <code>?? "center"</code> 也一并去掉，避免第三处默认值。</p>
+
+<h2>五、authEnabled 三态：面板终于能表达第三态</h2>
+<p>这是横切基础设施缺口——第 7 轮记录为「"认证接入灵活全面"的最后一块」。三态语义：<code>null</code> 跟随站点全局 / <code>true</code> 强制注入 / <code>false</code> 明确不注入。</p>
+<div class="ev bad">
+  <p><b>修复前</b>：面板是 toggle，只有开/关两态，第三态在 UI 上表达不了；更糟的是 toggle 对 <code>undefined</code> 渲染成 OFF，而 codegen 把 <code>undefined</code> 当"跟随全局"——<b>面板在骗人</b>。临时对策是 <code>defaultConfig</code> 里显式落 <code>authEnabled: false</code>，治标不治本。</p>
+  <p><b>修复后</b>：新增 <code>editor/data/fieldSelect.ts</code>（<code>sameOptionValue</code> / <code>selectDisplayValue</code> / <code>resolveSelectValue</code> / <code>readTriState</code>）与 <code>editor/data/authMode.ts</code>（<code>AUTH_ENABLED_OPTIONS</code> / <code>authEnabledField()</code> / <code>readAuthEnabled()</code>），把 <code>authEnabled</code> 从 toggle 换成三态 select，并统一全仓取值入口。</p>
+</div>
+<p>顺带修掉一个真实的<b>两端相反</b>缺陷：面板 select 写回字符串时把 <code>false</code> 变成 <code>"false"</code>，而 <code>Boolean("false")</code> 为真——同一份配置在编辑区与发布端行为相反。<code>readTriState()</code> 对 <code>"false"</code> 字符串做了特判。</p>
+<p>同类问题也出现在 echart-pie 的玫瑰图开关上：<code>config.roseType || false</code> 让历史脏值 <code>"false"</code> 成真值，编辑区画玫瑰图、发布端画普通饼图。已改为白名单判据 <code>roseType === "radius" || roseType === "axis"</code> 两端口径一致。</p>
+
+<h2>六、两端逐项取证对照（真实 Chrome，非推断）</h2>
+<p>方法：发布端用临时探针产出 HTML 后 <code>--headless=new --window-size=1920,1080 --virtual-time-budget --dump-dom</code> 读读数；编辑区用 <code>src/__measure__</code> 真值页（本地 HTTP 服务 + 同一 dump-dom 手法）。<b>测量容器已做成同构</b>（<code>*{box-sizing:border-box}</code> + 1px 边框 + 同宽高），否则会量出假分叉。样本盒 300×150（fullWidth 用 300×56）。</p>
+<table>
+  <thead><tr><th>用例</th><th>项目</th><th>编辑区</th><th>发布端</th><th>判定</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="6">cN 开关<br>外观层</td><td>舞台</td><td>298×148 justify=<b>center</b></td><td>298×148 justify=<b>center</b></td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>内层 transform</td><td><code>matrix(1.49,…)</code></td><td><code>matrix(1.49,…)</code></td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>内层外观</td><td><code>#ffeeaa / 4px 10px / 20px / .8 / 2px #333</code></td><td>逐字相同</td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>轨道</td><td><code>#ffffff</code> opacity 0.3</td><td><code>#ffffff</code> opacity 0.3</td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>滑块</td><td><code>#E0E0E0</code></td><td><code>#E0E0E0</code></td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>标签字重</td><td>400</td><td>400</td><td><span class="tag ok">✓</span></td></tr>
+
+    <tr><td rowspan="4">cN2 开关<br>皮肤（on 态）</td><td>轨道</td><td><code>#1976d2</code> opacity 0.9</td><td><code>#1976d2</code> opacity 0.9</td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>滑块</td><td><code>#1976d2</code></td><td><code>#1976d2</code></td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>标签字重</td><td>700</td><td>700</td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>内层外观（全默认）</td><td><code>rgba(0,0,0,0)/0px/0px/1</code></td><td>逐字相同</td><td><span class="tag ok">✓ 零回归</span></td></tr>
+
+    <tr><td rowspan="3">cO 复选框<br>外观 + 未选中色</td><td>内层外观</td><td><code>#e0f2ff / 6px 12px / 20px</code></td><td>逐字相同</td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>未选中色</td><td><code>rgb(255,0,0)</code></td><td>svg fill 命中 <code>rgb(255,0,0)</code></td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>标签字重</td><td>700</td><td>700</td><td><span class="tag ok">✓</span></td></tr>
+
+    <tr><td rowspan="2">cP 按钮<br>默认(natural)</td><td>内层 transform</td><td><code>matrix(2.48,…)</code></td><td><code>matrix(2.48333,…)</code></td><td><span class="tag ok">✓</span></td></tr>
+    <tr><td>按钮盒</td><td>视觉 149×94.4，<code>h=38px pad=0px 16px</code>，中心 = 盒中心</td><td>视觉 149×94，<code>h=38px pad=0px 16px</code></td><td><span class="tag ok">✓ 居中+等比</span></td></tr>
+
+    <tr><td>cP2 按钮<br>fullWidth</td><td>按钮盒</td><td>298×54 <code>h=54px pad=1px 6px</code></td><td>298×54 <code>h=54px pad=1px 6px</code></td><td><span class="tag ok">✓ 铺满</span></td></tr>
+  </tbody>
+</table>
+<p class="muted">注：几何上出现的 0.4~0.5px 差异（如 205.6 → 206）来自探针读数取整，非产品差异。缩放系数 1.49 / 2.48 由待测盒的内容尺寸（298×148）经同一份 <code>fitFactor</code> 算出：298/200=1.49（SWITCH_FIT）、298/120=2.4833（BUTTON_FIT）。</p>
+
+<h2>七、契约锁（新增/扩充）</h2>
+<table>
+  <thead><tr><th>文件</th><th>锁住什么</th></tr></thead>
+  <tbody>
+    <tr><td><code>codegen/__test__/form-group-scale.test.ts</code></td><td><b>扩充 +15 项</b>（现 48 项）：① <code>stageAlignOf/stageVAlignOf</code> 缺省给默认值、显式值原样透传；② 发布端未配置 <code>align</code> 时舞台必须居中；③ <b>同一份配置在 scaleFit 开/关两侧的舞台摆放逐字一致</b>（锁住第二个缺陷）；④ 源码守卫：用 <code>stageAlignOf</code> 的组件，其编辑区渲染器必须走同一入口且不得再出现硬编码回退字面量</td></tr>
+    <tr><td><code>editor/__test__/field-select.test.ts</code>（新）</td><td>select 取值往返 + <code>readTriState</code> + 三态字段联动</td></tr>
+    <tr><td><code>codegen/__test__/auth-tri-state.test.ts</code>（新）</td><td>三态产物字面量（<code>var authEnabled = null/true/false</code>）+ pie roseType 白名单</td></tr>
+    <tr><td><code>editor/__test__/toggle-schema.test.ts</code>（新）</td><td>开关/复选框字段集与取值口径（30 项）</td></tr>
+    <tr><td><code>codegen/__test__/toggle-codegen.test.ts</code>（新）</td><td>「面板控件必须能改变产物」逐字段 + 外观层必须落缩放内层（10 项）</td></tr>
+    <tr><td><code>codegen/__test__/state-rule-inline-conflict.test.ts</code></td><td>开关配色断言改读 <code>toggleStyle</code> 常量（不再写死色值）</td></tr>
+  </tbody>
+</table>
+<div class="ev">
+  <span class="tag">为什么第 ④ 条只能靠源码守卫</span>
+  jsdom 不实现 CSS 级联，MUI <code>sx</code> 产出的 emotion 类规则在单测里读不到最终 <code>justify-content</code>；行为侧唯一的真值来自真实浏览器（真值页 + headless Chrome）。所以用例负责在"<b>两端取值入口</b>"这一层把分叉钉死，浏览器探针负责确认最终几何——两者缺一不可。
+</div>
+
+<h2>八、验证结果</h2>
+<div class="grid">
+  <div class="card"><div class="k">tsc --noEmit</div><div class="v">非 <code>__measure__</code> 错误 <b>0</b>（预存 23 个 <code>__measure__</code> 错误与业务无关）</div></div>
+  <div class="card"><div class="k">vitest</div><div class="v"><b>824 passed / 64 files / 0 failed</b>（清理 5 个临时探针文件后的最终态；清理前 829/69）</div></div>
+  <div class="card"><div class="k">vite build</div><div class="v">✓ built in <b>10.96s</b>（<code>env -u NODE_OPTIONS … --emptyOutDir</code>）</div></div>
+  <div class="card"><div class="k">真实浏览器</div><div class="v">发布端 7 个探针 + 编辑区真值页，关键读数逐项相同</div></div>
+</div>
+<p><b>未 git commit</b>（用户铁律）。工作树保持未提交状态。</p>
+
+<h2>九、变更文件</h2>
+<ul>
+  <li><code>src/editor/data/scaleFit.ts</code> — 新增 <code>stageAlignOf()</code> / <code>stageVAlignOf()</code>（舞台摆放唯一取值入口）</li>
+  <li><code>src/editor/renderers/FormSwitchRenderer.tsx</code> · <code>FormCheckboxRenderer.tsx</code> · <code>FormRadioRenderer.tsx</code> · <code>FormButtonRenderer.tsx</code> · <code>SegmentedRenderer.tsx</code> — 舞台摆放改走统一入口（修分叉）</li>
+  <li><code>src/codegen/components/form.ts</code> — 4 处摆放取值改走统一入口</li>
+  <li><code>src/codegen/components/segmented.ts</code> — 同上</li>
+  <li><code>src/codegen/scaleFit.ts</code> — 去掉硬编码 <code>?? "center"</code>，摆放值不再二次映射</li>
+  <li><code>src/codegen/shared/scaleSkeleton.ts</code> — 删除 <code>toAlign</code> / <code>toVAlign</code>，两条分支统一映射</li>
+  <li><code>src/codegen/__test__/form-group-scale.test.ts</code> — 新增「舞台摆放两端同源」契约锁（+15 项）</li>
+  <li><code>src/__measure__/main.tsx</code> — 补 <code>FormButtonRenderer</code> import（修好真值页）+ cN/cN2/cO/cP/cP2 测量单元与 <code>msk()</code></li>
+  <li>本轮前半（表单组属性栏深化）：<code>editor/data/fieldSelect.ts</code> · <code>authMode.ts</code> · <code>toggleStyle.ts</code>（新）· <code>codegen/shared/button.ts</code> · <code>editor/registerFormComponents.ts</code> · 约 24 个 codegen 组件 + 约 14 个编辑区渲染器（<code>readAuthEnabled</code> 统一）</li>
+  <li>清理：11 个历史临时探针文件移入 <code>.workbuddy/trash/2026-09-20-round8/</code>（可逆备份，未删除；其中 6 个 <code>.test.ts</code> 已加 <code>.bak</code> 后缀以免被 vitest 扫到）</li>
+</ul>
+
+<h2>十、下一轮起点</h2>
+<ol>
+  <li><b>form-button 的"点击行为"</b>仍未落地（当前只有 <code>type</code>/<code>variant</code>/<code>size</code>，没有跳转/提交/弹窗等 action 配置）——这是按钮组最后一个明显缺口。</li>
+  <li><b>form-rate 的舞台摆放</b>：<code>RateRenderer.tsx:56</code> 与 <code>rate.ts:59</code> 两端都写 <code>?? "left"</code>（目前一致所以不是 bug），但它用的是自己的一套 <code>alignMap</code> + 独立舞台，未接入 <code>scaleStageCss</code> / <code>stageAlignOf</code>。建议统一，顺带接入同源锁。</li>
+  <li>面板 <code>authEnabled</code> 已可用三态 select 表达，但<b>历史场景里已落成 <code>false</code> 的默认值</b>会掩盖"跟随全局"——可考虑一次性迁移（把显式 <code>false</code> 且从未被用户触碰过的记录还原为 <code>null</code>）。</li>
+  <li>媒体组 <code>audio</code> 是否也需要动态资源（image/video 已有）。</li>
+  <li><code>DataVRenderer</code> 被 codegen 静态引用 → 该 chunk 586 kB，可拆 chunk（功能无影响）。</li>
+  <li>20 个原生装饰的属性栏仍偏薄（5~14 项）→ 搬形状组的填充/描边/效果片段。</li>
+</ol>
+
+<div class="foot">
+  报告由自动化任务 #8 生成 · 所有读数来自真实 Chrome headless（发布端 <code>--dump-dom</code> 探针 / 编辑区 measure 真值页）与 vitest 契约锁，非推断 · 未 git commit。
+</div>
+
+</div>
+</body>
+</html>
