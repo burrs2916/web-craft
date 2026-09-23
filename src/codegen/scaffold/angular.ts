@@ -22,6 +22,7 @@ import { generateProjectGlobalConfigScript } from "./globalConfig";
 import { buildViewportFitScript } from "../viewport";
 import { generateDataScript } from "./data";
 import { buildPageCSS, buildLayerCSS } from "../shared/webstyles";
+import { generateScaffoldResponsiveCSS } from "./responsive";
 import { buildAngularEnvironmentContent, buildHttpClientSource, buildApiIndexSource } from "../shared/apiClient";
 
 export const generateAngularProject: ScaffoldGenerator = (ctx: ScaffoldContext): ProjectFile[] => {
@@ -296,6 +297,7 @@ export const generateAngularProject: ScaffoldGenerator = (ctx: ScaffoldContext):
     const body = sceneView ? generateViewBody(sceneView, scene, ctx.iconData) : null;
     const rawHTML = body?.html ?? "";
     const componentStyles = body?.styles ?? [];
+    const responsiveCss = generateScaffoldResponsiveCSS(sceneView?.components ?? []);
     const eventResult = generateEventsScript(body?.events ?? []);
     const dataResult = sceneView ? generateDataScript(sceneView, scene) : { hasData: false, inlineScript: "", module: "", bindingCount: 0 };
 
@@ -381,6 +383,7 @@ export const generateAngularProject: ScaffoldGenerator = (ctx: ScaffoldContext):
           .filter((l) => l.visible)
           .map((l) => buildLayerCSS({ name: l.fileName, opacity: l.opacity })),
         ...(componentStyles.length > 0 ? [``, ...componentStyles] : []),
+        ...(responsiveCss.length > 0 ? [``, responsiveCss] : []),
       ].join("\n");
       files.push({
         path: `src/app/pages/${v.fileName}/${v.fileName}.component.css`,
@@ -475,6 +478,7 @@ export const generateAngularProject: ScaffoldGenerator = (ctx: ScaffoldContext):
         `  height: 100%;`,
         `}`,
         ...(componentStyles.length > 0 ? [``, ...componentStyles] : []),
+        ...(responsiveCss.length > 0 ? [``, responsiveCss] : []),
       ].join("\n");
       files.push({
         path: `src/app/pages/${v.fileName}/${v.fileName}.component.css`,

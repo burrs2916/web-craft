@@ -18,6 +18,7 @@ import { generateDataScript } from "./data";
 import { generateProjectGlobalConfigScript } from "./globalConfig";
 import { buildViewportFitScript } from "../viewport";
 import { buildPageCSS, buildLayerCSS } from "../shared/webstyles";
+import { generateScaffoldResponsiveCSS } from "./responsive";
 import { buildStaticHttpClientSource } from "../shared/apiClient";
 
 export const generateStaticHtmlProject: ScaffoldGenerator = (ctx: ScaffoldContext): ProjectFile[] => {
@@ -113,6 +114,7 @@ export const generateStaticHtmlProject: ScaffoldGenerator = (ctx: ScaffoldContex
     const hasMultipleLayers = layers.length > 0;
 
     // 页面级 CSS 分离：画布(视图) + 各图层(图层维度) + 组件样式抽为独立 /pages/{name}.css
+    const responsiveCss = generateScaffoldResponsiveCSS(sceneView?.components ?? []);
     const pageCss = [
       buildPageCSS({
         name: v.fileName,
@@ -124,6 +126,7 @@ export const generateStaticHtmlProject: ScaffoldGenerator = (ctx: ScaffoldContex
         ? layers.filter((l) => l.visible).map((l) => buildLayerCSS({ name: l.fileName, opacity: l.opacity }))
         : []),
       ...(componentStyles.length > 0 ? [``, ...componentStyles] : []),
+      ...(responsiveCss.length > 0 ? [``, responsiveCss] : []),
     ].join("\n");
     // 页面专用样式文件（CSS/JS/HTML 分离）
     files.push({
