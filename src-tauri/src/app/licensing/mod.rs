@@ -1,4 +1,4 @@
-//! Licensing service for Biosphere Terminal.
+//! Licensing service for WebCraft.
 //!
 //! Implements a 14-day free trial followed by a one-time Pro unlock.
 //! The trial start time and unlock state are persisted to a JSON file

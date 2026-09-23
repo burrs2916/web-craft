@@ -56,3 +56,11 @@ pub fn get_terminal_cwd(
 ) -> Result<Option<String>, String> {
     terminal_service.get_cwd(&session_id).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn terminal_session_alive(
+    session_id: String,
+    terminal_service: State<'_, Arc<TerminalService>>,
+) -> bool {
+    terminal_service.session_alive(&session_id)
+}

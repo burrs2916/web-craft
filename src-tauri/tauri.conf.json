@@ -4,7 +4,7 @@
   "version": "0.6.2",
   "identifier": "com.webcraft.app",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "true",
     "devUrl": "http://localhost:1521",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
@@ -20,7 +20,9 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
-        "transparent": false
+        "transparent": false,
+        "dragDropEnabled": false,
+        "devtools": true
       }
     ],
     "security": {

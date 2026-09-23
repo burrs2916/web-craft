@@ -705,7 +705,7 @@ pub(crate) fn run_ssh_command_with_timeout(ssh: &SshConnectionInfo, command: &st
         .map_err(|e| format!("take writer failed: {}", e))?;
 
     let password = ssh.password.clone();
-    let password_auth = ssh.auth_method == "password" && password.is_some();
+    let password_auth = password.is_some() && !password.as_deref().unwrap_or("").is_empty();
 
     let output_arc: Arc<std::sync::Mutex<String>> = Arc::new(std::sync::Mutex::new(String::new()));
     let done_arc = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -789,6 +789,7 @@ pub(crate) fn run_ssh_command_with_timeout(ssh: &SshConnectionInfo, command: &st
     tracing::info!("[remote-desktop-setup] Raw output ({} bytes): {}", output.len(), if output.len() > 300 { &output[..300] } else { &output });
 
     let cleaned = clean_ansi_output(&output);
+    let cleaned = strip_password_prompts(&cleaned);
     tracing::info!("[remote-desktop-setup] Cleaned output ({} bytes): {}", cleaned.len(), if cleaned.len() > 300 { &cleaned[..300] } else { &cleaned });
 
     Ok(cleaned)
@@ -821,6 +822,29 @@ fn clean_ansi_output(input: &str) -> String {
         } else {
             result.push(c);
         }
+    }
+    result
+}
+
+/// 从输出中移除密码提示行，避免干扰状态判断
+fn strip_password_prompts(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    for line in input.lines() {
+        let lower = line.to_lowercase();
+        // 跳过密码/口令提示行
+        if (lower.contains("password:") || lower.contains("passphrase:"))
+            && lower.contains('@')
+        {
+            continue;
+        }
+        if !result.is_empty() {
+            result.push('\n');
+        }
+        result.push_str(line);
+    }
+    // 保留原始结尾换行
+    if input.ends_with('\n') && !result.ends_with('\n') {
+        result.push('\n');
     }
     result
 }

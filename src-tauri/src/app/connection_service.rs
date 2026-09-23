@@ -2,6 +2,8 @@ use crate::core::error::{Error, Result};
 use crate::core::types::ConnectionConfig;
 use crate::infra::storage::database::Database;
 use crate::infra::storage::connection_repo::ConnectionRepo;
+use crate::infra::storage::resource_repo::ResourceKind;
+use crate::app::resource_service::ResourceService;
 use serde_json::Value;
 
 /// 远程桌面安装档位的合法取值。与前端 `InstallFlavor` 对齐。
@@ -15,7 +17,24 @@ impl ConnectionService {
     }
 
     pub fn save_connection(db: &Database, config: &ConnectionConfig) -> Result<()> {
-        ConnectionRepo::save(db, config)
+        ConnectionRepo::save(db, config)?;
+        // 最佳努力登记为统一资源（失败不影响主流程）
+        let meta: Value = serde_json::from_str(&config.config_json).unwrap_or(Value::Object(Default::default()));
+        if let Err(e) = ResourceService::register(
+            db,
+            ResourceKind::Connection,
+            &config.id,
+            &config.name,
+            serde_json::json!({
+                "type": config.connection_type,
+                "host": meta.get("host"),
+                "username": meta.get("username"),
+                "port": meta.get("port"),
+            }),
+        ) {
+            tracing::warn!("[connection] 登记资源失败（不影响保存）: {}", e);
+        }
+        Ok(())
     }
 
     pub fn delete_connection(db: &Database, id: &str) -> Result<()> {

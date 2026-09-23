@@ -21,7 +21,7 @@ pub fn get_default_workspace_dir(agent_id: &str) -> PathBuf {
         .or_else(dirs_next::data_dir)
         .or_else(dirs_next::home_dir)
         .unwrap_or_else(|| PathBuf::from("/tmp"));
-    base.join("BiosphereTerminal").join("agents").join(agent_id)
+    base.join("WebCraft").join("agents").join(agent_id)
 }
 
 pub fn resolve_workspace_dir(agent_workspace: &str, agent_id: &str) -> PathBuf {
@@ -183,7 +183,34 @@ impl AgentTool for FileTool {
             },
             "required": ["action", "path"]
         })
+    }
 
+    fn category(&self) -> &str {
+        "file"
+    }
+
+    fn risk_level(&self, params: &Value) -> super::permission::ToolRiskLevel {
+        let action = params["action"].as_str().unwrap_or("");
+        match action {
+            "read" | "list" | "exists" | "analyze" => super::permission::ToolRiskLevel::Low,
+            "write" | "delete" | "create" => super::permission::ToolRiskLevel::High,
+            _ => super::permission::ToolRiskLevel::High,
+        }
+    }
+
+    fn permission_description(&self, params: &Value) -> String {
+        let action = params["action"].as_str().unwrap_or("unknown");
+        let path = params["path"].as_str().unwrap_or("<path>");
+        match action {
+            "read" => format!("Read file: {}", path),
+            "write" => format!("Write file: {}", path),
+            "list" => format!("List directory: {}", path),
+            "exists" => format!("Check path exists: {}", path),
+            "analyze" => format!("Analyze file: {}", path),
+            "delete" => format!("Delete file: {}", path),
+            "create" => format!("Create file: {}", path),
+            _ => format!("File {} : {}", action, path),
+        }
     }
 
     async fn execute(&self, params: Value) -> Result<ToolOutput, String> {

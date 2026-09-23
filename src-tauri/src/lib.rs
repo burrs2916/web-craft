@@ -1,26 +1,31 @@
-mod core;
-mod domain;
-mod infra;
-mod app;
-mod interface;
+pub mod core;
+pub mod domain;
+pub mod infra;
+pub mod app;
+pub mod interface;
 mod plugins;
+mod ssg;
 
 use std::sync::Arc;
 use tauri::Manager;
+use tauri::Emitter;
 use tauri::Listener;
 
 use infra::storage::database::Database;
 use app::terminal_service::TerminalService;
-use app::notebook_service::NotebookService;
 use app::agent_service::AgentService;
 use app::plugin_service::PluginService;
-use app::linker_service::LinkerService;
 use app::icon_service::IconService;
 use app::remote_desktop_service::RemoteDesktopService;
+use app::remote_exec_service::RemoteExecService;
+use app::ops_service::OpsService;
+use app::automation_service::AutomationService;
 use app::preview_service::PreviewService;
 use app::sftp_service::SftpService;
+use infra::ssh::pool::ConnectionPool;
 use app::licensing::LicensingService;
 use domain::command::executor::CommandExecutor;
+use interface::commands::codegen::CodegenPreviewService;
 
 fn get_dev_data_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -93,8 +98,19 @@ fn install_panic_hook(paths: DebugLogPaths) {
         let msg = format!("[panic] {}", info);
         write_debug_log_all(&paths, &msg);
         eprintln!("{msg}");
+        // 通知前端：后端命令 panic 时 invoke Promise 会永远 pending，
+        // 前端靠该事件解除 loading（否则界面永远"思考中"）。
+        if let Some(handle) = GLOBAL_APP_HANDLE.get() {
+            let payload: String = info.to_string();
+            let _ = handle.emit("app-panic", serde_json::json!({
+                "message": payload,
+                "location": info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_default(),
+            }));
+        }
     }));
 }
+
+static GLOBAL_APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 
 const JS_ERROR_HOOKS: &str = r#"
 (function(){
@@ -453,14 +469,34 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let terminal_service = Arc::new(TerminalService::new());
 
     let result = tauri::Builder::default()
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("notification-guard")
+                .js_init_script(
+                    r#"(function(){
+  if(window.__TAURI_INTERNALS__&&window.__TAURI_INTERNALS__.invoke){
+    var orig=window.__TAURI_INTERNALS__.invoke;
+    window.__TAURI_INTERNALS__.invoke=function(cmd){
+      if(typeof cmd==='string'&&cmd.indexOf('notification')>=0){
+        return Promise.resolve(false);
+      }
+      return orig.apply(window.__TAURI_INTERNALS__,arguments);
+    };
+  }
+})();
+"#,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(terminal_service.clone())
         .setup(move |app| {
             let app_handle = app.handle();
             let debug_paths = debug_paths_for_setup.clone();
             let _ = write_debug_log_all(&debug_paths, "[setup] Tauri setup started");
+            let _ = GLOBAL_APP_HANDLE.set(app_handle.clone());
 
             // Resolve data/log directory based on environment.
             // In production we MUST use a user-writable location.
@@ -533,15 +569,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             let _ = write_debug_log_all(&debug_paths, "[setup] terminal_service initialized");
 
             let db_path = data_dir.join("webcraft.db");
-            let notes_dir = data_dir.join("notes");
             let _ = write_debug_log_all(&debug_paths, &format!("[setup] db_path: {:?}", db_path));
 
-            let _ = std::fs::create_dir_all(&notes_dir);
-
-            // 打开数据库；失败时尝试一次 fallback 到 %USERPROFILE%\biosphere-terminal
+            // 打开数据库；失败时尝试一次 fallback 到 %USERPROFILE%\webcraft
             // （即使 MSIX 沙盒 + Package Framework 全部禁写 LocalAppData，
-            // 用户目录一般是可写的）。fallback 目录同样带 notes 子目录，
-            // 保证 NotebookService 也能工作。
+            // 用户目录一般是可写的）。
             let (db, effective_data_dir) = match Database::open(&db_path) {
                 Ok(db) => {
                     let _ = write_debug_log_all(&debug_paths, "[setup] database opened successfully");
@@ -560,8 +592,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                     if let Some(fb) = fallback_dir {
                         let _ = std::fs::create_dir_all(&fb);
-                        let fb_notes = fb.join("notes");
-                        let _ = std::fs::create_dir_all(&fb_notes);
                         let fb_db = fb.join("webcraft.db");
                         let _ = write_debug_log_all(
                             &debug_paths,
@@ -621,9 +651,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             let db_arc = Arc::new(db);
-            // 重新计算 notes_dir，指向真正使用的 data 目录（可能是 fallback）
-            let notes_dir = effective_data_dir.join("notes");
-            let _ = std::fs::create_dir_all(&notes_dir);
 
             // 初始化连接密码加密密钥（与数据库同目录，零额外安装，at-rest 加密）。
             // 失败仅告警并降级为明文存储，不阻断 app 启动。
@@ -631,19 +658,39 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 tracing::error!("[app] 连接密码加密初始化失败（将降级为明文存储）: {}", e);
             }
 
-            let notebook_service = Arc::new(NotebookService::new(notes_dir, db_arc.clone(), app_handle.clone()));
-            let agent_service = Arc::new(AgentService::new(db_arc.clone(), notebook_service.clone(), terminal_service.clone()));
+            let agent_service = Arc::new(AgentService::new(db_arc.clone(), terminal_service.clone()));
+
+            // 应用启动时重置所有运行中的会话为中断状态
+            match agent_service.reset_running_conversations() {
+                Ok(count) if count > 0 => {
+                    tracing::info!("[setup] reset {} running conversation(s) to interrupted status", count);
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!("[setup] failed to reset running conversations: {}", e);
+                }
+            }
+
             let plugin_service = Arc::new(PluginService::new(effective_data_dir.clone(), db_arc.clone()));
-            let linker_service = Arc::new(LinkerService::new(
-                notebook_service.clone(),
-                db_arc.clone(),
-            ));
             let command_executor = Arc::new(CommandExecutor::new(db_arc.clone(), app_handle.clone()));
             let icons_dir = effective_data_dir.join("icons");
             let icon_service = Arc::new(IconService::new(db_arc.clone(), icons_dir));
             let remote_desktop_service = Arc::new(RemoteDesktopService::new());
             let sftp_service = Arc::new(SftpService::new());
             let preview_service = Arc::new(PreviewService::new());
+            let codegen_preview_service = Arc::new(CodegenPreviewService::new());
+            let ssh_pool = Arc::new(ConnectionPool::new());
+            let remote_exec_service = Arc::new(RemoteExecService::new(ssh_pool));
+            let ops_service = Arc::new(OpsService::new(remote_exec_service.clone()));
+            if let Err(e) = ops_service.ensure_builtins(&db_arc) {
+                tracing::warn!("[setup] seed builtin ops scripts failed: {}", e);
+            }
+            let automation_service = Arc::new(AutomationService::new(
+                db_arc.clone(),
+                remote_exec_service.clone(),
+                sftp_service.clone(),
+                app_handle.clone(),
+            ));
             let licensing_service = Arc::new(LicensingService::new(effective_data_dir.clone()));
             let _ = write_debug_log_all(&debug_paths, "[setup] all services initialized");
 
@@ -660,15 +707,31 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             app_handle.manage(db_arc);
-            app_handle.manage(notebook_service);
             app_handle.manage(agent_service);
             app_handle.manage(plugin_service);
-            app_handle.manage(linker_service);
             app_handle.manage(command_executor);
             app_handle.manage(icon_service);
             app_handle.manage(remote_desktop_service);
             app_handle.manage(sftp_service);
             app_handle.manage(preview_service);
+            app_handle.manage(codegen_preview_service);
+            app_handle.manage(remote_exec_service);
+            app_handle.manage(ops_service);
+            // 启动自动化周期调度器（保证工作连续性：startup 触发 + 周期调度）。
+            // 必须在 manage 之前调用：manage 会移动 automation_service 的所有权。
+            if let Err(e) = automation_service.ensure_builtin_tasks() {
+                tracing::warn!("[automation] 内置任务初始化失败: {}", e);
+            }
+            // 启动时清理过期的运行历史（保留 90 天 + 每任务最近 200 条），防止库无限膨胀。
+            match automation_service.prune_run_history(90, 200) {
+                Ok((runs, steps)) if runs > 0 => {
+                    tracing::info!("[automation] 历史清理：删除 {} 条运行、{} 条步骤", runs, steps);
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!("[automation] 历史清理失败: {}", e),
+            }
+            automation_service.start_scheduler();
+            app_handle.manage(automation_service);
             app_handle.manage(licensing_service);
             let _ = write_debug_log_all(&debug_paths, "[setup] all services registered with app_handle");
 
@@ -759,6 +822,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::terminal::resize_terminal,
             interface::commands::terminal::relay_execute_command,
             interface::commands::terminal::get_terminal_cwd,
+            interface::commands::terminal::terminal_session_alive,
             interface::commands::session::list_sessions,
             interface::commands::session::create_session,
             interface::commands::session::delete_session,
@@ -783,30 +847,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::connection::test_connection,
             interface::commands::connection::get_rd_install_flavor,
             interface::commands::connection::set_rd_install_flavor,
-            interface::commands::notebook::list_notes,
-            interface::commands::notebook::get_note,
-            interface::commands::notebook::create_note,
-            interface::commands::notebook::update_note,
-            interface::commands::notebook::delete_note,
-            interface::commands::notebook::toggle_pin_note,
-            interface::commands::notebook::search_notes,
-            interface::commands::notebook::list_note_categories,
-            interface::commands::notebook::link_command_to_note,
-            interface::commands::notebook::get_linked_commands,
-            interface::commands::notebook::get_linked_notes,
-            interface::commands::notebook::get_notes_for_command_text,
-            interface::commands::notebook::list_note_groups,
-            interface::commands::notebook::create_note_group,
-            interface::commands::notebook::update_note_group,
-            interface::commands::notebook::delete_note_group,
-            interface::commands::notebook::list_note_categories_by_group,
-            interface::commands::notebook::create_note_category,
-            interface::commands::notebook::update_note_category,
-            interface::commands::notebook::delete_note_category,
-            interface::commands::notebook::list_note_tags_by_group,
-            interface::commands::notebook::create_note_tag,
-            interface::commands::notebook::update_note_tag,
-            interface::commands::notebook::delete_note_tag,
             interface::commands::agent::list_providers,
             interface::commands::agent::save_provider,
             interface::commands::agent::delete_provider,
@@ -820,12 +860,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::agent::delete_model,
             interface::commands::agent::test_endpoint_connection,
             interface::commands::agent::test_model_chat,
+            interface::commands::agent::scan_ollama_models,
+            interface::commands::agent::check_ollama_status,
             interface::commands::agent::list_agents,
             interface::commands::agent::save_agent,
             interface::commands::agent::delete_agent,
             interface::commands::agent::list_conversations,
             interface::commands::agent::create_conversation,
             interface::commands::agent::delete_conversation,
+            interface::commands::agent::cleanup_old_conversations,
             interface::commands::agent::update_conversation_title,
             interface::commands::agent::list_messages,
             interface::commands::agent::save_message,
@@ -833,10 +876,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::agent::run_agent,
             interface::commands::agent::stop_agent,
             interface::commands::agent::write_frontend_log,
+            interface::commands::agent::append_env_ops_log,
+            interface::commands::logging::write_log_batch,
+            interface::commands::logging::get_log_dir_path,
             interface::commands::agent::respond_permission,
             interface::commands::agent::update_agent_allowed_tools,
             interface::commands::agent::ensure_remote_desktop_setup_agent,
             interface::commands::agent::ensure_server_env_setup_agent,
+            interface::commands::agent::ensure_ops_assistant_agent,
+            interface::commands::agent::ensure_env_fix_assistant_agent,
             interface::commands::environment::get_environment,
             interface::commands::icon::list_icon_groups,
             interface::commands::icon::create_icon_group,
@@ -847,7 +895,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::icon::delete_custom_icon,
             interface::commands::icon::get_custom_icon_urls,
             interface::commands::icon::get_custom_icon_url,
-            interface::commands::notebook::unlink_command_note,
             interface::commands::remote_desktop::create_remote_desktop,
             interface::commands::remote_desktop::close_remote_desktop,
             interface::commands::remote_desktop::setup_remote_desktop,
@@ -869,16 +916,64 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::licensing::extend_trial,
             interface::commands::licensing::get_pro_product_id,
             interface::commands::cms::site_create,
+            interface::commands::cms::site_init_remote,
             interface::commands::deploy::site_deploy,
+            interface::commands::deploy::site_deploy_check,
             interface::commands::deploy::deployment_list,
+            interface::commands::deploy::deployment_get,
+            interface::commands::deploy::deployment_list_by_connection,
+            interface::commands::deploy::deployment_stats,
+            interface::commands::deploy::deployment_rollback,
             interface::commands::deploy::site_healthz,
+            interface::commands::deploy::service_get_status,
+            interface::commands::deploy::service_restart,
+            interface::commands::deploy::service_stop,
+            interface::commands::deploy::service_start,
+            interface::commands::deploy::deployment_delete,
+            interface::commands::deploy::deployment_batch_delete,
+            interface::commands::deploy::deployment_cleanup_site,
+            interface::commands::deploy::deployment_delete_by_status,
             interface::commands::preview::site_preview_start,
             interface::commands::preview::site_preview_stop,
             interface::commands::preview::site_preview_list,
+            interface::commands::ops::remote_exec,
+            interface::commands::ops::ops_list_scripts,
+            interface::commands::ops::ops_save_script,
+            interface::commands::ops::ops_delete_script,
+            interface::commands::ops::ops_toggle_script,
+            interface::commands::ops::ops_run_script,
+            interface::commands::ops::ops_script_runs,
+            interface::commands::ops::ops_read_file,
+            interface::commands::ops::ops_write_file,
+            interface::commands::ops::ops_list_dir,
+            interface::commands::ops::ops_get_cert_info,
+            interface::commands::automation::automation_list_tasks,
+            interface::commands::automation::automation_get_task,
+            interface::commands::automation::automation_save_task,
+            interface::commands::automation::automation_delete_task,
+            interface::commands::automation::automation_toggle_task,
+            interface::commands::automation::automation_run_task,
+            interface::commands::automation::automation_cancel_run,
+            interface::commands::automation::automation_list_runs,
+            interface::commands::automation::automation_get_stats,
+            interface::commands::resource::resource_list,
+            interface::commands::resource::resource_get,
+            interface::commands::resource::resource_links,
+            interface::commands::resource::resource_reconcile,
+            interface::commands::resource::register_terminal_resource,
+            interface::commands::automation::automation_get_run,
+            interface::commands::automation::automation_export_run,
+            interface::commands::automation::automation_delete_run,
+            interface::commands::automation::automation_rerun,
             interface::commands::cms::site_list,
             interface::commands::cms::site_get,
             interface::commands::cms::site_update,
             interface::commands::cms::site_archive,
+            interface::commands::cms::site_delete,
+            interface::commands::cms::site_domain_list,
+            interface::commands::cms::site_domain_add,
+            interface::commands::cms::site_domain_remove,
+            interface::commands::cms::site_domain_dns_check,
             interface::commands::cms::content_create,
             interface::commands::cms::content_list,
             interface::commands::cms::content_get,
@@ -889,6 +984,44 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             interface::commands::cms::content_restore,
             interface::commands::cms::content_purge,
             interface::commands::cms::content_set_pinned,
+            interface::commands::cms::tag_list,
+            interface::commands::cms::tag_list_summaries,
+            interface::commands::cms::tag_create,
+            interface::commands::cms::tag_rename,
+            interface::commands::cms::tag_delete,
+            interface::commands::cms::content_list_tags,
+            interface::commands::cms::content_set_tags,
+            interface::commands::cms::content_save_version,
+            interface::commands::cms::content_list_versions,
+            interface::commands::cms::content_rollback,
+            interface::commands::ssg::ssg_build,
+            interface::commands::ssg::ssg_build_full,
+            interface::commands::ssg::theme_list,
+            interface::commands::media::media_upload,
+            interface::commands::media::media_list,
+            interface::commands::media::media_delete,
+            interface::commands::media::media_get,
+            // 场景（网站）管理
+            interface::commands::scene::get_all_scenes,
+            interface::commands::scene::get_scene,
+            interface::commands::scene::get_scenes_by_category,
+            interface::commands::scene::create_scene,
+            interface::commands::scene::update_scene,
+            interface::commands::scene::delete_scene,
+            interface::commands::scene::get_all_categories,
+            interface::commands::scene::get_category,
+            interface::commands::scene::save_category,
+            interface::commands::scene::delete_category,
+            interface::commands::scene::read_file_as_data_url,
+            // Codegen（预览与发布）
+            interface::commands::codegen::write_preview_file,
+            interface::commands::codegen::get_preview_url,
+            interface::commands::codegen::write_publish_file,
+            interface::commands::codegen::clean_output_dir,
+            interface::commands::codegen::stop_preview_server,
+            interface::commands::codegen::check_node_available,
+            interface::commands::codegen::build_project,
+            interface::commands::codegen::open_in_finder,
         ])
         .run(tauri::generate_context!());
 

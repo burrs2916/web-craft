@@ -4,7 +4,7 @@ use crate::infra::storage::database::Database;
 
 const CONTENT_COLUMNS: &str = "id, site_id, type, title, slug, category, summary, cover_media_id, \
      content_json, content_md, content_hash, seo_title, seo_description, og_image_media_id, \
-     status, scheduled_at, published_at, pinned, deleted_at, created_at, updated_at";
+     status, scheduled_at, published_at, pinned, deleted_at, created_at, updated_at, blocks_json";
 
 fn row_to_content(row: &rusqlite::Row) -> rusqlite::Result<Content> {
     let pinned: i64 = row.get(17)?;
@@ -30,6 +30,8 @@ fn row_to_content(row: &rusqlite::Row) -> rusqlite::Result<Content> {
         deleted_at: row.get(18)?,
         created_at: row.get(19)?,
         updated_at: row.get(20)?,
+        blocks_json: row.get(21)?,
+        tags: Vec::new(),
     })
 }
 
@@ -41,8 +43,8 @@ impl ContentRepo {
         conn.execute(
             "INSERT INTO contents (id, site_id, type, title, slug, category, summary, cover_media_id, \
              content_json, content_md, content_hash, seo_title, seo_description, og_image_media_id, \
-             status, scheduled_at, published_at, pinned, deleted_at, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+             status, scheduled_at, published_at, pinned, deleted_at, created_at, updated_at, blocks_json) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
             rusqlite::params![
                 c.id,
                 c.site_id,
@@ -65,6 +67,7 @@ impl ContentRepo {
                 c.deleted_at,
                 c.created_at,
                 c.updated_at,
+                c.blocks_json,
             ],
         )?;
         Ok(())
@@ -76,7 +79,7 @@ impl ContentRepo {
             "UPDATE contents SET type = ?2, title = ?3, slug = ?4, category = ?5, summary = ?6, \
              cover_media_id = ?7, content_json = ?8, content_md = ?9, content_hash = ?10, \
              seo_title = ?11, seo_description = ?12, og_image_media_id = ?13, pinned = ?14, \
-             updated_at = ?15 \
+             blocks_json = ?15, updated_at = ?16 \
              WHERE id = ?1 AND deleted_at IS NULL",
             rusqlite::params![
                 c.id,
@@ -93,6 +96,7 @@ impl ContentRepo {
                 c.seo_description,
                 c.og_image_media_id,
                 c.pinned as i64,
+                c.blocks_json,
                 c.updated_at,
             ],
         )?;
@@ -113,7 +117,6 @@ impl ContentRepo {
     }
 
     pub fn list(db: &Database, site_id: &str, filter: &ContentListFilter) -> Result<Vec<Content>> {
-        let conn = db.conn();
         let include_deleted = filter.include_deleted.unwrap_or(false);
         let mut sql = format!(
             "SELECT {} FROM contents WHERE site_id = ?1",
@@ -142,13 +145,59 @@ impl ContentRepo {
                 sql.push_str(&format!(" AND (title LIKE ?{} OR slug LIKE ?{})", params.len(), params.len()));
             }
         }
+        if !include_deleted {
+            if let Some(tag) = &filter.tag {
+                if !tag.trim().is_empty() {
+                    params.push(Box::new(tag.trim().to_string()));
+                    sql.push_str(&format!(
+                        " AND id IN (SELECT l.content_id FROM content_tag_links l \
+                         JOIN content_tags t ON t.id = l.tag_id WHERE t.name = ?{})",
+                        params.len()
+                    ));
+                }
+            }
+        }
         // 置顶优先，其后按更新时间倒序（最近编辑靠前）
         sql.push_str(" ORDER BY pinned DESC, updated_at DESC");
 
+        // 查询放入独立作用域，确保 conn（MutexGuard）在 attach_tags 前释放，避免重入死锁
+        let mut contents = {
+            let conn = db.conn();
+            let mut stmt = conn.prepare(&sql)?;
+            let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+            let rows = stmt.query_map(param_refs.as_slice(), row_to_content)?;
+            rows.collect::<std::result::Result<Vec<_>, _>>()?
+        };
+        if !contents.is_empty() {
+            Self::attach_tags(db, &mut contents)?;
+        }
+        Ok(contents)
+    }
+
+    /// 批量加载内容标签（一次 IN 查询，避免列表 N+1）。
+    fn attach_tags(db: &Database, contents: &mut [Content]) -> Result<()> {
+        let conn = db.conn();
+        let ids: Vec<&str> = contents.iter().map(|c| c.id.as_str()).collect();
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "SELECT l.content_id, t.name FROM content_tag_links l \
+             JOIN content_tags t ON t.id = l.tag_id \
+             WHERE l.content_id IN ({}) ORDER BY t.name COLLATE NOCASE",
+            placeholders
+        );
         let mut stmt = conn.prepare(&sql)?;
-        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-        let rows = stmt.query_map(param_refs.as_slice(), row_to_content)?;
-        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+        let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter().copied()), |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
+        let mut map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        for row in rows {
+            let (cid, name) = row?;
+            map.entry(cid).or_default().push(name);
+        }
+        for c in contents.iter_mut() {
+            c.tags = map.remove(&c.id).unwrap_or_default();
+        }
+        Ok(())
     }
 
     /// slug 在同站点同类型下是否已被未删除内容占用（exclude_id 用于自身改名场景）。
@@ -275,6 +324,8 @@ mod tests {
             deleted_at: None,
             created_at: 1,
             updated_at: 1,
+            blocks_json: String::new(),
+            tags: Vec::new(),
         }
     }
 
@@ -338,5 +389,43 @@ mod tests {
         // 撤回后 published_at 保留首次上线时间
         assert_eq!(c.published_at, Some(100));
         assert_eq!(c.status, "draft");
+    }
+
+    #[test]
+    fn list_loads_tags_and_filters_by_tag() {
+        let db = test_db();
+        seed_site(&db);
+        ContentRepo::insert(&db, &sample("c1", "hello")).unwrap();
+        ContentRepo::insert(&db, &sample("c2", "world")).unwrap();
+        // 建标签并挂到 c1
+        db.conn()
+            .execute(
+                "INSERT INTO content_tags (id, site_id, name) VALUES ('tag-1', 'site-a', 'Rust')",
+                [],
+            )
+            .unwrap();
+        db.conn()
+            .execute(
+                "INSERT INTO content_tag_links (content_id, tag_id) VALUES ('c1', 'tag-1')",
+                [],
+            )
+            .unwrap();
+
+        // 列表批量带出标签
+        let all = ContentRepo::list(&db, "site-a", &ContentListFilter::default()).unwrap();
+        let c1 = all.iter().find(|c| c.id == "c1").unwrap();
+        assert_eq!(c1.tags, vec!["Rust"]);
+        let c2 = all.iter().find(|c| c.id == "c2").unwrap();
+        assert!(c2.tags.is_empty());
+
+        // 按标签名过滤
+        let filtered = ContentRepo::list(
+            &db,
+            "site-a",
+            &ContentListFilter { tag: Some("Rust".into()), ..Default::default() },
+        )
+        .unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].id, "c1");
     }
 }

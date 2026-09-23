@@ -1,12 +1,23 @@
 pub mod debug_log;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::io::{self, Seek};
+use std::sync::OnceLock;
+
+/// 全局日志目录，在 init() 时设置，供 get_log_dir_path 命令查询。
+static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// 返回日志目录路径（init 后可用）。
+pub fn get_log_dir() -> Option<&'static Path> {
+    LOG_DIR.get().map(PathBuf::as_path)
+}
 
 const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024;
 
+/// 初始化 tracing 日志系统，统一输出到 debug.log
 pub fn init(log_dir: &Path) {
-    let file_appender = match RollingFileAppender::new(log_dir, "webcraft.log") {
+    let _ = LOG_DIR.set(log_dir.to_path_buf());
+    let file_appender = match RollingFileAppender::new(log_dir, "debug.log") {
         Ok(fa) => fa,
         Err(e) => {
             eprintln!("Failed to open log file: {}. Logging to stderr only.", e);
@@ -17,7 +28,7 @@ pub fn init(log_dir: &Path) {
                 .expect("Cannot open /dev/null");
             RollingFileAppender {
                 file: std::sync::Mutex::new(file),
-                path: log_dir.join("webcraft.log"),
+                path: log_dir.join("debug.log"),
             }
         }
     };
@@ -34,7 +45,7 @@ pub fn init(log_dir: &Path) {
         .with_file(true)
         .init();
 
-    tracing::info!("Logging initialized, log file: {:?}", log_dir.join("webcraft.log"));
+    tracing::info!("Logging initialized, log file: {:?}", log_dir.join("debug.log"));
     tracing::info!("Max log size: {} bytes", MAX_LOG_SIZE);
 }
 

@@ -9,6 +9,8 @@ pub struct ChatMessage {
     pub role: String,
     pub content: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
@@ -34,6 +36,52 @@ pub struct ChatOptions {
     pub temperature: f64,
     pub max_tokens: i64,
     pub tools: Option<Vec<ToolDefinition>>,
+    /// 上下文窗口大小（默认 0，表示使用模型默认）
+    #[serde(default)]
+    pub num_ctx: i64,
+    /// 使用的 GPU 层数（默认 -1，表示全部）
+    #[serde(default = "default_num_gpu")]
+    pub num_gpu: i64,
+    /// 重复惩罚（默认 1.1）
+    #[serde(default = "default_repeat_penalty")]
+    pub repeat_penalty: f64,
+    /// 核采样参数（默认 0.9）
+    #[serde(default = "default_top_p")]
+    pub top_p: f64,
+    /// top-k 采样（默认 40）
+    #[serde(default = "default_top_k")]
+    pub top_k: i64,
+    /// 随机种子（默认 -1，表示随机）
+    #[serde(default = "default_seed")]
+    pub seed: i64,
+    /// 响应格式："text" 或 "json"（Ollama 支持原生 JSON mode）
+    /// 默认值为空字符串（表示不指定，使用模型默认行为）
+    #[serde(default)]
+    pub response_format: String,
+}
+
+fn default_num_gpu() -> i64 { -1 }
+fn default_repeat_penalty() -> f64 { 1.1 }
+fn default_top_p() -> f64 { 0.9 }
+fn default_top_k() -> i64 { 40 }
+fn default_seed() -> i64 { -1 }
+
+impl Default for ChatOptions {
+    fn default() -> Self {
+        ChatOptions {
+            model: String::new(),
+            temperature: 0.7,
+            max_tokens: 0,
+            tools: None,
+            num_ctx: 0,
+            num_gpu: default_num_gpu(),
+            repeat_penalty: default_repeat_penalty(),
+            top_p: default_top_p(),
+            top_k: default_top_k(),
+            seed: default_seed(),
+            response_format: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +102,7 @@ pub struct ToolFunctionDef {
 pub struct ChatResponse {
     pub role: String,
     pub content: Option<String>,
+    pub reasoning_content: Option<String>,
     pub tool_calls: Option<Vec<ToolCall>>,
     pub finish_reason: Option<String>,
 }
@@ -61,6 +110,7 @@ pub struct ChatResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunk {
     pub content: Option<String>,
+    pub reasoning_content: Option<String>,
     pub tool_calls: Option<Vec<ToolCallDelta>>,
     pub finish_reason: Option<String>,
 }
@@ -165,10 +215,26 @@ pub trait LlmProvider: Send + Sync {
         Ok(ChatResponse {
             role: "assistant".to_string(),
             content: if full_content.is_empty() { None } else { Some(full_content) },
+            reasoning_content: None,
             tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
             finish_reason,
         })
     }
 
     fn validate_config(&self, config: &ProviderConfig) -> Result<(), String>;
+
+    /// 预加载模型到内存（Ollama 等本地模型专用，其他 provider 默认空实现）
+    async fn preload_model(&self, _model: &str, _keep_alive: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// 检测服务是否可用（默认返回 true，Ollama 等可实际检测）
+    async fn check_health(&self) -> bool {
+        true
+    }
+
+    /// 获取 provider 类型标识，如 "ollama"、"openai-compat" 等
+    fn provider_type(&self) -> &'static str {
+        "unknown"
+    }
 }

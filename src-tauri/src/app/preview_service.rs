@@ -1,15 +1,14 @@
-//! 本地预览 sidecar（M-x3）：用 host 原生的 webcraft-server 二进制加载站点
-//! 构建产物 dist/ 与生成式 server.toml，作为子进程常驻，供"本地预览 + 健康徽标
-//! 变绿"闭环验证，且不依赖远端服务器。设计见 docs/server-integration-design.md §6 M-x3。
+//! 本地预览服务：在 127.0.0.1 随机端口提供 dist/ 静态文件，
+//! 无需 webcraft-server 二进制。子进程方式已废弃，改为 tokio 原生 listener。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::Arc;
 
 use serde::Serialize;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 use tokio::sync::Mutex;
-use webcraft_common::{AuthConfig, HttpConfig, RouteEntry, ServerConfig};
 
 use crate::infra::storage::database::Database;
 use crate::infra::storage::site_repo::SiteRepo;
@@ -25,7 +24,7 @@ pub struct PreviewInfo {
 }
 
 struct PreviewRun {
-    child: tokio::process::Child,
+    shutdown: tokio::sync::oneshot::Sender<()>,
     port: u16,
     base_url: String,
     healthz_url: String,
@@ -37,82 +36,67 @@ pub struct PreviewService {
 
 impl PreviewService {
     pub fn new() -> Self {
-        PreviewService { runs: Arc::new(Mutex::new(HashMap::new())) }
+        PreviewService {
+            runs: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
-    /// 启动（或重启）某站点的本地预览。dist/ 不存在或找不到 host 二进制则报错返回。
-    pub async fn start(&self, db: &Database, data_dir: &Path, site_id: &str) -> Result<PreviewInfo, String> {
+    /// 启动（或重启）某站点的本地预览。dist/ 不存在则报错返回。
+    pub async fn start(
+        &self,
+        db: &Database,
+        _data_dir: &Path,
+        site_id: &str,
+    ) -> Result<PreviewInfo, String> {
         let site = SiteRepo::get_by_id(db, site_id)
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("站点不存在: {}", site_id))?;
+            .ok_or_else(|| format!("site not found: {}", site_id))?;
+
+        // local_workdir 为空时无法预览（站点尚未绑定网站）
+        if site.local_workdir.trim().is_empty() {
+            return Err("站点尚未绑定网站，本地工作目录为空（请先绑定已发布网站）".to_string());
+        }
 
         let dist_dir = Path::new(&site.local_workdir).join("dist");
         if !dist_dir.is_dir() {
             return Err(format!(
-                "本地构建产物不存在: {}（先完成站点构建再预览）",
+                "dist not found: {}（please build first）",
                 dist_dir.display()
             ));
         }
 
-        let deploy_config: serde_json::Value =
-            serde_json::from_str(&site.deploy_config_json).unwrap_or(serde_json::json!({}));
-        let bin = Self::find_host_bin(data_dir, &deploy_config)?;
-
         // 只对本站保持单实例：重复启动先停旧进程。
         self.stop(site_id).await;
 
-        let port = Self::pick_free_port()?;
-        let token = uuid::Uuid::new_v4().simple().to_string();
-        let config = ServerConfig {
-            server: HttpConfig {
-                port,
-                static_dir: dist_dir.to_string_lossy().to_string(),
-            },
-            auth: AuthConfig {
-                token: token.clone(),
-                allowed_roles: vec!["admin".to_string(), "editor".to_string()],
-            },
-            route: vec![
-                RouteEntry { path: "/healthz".to_string(), handler: "health".to_string(), roles: vec![] },
-                RouteEntry {
-                    path: "/api/content".to_string(),
-                    handler: "content_api".to_string(),
-                    roles: vec!["admin".to_string(), "editor".to_string()],
-                },
-            ],
-        };
-        let toml_text = webcraft_common::render_config(&config).map_err(|e| e.to_string())?;
-        webcraft_common::parse_config(&toml_text).map_err(|e| e.to_string())?;
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("bind preview port failed: {}", e))?;
+        let port = listener
+            .local_addr()
+            .map_err(|e| e.to_string())?
+            .port();
 
-        let toml_path = std::env::temp_dir().join(format!("webcraft-preview-{}.toml", site_id));
-        std::fs::write(&toml_path, &toml_text)
-            .map_err(|e| format!("写入预览配置失败: {}", e))?;
-
-        // 子进程日志落盘，排障不阻塞主进程。
-        let log_dir = data_dir.join("logs");
-        let _ = std::fs::create_dir_all(&log_dir);
-        let log_path = log_dir.join(format!("preview-{}.log", site_id));
-        let log_file = std::fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&log_path)
-            .map_err(|e| format!("打开预览日志失败: {}", e))?;
-        let log_stdout = log_file.try_clone().map_err(|e| e.to_string())?;
-
-        let child = tokio::process::Command::new(&bin)
-            .arg(&toml_path)
-            .stdin(Stdio::null())
-            .stdout(Stdio::from(log_stdout))
-            .stderr(Stdio::from(log_file))
-            .spawn()
-            .map_err(|e| format!("启动 webcraft-server 失败 ({}): {}", bin.display(), e))?;
-
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+        let dist_dir = Arc::new(dist_dir);
         let base_url = format!("http://127.0.0.1:{}", port);
         let healthz_url = format!("{}/healthz", base_url);
+
+        tokio::spawn(Self::serve_loop(
+            listener,
+            dist_dir,
+            shutdown_rx,
+        ));
+
         self.runs.lock().await.insert(
             site_id.to_string(),
-            PreviewRun { child, port, base_url: base_url.clone(), healthz_url: healthz_url.clone() },
+            PreviewRun {
+                shutdown: shutdown_tx,
+                port,
+                base_url: base_url.clone(),
+                healthz_url: healthz_url.clone(),
+            },
         );
+
         Ok(PreviewInfo {
             site_id: site_id.to_string(),
             base_url,
@@ -122,74 +106,210 @@ impl PreviewService {
         })
     }
 
-    /// 停止本地预览；进程已退出是正常情况，不算错误。
+    /// 停止本地预览。
     pub async fn stop(&self, site_id: &str) -> Result<(), String> {
         let mut runs = self.runs.lock().await;
-        if let Some(mut run) = runs.remove(site_id) {
-            let _ = run.child.start_kill();
-            let _ = run.child.wait().await;
+        if let Some(run) = runs.remove(site_id) {
+            let _ = run.shutdown.send(());
         }
         Ok(())
     }
 
-    /// 当前运行态概览（剔除已退出的子进程）。
+    /// 当前运行态概览。
     pub async fn list(&self) -> Vec<PreviewInfo> {
-        let mut runs = self.runs.lock().await;
-        let mut out = Vec::new();
-        let mut dead = Vec::new();
-        for (id, run) in runs.iter_mut() {
-            let alive = run.child.try_wait().map(|st| st.is_none()).unwrap_or(false);
-            if alive {
-                out.push(PreviewInfo {
-                    site_id: id.clone(),
-                    base_url: run.base_url.clone(),
-                    healthz_url: run.healthz_url.clone(),
-                    port: run.port,
-                    alive: true,
-                });
-            } else {
-                dead.push(id.clone());
+        let runs = self.runs.lock().await;
+        runs.iter()
+            .map(|(id, run)| PreviewInfo {
+                site_id: id.clone(),
+                base_url: run.base_url.clone(),
+                healthz_url: run.healthz_url.clone(),
+                port: run.port,
+                alive: true,
+            })
+            .collect()
+    }
+
+    // ── internal ──────────────────────────────────────────────
+
+    async fn serve_loop(
+        listener: TcpListener,
+        dist_dir: Arc<PathBuf>,
+        mut shutdown: tokio::sync::oneshot::Receiver<()>,
+    ) {
+        use tokio::select;
+        loop {
+            select! {
+                // Accept new connections
+                accept_result = listener.accept() => {
+                    match accept_result {
+                        Ok((stream, _addr)) => {
+                            let dir = Arc::clone(&dist_dir);
+                            tokio::spawn(Self::handle_conn(stream, dir));
+                        }
+                        Err(e) => {
+                            tracing::warn!("preview listener accept error: {}", e);
+                            break;
+                        }
+                    }
+                }
+                // Shutdown signal received
+                _ = &mut shutdown => {
+                    tracing::info!("preview server shutting down");
+                    break;
+                }
             }
         }
-        for id in dead {
-            runs.remove(&id);
-        }
-        out
     }
 
-    /// 依据 host 平台与部署配置定位本地预览用二进制。
-    fn find_host_bin(data_dir: &Path, deploy_config: &serde_json::Value) -> Result<PathBuf, String> {
-        let os = std::env::consts::OS; // macos / windows / linux
-        let arch = std::env::consts::ARCH; // aarch64 / x86_64
-        let bin_dir = data_dir.join("bin");
-        let host_name = format!("webcraft-server-{}-{}", os, arch);
-        let candidates: Vec<(PathBuf, &str)> = if let Some(over) = deploy_config["server_bin"].as_str() {
-            vec![(PathBuf::from(over), "deploy_config.server_bin")]
-        } else {
-            vec![
-                (bin_dir.join(&host_name), "bin/webcraft-server-{os}-{arch}"),
-                (bin_dir.join("webcraft-server"), "bin/webcraft-server"),
-            ]
+    async fn handle_conn(mut stream: tokio::net::TcpStream, dist_dir: Arc<PathBuf>) {
+        // Read request (just need the first line for path)
+        let mut buf = vec![0u8; 4096];
+        let n = match stream.read(&mut buf).await {
+            Ok(0) | Err(_) => return,
+            Ok(n) => n,
         };
-        candidates
-            .iter()
-            .find(|(p, _)| p.is_file())
-            .map(|(p, _)| p.clone())
-            .ok_or_else(|| {
-                format!(
-                    "未找到本机预览的 webcraft-server 二进制。请先构建 host 产物并放到 {}：\n  cargo build -p webcraft-server --release\n  cp ../target/release/webcraft-server {}",
-                    bin_dir.join(&host_name).display(),
-                    bin_dir.join(&host_name).display()
-                )
-            })
+        let request = String::from_utf8_lossy(&buf[..n]);
+
+        // Parse: "GET /path HTTP/1.1\r\n..."
+        let first_line = request.lines().next().unwrap_or("GET / HTTP/1.1");
+        let mut parts = first_line.split_whitespace();
+        let _method = parts.next().unwrap_or("GET");
+        let raw_path = parts.next().unwrap_or("/");
+
+        // Strip query string
+        let path = raw_path.split('?').next().unwrap_or(raw_path);
+        let path = percent_decode(path);
+
+        // /healthz → 200 OK
+        if path == "/healthz" {
+            let resp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nok";
+            let _ = stream.write_all(resp.as_bytes()).await;
+            let _ = stream.shutdown().await;
+            return;
+        }
+
+        // Resolve file path safely (prevent path traversal)
+        let file_path = resolve_safe(dist_dir.as_ref(), &path);
+
+        // Read file and determine content-type
+        let (status, content_type, body): (u16, &str, Vec<u8>) = match file_path {
+            Some(fp) if fp.is_file() => {
+                match tokio::fs::read(&fp).await {
+                    Ok(data) => {
+                        let ct = content_type_for(&fp);
+                        (200, ct, data)
+                    }
+                    Err(_) => (500, "text/plain", b"500 Internal Server Error".to_vec()),
+                }
+            }
+            _ => {
+                // 404 — try index.html fallback for SPA-style routing
+                let index = dist_dir.join("index.html");
+                if index.is_file() {
+                    match tokio::fs::read(&index).await {
+                        Ok(d) => (200, "text/html; charset=utf-8", d),
+                        Err(_) => (404, "text/plain", b"404 Not Found".to_vec()),
+                    }
+                } else {
+                    (404, "text/plain", b"404 Not Found".to_vec())
+                }
+            }
+        };
+
+        // Write response
+        let header = format!(
+            "HTTP/1.1 {} OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
+            status,
+            content_type,
+            body.len()
+        );
+        let mut response = Vec::with_capacity(header.len() + body.len());
+        response.extend_from_slice(header.as_bytes());
+        response.extend_from_slice(&body);
+
+        let _ = stream.write_all(&response).await;
+        let _ = stream.shutdown().await;
+    }
+}
+
+// ── helpers ──────────────────────────────────────────────────
+
+/// Percent-decode a URL path (handles %20, %2F, etc.).
+fn percent_decode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
+            if let Ok(n) = u8::from_str_radix(hex, 16) {
+                out.push(n as char);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+/// Safely resolve a URL path under the dist directory, preventing traversal.
+fn resolve_safe(dist_dir: &Path, url_path: &str) -> Option<PathBuf> {
+    // Normalize: strip leading slashes
+    let rel = url_path.trim_start_matches('/');
+
+    // Empty path → index.html
+    if rel.is_empty() {
+        return Some(dist_dir.join("index.html"));
     }
 
-    /// 绑定 127.0.0.1:0 取一个空闲端口后立即释放（预览端口随机，避免冲突）。
-    fn pick_free_port() -> Result<u16, String> {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")
-            .map_err(|e| format!("分配预览端口失败: {}", e))?;
-        let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-        Ok(port)
+    // Build candidate path
+    let candidate = dist_dir.join(rel);
+
+    // Canonicalize and verify it's under dist_dir
+    let canonical = candidate.canonicalize().ok()?;
+    let dist_canonical = dist_dir.canonicalize().ok()?;
+
+    if canonical.starts_with(&dist_canonical) {
+        Some(canonical)
+    } else {
+        None
+    }
+}
+
+/// Determine Content-Type from file extension.
+fn content_type_for(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+        .as_str()
+    {
+        "html" | "htm" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" | "mjs" => "application/javascript; charset=utf-8",
+        "json" => "application/json; charset=utf-8",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "webp" => "image/webp",
+        "ico" => "image/x-icon",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        "wasm" => "application/wasm",
+        "txt" => "text/plain; charset=utf-8",
+        "xml" => "application/xml; charset=utf-8",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "mp3" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        "pdf" => "application/pdf",
+        _ => "application/octet-stream",
     }
 }
 
@@ -198,46 +318,50 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pick_free_port_returns_bindable_port() {
-        let port = PreviewService::pick_free_port().unwrap();
-        assert!(port > 0);
-        // 返回的端口应立即可被监听（避免端口已被占用导致预览失败）。
-        let listener = std::net::TcpListener::bind(("127.0.0.1", port)).unwrap();
-        listener.local_addr().unwrap();
+    fn resolve_safe_blocks_traversal() {
+        let tmp = std::env::temp_dir().join(format!(
+            "preview-test-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(tmp.join("index.html"), "<h1>hi</h1>").unwrap();
+
+        // Normal path
+        assert!(resolve_safe(&tmp, "/index.html").is_some());
+
+        // Empty → index.html
+        assert!(resolve_safe(&tmp, "/").is_some());
+
+        // Path traversal blocked
+        assert!(resolve_safe(&tmp, "/../../../etc/passwd").is_none());
+
+        std::fs::remove_dir_all(&tmp).unwrap();
     }
 
     #[test]
-    fn find_host_bin_prefers_specific_then_generic() {
-        let dir = std::env::temp_dir().join(format!("preview-bin-test-{}", std::process::id()));
-        let bin_dir = dir.join("bin");
-        std::fs::create_dir_all(&bin_dir).unwrap();
-        let host_name = format!("webcraft-server-{}-{}", std::env::consts::OS, std::env::consts::ARCH);
-        let specific = bin_dir.join(&host_name);
-        std::fs::write(&specific, "bin").unwrap();
-        let generic = bin_dir.join("webcraft-server");
-        std::fs::write(&generic, "generic").unwrap();
+    fn content_type_basic() {
+        assert_eq!(
+            content_type_for(Path::new("style.css")),
+            "text/css; charset=utf-8"
+        );
+        assert_eq!(
+            content_type_for(Path::new("app.js")),
+            "application/javascript; charset=utf-8"
+        );
+        assert_eq!(
+            content_type_for(Path::new("logo.png")),
+            "image/png"
+        );
+        assert_eq!(
+            content_type_for(Path::new("unknown.xyz")),
+            "application/octet-stream"
+        );
+    }
 
-        let cfg = serde_json::json!({});
-        assert_eq!(
-            PreviewService::find_host_bin(&dir, &cfg).unwrap(),
-            specific
-        );
-        // 移除专用产物后回退到通用名。
-        std::fs::remove_file(&specific).unwrap();
-        assert_eq!(
-            PreviewService::find_host_bin(&dir, &cfg).unwrap(),
-            generic
-        );
-        // server_bin 覆盖优先于其余候选。
-        let override_bin = bin_dir.join("override-server");
-        std::fs::write(&override_bin, "override").unwrap();
-        let override_cfg = serde_json::json!({ "server_bin": override_bin });
-        assert_eq!(
-            PreviewService::find_host_bin(&dir, &override_cfg).unwrap(),
-            override_bin
-        );
-        // 都缺失时报错。
-        std::fs::remove_file(&generic).unwrap();
-        std::fs::remove_dir_all(&dir).unwrap();
+    #[test]
+    fn percent_decode_basic() {
+        assert_eq!(percent_decode("/hello%20world"), "/hello world");
+        assert_eq!(percent_decode("/path/to/file"), "/path/to/file");
+        assert_eq!(percent_decode("/"), "/");
     }
 }

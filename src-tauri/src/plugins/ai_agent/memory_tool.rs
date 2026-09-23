@@ -59,6 +59,81 @@ impl MemoryTool {
             format!("\n\n--- Agent Memory ---\n{}\n--- End Memory ---", parts.join("\n\n"))
         }
     }
+
+    /// 基于查询字符串搜索相关记忆，返回 Top-N 条结果
+    /// 用于在对话开始时智能注入相关记忆，避免全部加载占用 token
+    pub fn search_relevant_for_prompt(&self, query: &str, top_n: usize) -> String {
+        if query.trim().is_empty() || top_n == 0 {
+            return String::new();
+        }
+
+        // 提取查询关键词（小写，去重）
+        let keywords: Vec<String> = query
+            .to_lowercase()
+            .split(|c: char| !c.is_alphanumeric() && c != '_' && c != '-')
+            .filter(|s| !s.is_empty() && s.len() > 1)
+            .map(|s| s.to_string())
+            .collect();
+
+        if keywords.is_empty() {
+            return String::new();
+        }
+
+        // (score, source, content)
+        let mut scored_results: Vec<(usize, String, String)> = Vec::new();
+
+        // 搜索长期记忆
+        if let Ok(content) = fs::read_to_string(self.memory_file()) {
+            for line in content.lines() {
+                let line_lower = line.to_lowercase();
+                let score: usize = keywords.iter()
+                    .filter(|kw| line_lower.contains(kw.as_str()))
+                    .count();
+                if score > 0 {
+                    scored_results.push((score, "MEMORY.md".to_string(), line.to_string()));
+                }
+            }
+        }
+
+        // 搜索 daily notes（最近 7 天）
+        for days_ago in 0..7 {
+            let date = chrono::Local::now() - chrono::Duration::days(days_ago);
+            let filename = format!("{}.md", date.format("%Y-%m-%d"));
+            let path = self.base_dir.join("memory").join(&filename);
+            if let Ok(content) = fs::read_to_string(&path) {
+                for line in content.lines() {
+                    let line_lower = line.to_lowercase();
+                    let score: usize = keywords.iter()
+                        .filter(|kw| line_lower.contains(kw.as_str()))
+                        .count();
+                    if score > 0 {
+                        scored_results.push((score, filename.clone(), line.to_string()));
+                    }
+                }
+            }
+        }
+
+        if scored_results.is_empty() {
+            return String::new();
+        }
+
+        // 按分数降序排序
+        scored_results.sort_by(|a, b| b.0.cmp(&a.0));
+
+        // 取 Top-N
+        let top_results: Vec<_> = scored_results.into_iter().take(top_n).collect();
+
+        // 格式化输出
+        let lines: Vec<String> = top_results.iter()
+            .map(|(_score, source, content)| format!("[{}] {}", source, content))
+            .collect();
+
+        format!(
+            "\n\n--- Relevant Memory (top {} matches) ---\n{}\n--- End Relevant Memory ---",
+            top_results.len(),
+            lines.join("\n")
+        )
+    }
 }
 
 #[async_trait]
@@ -96,6 +171,45 @@ impl AgentTool for MemoryTool {
             },
             "required": ["action"]
         })
+    }
+
+    fn category(&self) -> &str {
+        "info"
+    }
+
+    fn risk_level(&self, params: &serde_json::Value) -> crate::plugins::ai_agent::permission::ToolRiskLevel {
+        use crate::plugins::ai_agent::permission::ToolRiskLevel;
+        match params["action"].as_str() {
+            Some("save") => ToolRiskLevel::Low,    // 写内存也是低风险（不影响系统）
+            Some("read") | Some("search") | Some("list") => ToolRiskLevel::Low,
+            _ => ToolRiskLevel::Low,
+        }
+    }
+
+    fn permission_description(&self, params: &serde_json::Value) -> String {
+        let action = params["action"].as_str().unwrap_or("unknown");
+        match action {
+            "save" => {
+                let target = params["target"].as_str().unwrap_or("daily");
+                let content_preview = params["content"].as_str().unwrap_or("");
+                let preview = if content_preview.len() > 100 {
+                    format!("{}...", super::engine::truncate_bytes(content_preview, 100))
+                } else {
+                    content_preview.to_string()
+                };
+                format!("Save to {} memory:\n{}", target, preview)
+            }
+            "read" => {
+                let query = params["query"].as_str().unwrap_or("<target>");
+                format!("Read memory: {}", query)
+            }
+            "search" => {
+                let query = params["query"].as_str().unwrap_or("<query>");
+                format!("Search memory: {}", query)
+            }
+            "list" => "List memory files".to_string(),
+            _ => format!("Memory tool: {}", action),
+        }
     }
 
     async fn execute(&self, params: Value) -> Result<ToolOutput, String> {

@@ -1,12 +1,16 @@
 pub mod provider;
 pub mod openai_provider;
+pub mod ollama_provider;
 pub mod engine;
 pub mod permission;
 pub mod terminal_tool;
-pub mod notebook_tool;
 pub mod file_tool;
 pub mod command_history_tool;
 pub mod terminal_session_tool;
 pub mod plugin_tool;
 pub mod plugin_manager_tool;
 pub mod memory_tool;
+pub mod repair_plan;
+pub mod repair_kb;
+pub mod repair_kb_tool;
+pub mod command_audit;

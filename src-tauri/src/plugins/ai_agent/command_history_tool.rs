@@ -23,7 +23,7 @@ impl AgentTool for CommandHistoryTool {
     }
 
     fn description(&self) -> &str {
-        "Query command execution history: list recent commands, find failed commands, search by keyword, and get command details with linked notes. Essential for diagnosing terminal errors and recovering interrupted tasks."
+        "Query command execution history: list recent commands, find failed commands, search by keyword, and get command details. Essential for diagnosing terminal errors and recovering interrupted tasks."
     }
 
     fn parameters(&self) -> Value {
@@ -50,6 +50,31 @@ impl AgentTool for CommandHistoryTool {
             },
             "required": ["action"]
         })
+    }
+
+    fn category(&self) -> &str {
+        "info"
+    }
+
+    fn risk_level(&self, _params: &Value) -> super::permission::ToolRiskLevel {
+        super::permission::ToolRiskLevel::Low
+    }
+
+    fn permission_description(&self, params: &Value) -> String {
+        let action = params["action"].as_str().unwrap_or("unknown");
+        match action {
+            "list_recent" => "List recent command history".to_string(),
+            "list_failed" => "List failed command history".to_string(),
+            "search" => {
+                let query = params["query"].as_str().unwrap_or("");
+                format!("Search command history: {}", query)
+            }
+            "get_detail" => {
+                let cmd_id = params["command_id"].as_str().unwrap_or("<id>");
+                format!("View command detail: {}", cmd_id)
+            }
+            _ => format!("Command history: {}", action),
+        }
     }
 
     async fn execute(&self, params: Value) -> Result<ToolOutput, String> {
@@ -123,10 +148,6 @@ impl CommandHistoryTool {
                     "cwd": e.cwd,
                     "exitCode": e.exit_code,
                     "executedAt": e.executed_at,
-                    "linkedNotes": e.linked_notes.iter().map(|n| json!({
-                        "noteId": n.note_id,
-                        "title": n.title,
-                    })).collect::<Vec<_>>(),
                 })
             }).collect();
 
@@ -187,14 +208,6 @@ impl CommandHistoryTool {
         let entry = entries.iter().find(|e| e.id == command_id)
             .ok_or_else(|| format!("Command '{}' not found", command_id))?;
 
-        let linked_notes_str = if entry.linked_notes.is_empty() {
-            "None".to_string()
-        } else {
-            entry.linked_notes.iter()
-                .map(|n| format!("{} - {}", n.note_id, n.title))
-                .collect::<Vec<_>>().join(", ")
-        };
-
         let exit_str = match entry.exit_code {
             Some(0) => "Success (0)".to_string(),
             Some(c) => format!("Failed ({})", c),
@@ -204,8 +217,8 @@ impl CommandHistoryTool {
         Ok(ToolOutput {
             success: true,
             result: format!(
-                "Command Detail:\n  ID: {}\n  Command: {}\n  CWD: {}\n  Exit: {}\n  Executed: {}\n  Linked Notes: {}",
-                entry.id, entry.command, entry.cwd, exit_str, entry.executed_at, linked_notes_str
+                "Command Detail:\n  ID: {}\n  Command: {}\n  CWD: {}\n  Exit: {}\n  Executed: {}",
+                entry.id, entry.command, entry.cwd, exit_str, entry.executed_at
             ),
             metadata: json!({
                 "id": entry.id,
@@ -213,12 +226,6 @@ impl CommandHistoryTool {
                 "cwd": entry.cwd,
                 "exitCode": entry.exit_code,
                 "executedAt": entry.executed_at,
-                "linkedNotes": entry.linked_notes.iter().map(|n| json!({
-                    "noteId": n.note_id,
-                    "title": n.title,
-                    "category": n.category,
-                    "groupId": n.group_id,
-                })).collect::<Vec<_>>(),
             }),
         })
     }

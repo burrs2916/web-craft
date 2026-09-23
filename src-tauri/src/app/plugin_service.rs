@@ -7,6 +7,7 @@ use crate::plugins::domain::plugin::{PluginManifest, PluginTool};
 use crate::plugins::domain::usage_log::UsageLogEntry;
 use crate::plugins::repo::plugin_repo::PluginRepo;
 use crate::plugins::repo::usage_log_repo::UsageLogRepo;
+use crate::plugins::builtin_plugins::builtin_plugins;
 use crate::infra::storage::agent_repo::{PluginGroupRepo, PluginGroupRow, PluginCategoryRepo, PluginCategoryRow};
 use crate::infra::storage::database::Database;
 
@@ -32,7 +33,22 @@ impl PluginService {
         let _ = usage_log_repo.ensure_table();
         let service = PluginService { data_dir, plugin_repo, usage_log_repo, db };
         let _ = service.ensure_default_groups();
+        let _ = service.ensure_builtins();
         service
+    }
+
+    /// 幂等播种内置插件：仅在插件不存在时创建，不覆盖用户已有的插件。
+    fn ensure_builtins(&self) -> Result<(), String> {
+        let now = now_ms();
+        for mut plugin in builtin_plugins() {
+            if self.plugin_repo.get(&plugin.id)?.is_some() {
+                continue;
+            }
+            plugin.created_at = now;
+            plugin.updated_at = now;
+            self.plugin_repo.save(&plugin)?;
+        }
+        Ok(())
     }
 
     pub fn data_dir(&self) -> &PathBuf {
@@ -109,7 +125,7 @@ impl PluginService {
         let defaults = vec![
             ("network", "网络服务", "🌐", "#4FC3F7"),
             ("dev", "开发工具", "🛠️", "#81C784"),
-            ("data", "数据分析", "📊", "#FFD740"),
+            ("data", "数据分析", "📊", "#FBBF24"),
             ("creative", "创意工具", "🎨", "#CE93D8"),
             ("utility", "实用工具", "🔧", "#FF8A65"),
         ];

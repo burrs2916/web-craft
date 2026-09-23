@@ -48,6 +48,21 @@ impl AgentTool for TerminalTool {
         })
     }
 
+    fn category(&self) -> &str {
+        "exec"
+    }
+
+    fn risk_level(&self, params: &Value) -> super::permission::ToolRiskLevel {
+        use super::permission::classify_command_risk;
+        let command = params["command"].as_str().unwrap_or("");
+        classify_command_risk(command)
+    }
+
+    fn permission_description(&self, params: &Value) -> String {
+        let command = params["command"].as_str().unwrap_or("<command>");
+        format!("Execute command: {}", command)
+    }
+
     async fn execute(&self, params: Value) -> Result<ToolOutput, String> {
         let command = params["command"].as_str()
             .ok_or_else(|| "Missing 'command' parameter".to_string())?;

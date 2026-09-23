@@ -57,7 +57,9 @@ impl Pty {
 
         if conn_type == "ssh" {
             if let Some(ssh) = &config.ssh {
-                return Self::build_ssh_command(ssh, config.x11_forwarding.unwrap_or(false), None, None);
+                // 终端会话默认 30 秒连接超时：防止主机不可达时 ssh 一直重试导致会话挂起。
+                // 30 秒对大多数网络场景足够，同时不会让用户等太久。
+                return Self::build_ssh_command(ssh, config.x11_forwarding.unwrap_or(false), None, Some(30));
             }
         }
 

@@ -3,7 +3,7 @@ use crate::core::types::{Site, SiteSummary};
 use crate::infra::storage::database::Database;
 
 const SITE_COLUMNS: &str = "id, name, domain, local_workdir, connection_id, deploy_config_json, \
-     build_config_json, theme_id, theme_config_json, status, last_deployed_at, created_at, updated_at";
+     build_config_json, theme_id, theme_config_json, db_type, status, last_deployed_at, created_at, updated_at";
 
 fn row_to_site(row: &rusqlite::Row) -> rusqlite::Result<Site> {
     Ok(Site {
@@ -16,10 +16,11 @@ fn row_to_site(row: &rusqlite::Row) -> rusqlite::Result<Site> {
         build_config_json: row.get(6)?,
         theme_id: row.get(7)?,
         theme_config_json: row.get(8)?,
-        status: row.get(9)?,
-        last_deployed_at: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
+        db_type: row.get(9)?,
+        status: row.get(10)?,
+        last_deployed_at: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
     })
 }
 
@@ -30,8 +31,8 @@ impl SiteRepo {
         let conn = db.conn();
         conn.execute(
             "INSERT INTO sites (id, name, domain, local_workdir, connection_id, deploy_config_json, \
-             build_config_json, theme_id, theme_config_json, status, last_deployed_at, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+             build_config_json, theme_id, theme_config_json, db_type, status, last_deployed_at, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             rusqlite::params![
                 site.id,
                 site.name,
@@ -42,6 +43,7 @@ impl SiteRepo {
                 site.build_config_json,
                 site.theme_id,
                 site.theme_config_json,
+                site.db_type,
                 site.status,
                 site.last_deployed_at,
                 site.created_at,
@@ -56,7 +58,7 @@ impl SiteRepo {
         let n = conn.execute(
             "UPDATE sites SET name = ?2, domain = ?3, local_workdir = ?4, connection_id = ?5, \
              deploy_config_json = ?6, build_config_json = ?7, theme_id = ?8, theme_config_json = ?9, \
-             status = ?10, updated_at = ?11 \
+             db_type = ?10, status = ?11, updated_at = ?12 \
              WHERE id = ?1",
             rusqlite::params![
                 site.id,
@@ -68,6 +70,7 @@ impl SiteRepo {
                 site.build_config_json,
                 site.theme_id,
                 site.theme_config_json,
+                site.db_type,
                 site.status,
                 site.updated_at,
             ],
@@ -84,6 +87,12 @@ impl SiteRepo {
             Some(row) => Ok(Some(row?)),
             None => Ok(None),
         }
+    }
+
+    pub fn delete(db: &Database, id: &str) -> Result<usize> {
+        let conn = db.conn();
+        let n = conn.execute("DELETE FROM sites WHERE id = ?1", [id])?;
+        Ok(n)
     }
 
     pub fn workdir_taken(db: &Database, local_workdir: &str, exclude_id: Option<&str>) -> Result<bool> {
@@ -123,8 +132,8 @@ impl SiteRepo {
             let site = row_to_site(row)?;
             Ok(SiteSummary {
                 site,
-                draft_count: row.get(13)?,
-                published_count: row.get(14)?,
+                draft_count: row.get(14)?,
+                published_count: row.get(15)?,
                 connection_online: None,
             })
         })?;
@@ -154,6 +163,7 @@ mod tests {
             build_config_json: "{}".to_string(),
             theme_id: "craft-blog".to_string(),
             theme_config_json: "{}".to_string(),
+            db_type: "none".to_string(),
             status: "active".to_string(),
             last_deployed_at: None,
             created_at: 1000,

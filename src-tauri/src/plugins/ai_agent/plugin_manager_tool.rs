@@ -464,7 +464,7 @@ impl PluginManagerTool {
             return Ok(ToolOutput {
                 success: false,
                 result: format!(
-                    "Cannot create plugin: tool name conflicts detected:\n{}\nPlease rename these tools. Built-in reserved names: terminal, notebook, file, command_history, terminal_session, plugin_manager.",
+                    "Cannot create plugin: tool name conflicts detected:\n{}\nPlease rename these tools. Built-in reserved names: terminal, file, command_history, terminal_session, plugin_manager.",
                     conflicts.join("\n")
                 ),
                 metadata: json!({ "conflicts": conflicts }),
@@ -1141,7 +1141,7 @@ impl PluginManagerTool {
 
     fn check_tool_name_conflicts(&self, new_tools: &[PluginTool]) -> Result<Vec<String>, String> {
         let reserved_names = [
-            "terminal", "notebook", "file", "command_history",
+            "terminal", "file", "command_history",
             "terminal_session", "plugin_manager",
         ];
 

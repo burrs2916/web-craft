@@ -1,5 +1,5 @@
 use crate::core::error::Result;
-use crate::core::types::{CommandHistoryEntry, CommandSnippet, LinkedNoteInfo};
+use crate::core::types::{CommandHistoryEntry, CommandSnippet};
 use crate::infra::storage::database::Database;
 
 pub struct CommandRepo;
@@ -35,13 +35,12 @@ impl CommandRepo {
                     exit_code: row.get(4)?,
                     executed_at: row.get(5)?,
                     linked: linked != 0,
-                    linked_notes: Vec::new(),
                 })
             })?;
             rows.collect::<std::result::Result<Vec<_>, _>>()?
         };
 
-        Self::attach_linked_notes(db, entries)
+        Ok(entries)
     }
 
     pub fn save(db: &Database, entry: &CommandHistoryEntry) -> Result<()> {
@@ -79,71 +78,12 @@ impl CommandRepo {
                     exit_code: row.get(4)?,
                     executed_at: row.get(5)?,
                     linked: linked != 0,
-                    linked_notes: Vec::new(),
                 })
             })?;
             rows.collect::<std::result::Result<Vec<_>, _>>()?
         };
 
-        Self::attach_linked_notes(db, entries)
-    }
-
-    fn attach_linked_notes(db: &Database, entries: Vec<CommandHistoryEntry>) -> Result<Vec<CommandHistoryEntry>> {
-        let linked_ids: Vec<String> = entries
-            .iter()
-            .filter(|e| e.linked)
-            .map(|e| e.id.clone())
-            .collect();
-
-        if linked_ids.is_empty() {
-            return Ok(entries);
-        }
-
-        let conn = db.conn();
-        let mut notes_map: std::collections::HashMap<String, Vec<LinkedNoteInfo>> =
-            std::collections::HashMap::new();
-
-        let placeholders: Vec<String> = linked_ids.iter().enumerate()
-            .map(|(i, _)| format!("?{}", i + 1))
-            .collect();
-        let sql = format!(
-            "SELECT cnl.command_id, cnl.id, cnl.note_id, n.title, n.category, n.group_id \
-             FROM command_note_links cnl \
-             JOIN notes n ON n.id = cnl.note_id \
-             WHERE cnl.command_id IN ({}) \
-             ORDER BY cnl.created_at DESC",
-            placeholders.join(", ")
-        );
-        let mut stmt = conn.prepare(&sql)?;
-        let params: Vec<&dyn rusqlite::types::ToSql> = linked_ids.iter()
-            .map(|c| c as &dyn rusqlite::types::ToSql)
-            .collect();
-        let rows = stmt.query_map(params.as_slice(), |row| {
-            Ok((row.get::<_, String>(0)?, LinkedNoteInfo {
-                link_id: row.get(1)?,
-                note_id: row.get(2)?,
-                title: row.get(3)?,
-                category: row.get(4)?,
-                group_id: row.get(5)?,
-            }))
-        })?;
-
-        for row in rows {
-            let (cmd_id, note) = row?;
-            notes_map.entry(cmd_id).or_default().push(note);
-        }
-
-        let result = entries
-            .into_iter()
-            .map(|mut e| {
-                if let Some(notes) = notes_map.get(&e.id) {
-                    e.linked_notes = notes.clone();
-                }
-                e
-            })
-            .collect();
-
-        Ok(result)
+        Ok(entries)
     }
 
     pub fn list_snippets(db: &Database) -> Result<Vec<CommandSnippet>> {

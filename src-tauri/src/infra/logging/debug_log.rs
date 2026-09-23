@@ -224,6 +224,36 @@ pub fn rd_frontend(level: &str, run_id: &str, phase: &str, event: &str, detail: 
     structured(RD_SCOPE, level, "fe", run_id, phase, event, detail);
 }
 
+// ===== Env Ops (环境检测 & AI 修复) trace =====
+
+/// Scope tag for the environment detection & AI fix trace.
+pub const ENV_OPS_SCOPE: &str = "env-ops";
+
+/// Backend-side entry of the env-ops trace.
+pub fn env_ops(level: &str, run_id: &str, phase: &str, event: &str, detail: &str) {
+    structured(ENV_OPS_SCOPE, level, "be", run_id, phase, event, detail);
+}
+
+/// Frontend-side entry of the env-ops trace.
+pub fn env_ops_frontend(level: &str, run_id: &str, phase: &str, event: &str, detail: &str) {
+    structured(ENV_OPS_SCOPE, level, "fe", run_id, phase, event, detail);
+}
+
+// ===== Deploy (站点部署) trace =====
+
+/// Scope tag for the site deployment trace.
+pub const DEPLOY_SCOPE: &str = "deploy";
+
+/// Backend-side entry of the deployment trace.
+pub fn deploy(level: &str, run_id: &str, phase: &str, event: &str, detail: &str) {
+    structured(DEPLOY_SCOPE, level, "be", run_id, phase, event, detail);
+}
+
+/// Frontend-side entry of the deployment trace.
+pub fn deploy_frontend(level: &str, run_id: &str, phase: &str, event: &str, detail: &str) {
+    structured(DEPLOY_SCOPE, level, "fe", run_id, phase, event, detail);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,4 +340,39 @@ mod tests {
         let line = format_entry(RD_SCOPE, 0, "00:00:00.000", "WARN", "fe", "", "", "boot", "x");
         assert!(line.contains("run=- phase=- evt=boot"));
     }
+
+    #[test]
+    fn deploy_scope_is_greppable_and_distinct() {
+        let line = format_entry(
+            DEPLOY_SCOPE,
+            7,
+            "12:34:56.789",
+            "INFO",
+            "be",
+            "dep-1",
+            STEP_UPLOAD_LABEL,
+            "upload_failed",
+            "dir=/srv/x error=路径不存在",
+        );
+        // 部署链路要能靠 scope 单独 grep 出来，且与 rd-guide / env-ops 区分开
+        assert!(line.starts_with("[deploy] #000007 "));
+        assert!(line.contains("run=dep-1"));
+        assert!(line.contains("phase=upload"));
+        assert!(line.contains("evt=upload_failed"));
+        assert!(!line.contains('\n'));
+    }
+
+    #[test]
+    fn deploy_secrets_are_redacted_before_written() {
+        // 部署命令里带明文口令；debug.log 是要拿给别人排查的，绝不能落盘明文
+        let cmd = "PGPASSWORD='ad42ada5683148fe' psql -w -h 127.0.0.1 -U postgres";
+        let masked = redact(cmd, &["ad42ada5683148fe"]);
+        assert!(!masked.contains("ad42ada5683148fe"));
+        assert!(masked.contains("***REDACTED***"));
+        // 掩码不能把命令本身搞没了，否则日志失去排查价值
+        assert!(masked.contains("psql -w -h 127.0.0.1 -U postgres"));
+    }
+
+    /// 与 `deploy_service::STEP_UPLOAD` 一致，仅用于断言输出形态。
+    const STEP_UPLOAD_LABEL: &str = "upload";
 }

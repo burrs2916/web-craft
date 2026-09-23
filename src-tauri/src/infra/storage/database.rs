@@ -176,7 +176,7 @@ impl Database {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 icon TEXT NOT NULL DEFAULT '📁',
-                color TEXT NOT NULL DEFAULT '#6C63FF',
+                color TEXT NOT NULL DEFAULT '#2DD4BF',
                 sort_order INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
@@ -405,7 +405,7 @@ impl Database {
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
                     icon TEXT NOT NULL DEFAULT '📁',
-                    color TEXT NOT NULL DEFAULT '#6C63FF',
+                    color TEXT NOT NULL DEFAULT '#2DD4BF',
                     sort_order INTEGER NOT NULL DEFAULT 0,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL
@@ -492,12 +492,12 @@ impl Database {
                     INSERT OR IGNORE INTO note_groups (id, name, icon, color, sort_order, created_at, updated_at) VALUES
                         ('linux', 'Linux', '🐧', '#4FC3F7', 0, 0, 0),
                         ('database', 'Database', '🗄️', '#CE93D8', 1, 0, 0),
-                        ('devops', 'DevOps', '🔧', '#FFD740', 2, 0, 0),
+                        ('devops', 'DevOps', '🔧', '#FBBF24', 2, 0, 0),
                         ('docker', 'Docker', '🐳', '#4DD0E1', 3, 0, 0),
-                        ('kubernetes', 'Kubernetes', '☸️', '#6C63FF', 4, 0, 0),
+                        ('kubernetes', 'Kubernetes', '☸️', '#2DD4BF', 4, 0, 0),
                         ('network', 'Network', '🌐', '#81C784', 5, 0, 0),
                         ('programming', 'Programming', '💻', '#FF8A80', 6, 0, 0),
-                        ('snippet', 'Snippet', '⚡', '#FFD740', 7, 0, 0);
+                        ('snippet', 'Snippet', '⚡', '#FBBF24', 7, 0, 0);
                     ",
                 )?;
             }
@@ -766,6 +766,9 @@ impl Database {
                     max_iterations INTEGER NOT NULL DEFAULT 10,
                     tool_ids TEXT NOT NULL DEFAULT '[]',
                     trigger_type TEXT NOT NULL DEFAULT 'manual',
+                    auto_confirm INTEGER NOT NULL DEFAULT 0,
+                    permission_mode TEXT NOT NULL DEFAULT 'confirm',
+                    always_allowed_tools TEXT NOT NULL DEFAULT '[]',
                     fallback_model_id TEXT,
                     workspace_dir TEXT NOT NULL DEFAULT '',
                     created_at INTEGER NOT NULL,
@@ -777,13 +780,17 @@ impl Database {
                 -- Copy data from old table (convert '' to NULL for model_id and fallback_model_id)
                 INSERT INTO ai_agents_new (
                     id, name, description, model_id, system_prompt, temperature,
-                    max_iterations, tool_ids, trigger_type, fallback_model_id,
+                    max_iterations, tool_ids, trigger_type, auto_confirm,
+                    permission_mode, always_allowed_tools, fallback_model_id,
                     workspace_dir, created_at, updated_at
                 )
                 SELECT 
                     id, name, description,
                     CASE WHEN model_id = '' THEN NULL ELSE model_id END,
                     system_prompt, temperature, max_iterations, tool_ids, trigger_type,
+                    COALESCE(auto_confirm, 0),
+                    COALESCE(permission_mode, 'confirm'),
+                    COALESCE(always_allowed_tools, '[]'),
                     CASE WHEN fallback_model_id = '' THEN NULL ELSE fallback_model_id END,
                     workspace_dir, created_at, updated_at
                 FROM ai_agents;

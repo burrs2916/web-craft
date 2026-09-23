@@ -75,6 +75,8 @@ pub struct AiConversationRow {
     pub title: String,
     pub metadata: String,
     pub compaction_summary: String,
+    pub status: String,
+    pub message_count: i64,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -625,7 +627,7 @@ impl AiConversationRepo {
     pub fn find_by_id(db: &Database, id: &str) -> Result<Option<AiConversationRow>, String> {
         let conn = db.conn();
         let mut stmt = conn
-            .prepare("SELECT id, agent_id, title, metadata, compaction_summary, created_at, updated_at FROM ai_conversations WHERE id = ?1")
+            .prepare("SELECT id, agent_id, title, metadata, compaction_summary, status, message_count, created_at, updated_at FROM ai_conversations WHERE id = ?1")
             .map_err(|e| e.to_string())?;
 
         let rows = stmt
@@ -636,8 +638,10 @@ impl AiConversationRepo {
                     title: row.get(2)?,
                     metadata: row.get(3)?,
                     compaction_summary: row.get(4)?,
-                    created_at: row.get(5)?,
-                    updated_at: row.get(6)?,
+                    status: row.get(5)?,
+                    message_count: row.get(6)?,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -649,7 +653,7 @@ impl AiConversationRepo {
     pub fn list_by_agent(db: &Database, agent_id: &str) -> Result<Vec<AiConversationRow>, String> {
         let conn = db.conn();
         let mut stmt = conn
-            .prepare("SELECT id, agent_id, title, metadata, compaction_summary, created_at, updated_at FROM ai_conversations WHERE agent_id = ?1 ORDER BY updated_at DESC")
+            .prepare("SELECT id, agent_id, title, metadata, compaction_summary, status, message_count, created_at, updated_at FROM ai_conversations WHERE agent_id = ?1 ORDER BY updated_at DESC")
             .map_err(|e| e.to_string())?;
 
         let rows = stmt
@@ -660,8 +664,10 @@ impl AiConversationRepo {
                     title: row.get(2)?,
                     metadata: row.get(3)?,
                     compaction_summary: row.get(4)?,
-                    created_at: row.get(5)?,
-                    updated_at: row.get(6)?,
+                    status: row.get(5)?,
+                    message_count: row.get(6)?,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -672,12 +678,41 @@ impl AiConversationRepo {
     pub fn save(db: &Database, conv: &AiConversationRow) -> Result<(), String> {
         let conn = db.conn();
         conn.execute(
-            "INSERT INTO ai_conversations (id, agent_id, title, metadata, compaction_summary, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             ON CONFLICT(id) DO UPDATE SET agent_id=excluded.agent_id, title=excluded.title, metadata=excluded.metadata, compaction_summary=excluded.compaction_summary, updated_at=excluded.updated_at",
-            params![conv.id, conv.agent_id, conv.title, conv.metadata, conv.compaction_summary, conv.created_at, conv.updated_at],
+            "INSERT INTO ai_conversations (id, agent_id, title, metadata, compaction_summary, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET agent_id=excluded.agent_id, title=excluded.title, metadata=excluded.metadata, compaction_summary=excluded.compaction_summary, status=excluded.status, updated_at=excluded.updated_at",
+            params![conv.id, conv.agent_id, conv.title, conv.metadata, conv.compaction_summary, conv.status, conv.created_at, conv.updated_at],
         )
         .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub fn update_status(db: &Database, id: &str, status: &str) -> Result<(), String> {
+        let conn = db.conn();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        conn.execute(
+            "UPDATE ai_conversations SET status = ?1, updated_at = ?2 WHERE id = ?3",
+            params![status, now, id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// 应用启动时：将所有 running 状态的会话重置为 interrupted
+    pub fn reset_running_to_interrupted(db: &Database) -> Result<i64, String> {
+        let conn = db.conn();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        let affected = conn.execute(
+            "UPDATE ai_conversations SET status = 'interrupted', updated_at = ?1 WHERE status = 'running'",
+            params![now],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(affected as i64)
     }
 
     pub fn update_compaction_summary(db: &Database, id: &str, summary: &str) -> Result<(), String> {
@@ -701,6 +736,80 @@ impl AiConversationRepo {
         conn.execute("DELETE FROM ai_conversations WHERE id = ?1", params![id])
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    /// 清理指定 agent 下过期的空闲会话（按 updated_at 筛选，保留最近 N 个）
+    /// 返回被删除的会话数
+    pub fn cleanup_old_conversations(
+        db: &Database,
+        agent_id: &str,
+        keep_count: i64,
+        max_age_days: Option<i64>,
+    ) -> Result<i64, String> {
+        let conn = db.conn();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+
+        // 1. 先找出需要保留的会话（排除正在运行的）
+        let keep_cutoff_ms = if let Some(days) = max_age_days {
+            // 同时按天数和数量限制：取两者中更严格的（保留更少的）
+            let age_cutoff = now - days * 24 * 3600 * 1000;
+            // 找第 keep_count 个会话的时间戳
+            let keep_by_count: Option<i64> = conn
+                .query_row(
+                    "SELECT updated_at FROM ai_conversations 
+                     WHERE agent_id = ?1 AND status != 'running'
+                     ORDER BY updated_at DESC LIMIT 1 OFFSET ?2",
+                    params![agent_id, keep_count - 1],
+                    |row| row.get(0),
+                )
+                .ok();
+            // 取两个时间戳中较小的（保留更新的）
+            match keep_by_count {
+                Some(ts) => ts.min(age_cutoff),
+                None => age_cutoff,
+            }
+        } else {
+            // 只按数量限制
+            conn.query_row(
+                "SELECT updated_at FROM ai_conversations 
+                 WHERE agent_id = ?1 AND status != 'running'
+                 ORDER BY updated_at DESC LIMIT 1 OFFSET ?2",
+                params![agent_id, keep_count - 1],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+        };
+
+        if keep_cutoff_ms <= 0 {
+            return Ok(0);
+        }
+
+        // 2. 删除更新时间早于阈值且不在运行中的会话及其消息
+        let ids_to_delete: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id FROM ai_conversations 
+                     WHERE agent_id = ?1 AND status != 'running' AND updated_at < ?2",
+                )
+                .map_err(|e| e.to_string())?;
+            let rows = stmt
+                .query_map(params![agent_id, keep_cutoff_ms], |row| row.get(0))
+                .map_err(|e| e.to_string())?;
+            rows.filter_map(|r| r.ok()).collect()
+        };
+
+        let deleted = ids_to_delete.len() as i64;
+        for id in &ids_to_delete {
+            conn.execute("DELETE FROM ai_messages WHERE conversation_id = ?1", params![id])
+                .map_err(|e| e.to_string())?;
+            conn.execute("DELETE FROM ai_conversations WHERE id = ?1", params![id])
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(deleted)
     }
 }
 
@@ -739,23 +848,62 @@ impl AiMessageRepo {
 
     pub fn save(db: &Database, msg: &AiMessageRow) -> Result<(), String> {
         let conn = db.conn();
+        // 先检查是否是新消息（用于更新计数）
+        let is_new = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ai_messages WHERE id = ?1",
+                params![msg.id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|c| c == 0)
+            .unwrap_or(true);
+
         let rows = conn.execute(
             "INSERT INTO ai_messages (id, conversation_id, role, content, tool_calls, is_error, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(id) DO UPDATE SET content=excluded.content, tool_calls=excluded.tool_calls, is_error=excluded.is_error",
             params![msg.id, msg.conversation_id, msg.role, msg.content, msg.tool_calls, msg.is_error, msg.created_at],
         )
         .map_err(|e| e.to_string())?;
+
+        // 新消息时更新会话的 message_count
+        if is_new {
+            conn.execute(
+                "UPDATE ai_conversations SET message_count = message_count + 1 WHERE id = ?1",
+                params![msg.conversation_id],
+            )
+            .map_err(|e| format!("failed to update message_count: {}", e))?;
+        }
+
         tracing::info!("[AiMessageRepo::save] id={}, role={}, conv_id={}, rows_affected={}", msg.id, msg.role, msg.conversation_id, rows);
         Ok(())
     }
 
     pub fn delete_after(db: &Database, conversation_id: &str, after_message_id: &str) -> Result<(), String> {
         let conn = db.conn();
+        // 先统计要删除的消息数
+        let deleted_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ai_messages WHERE conversation_id = ?1 AND created_at >= (SELECT created_at FROM ai_messages WHERE id = ?2)",
+                params![conversation_id, after_message_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
         conn.execute(
             "DELETE FROM ai_messages WHERE conversation_id = ?1 AND created_at >= (SELECT created_at FROM ai_messages WHERE id = ?2)",
             params![conversation_id, after_message_id],
         )
         .map_err(|e| e.to_string())?;
+
+        // 更新会话的 message_count
+        if deleted_count > 0 {
+            conn.execute(
+                "UPDATE ai_conversations SET message_count = MAX(message_count - ?1, 0) WHERE id = ?2",
+                params![deleted_count, conversation_id],
+            )
+            .map_err(|e| format!("failed to update message_count after delete: {}", e))?;
+        }
+
         Ok(())
     }
 }

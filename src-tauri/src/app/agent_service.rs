@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use crate::app::notebook_service::NotebookService;
 use crate::app::terminal_service::TerminalService;
 use crate::infra::storage::database::Database;
 use crate::infra::storage::agent_repo::{
@@ -21,23 +20,41 @@ fn now_ms() -> i64 {
         .as_millis() as i64
 }
 
+/// Ollama 本地模型信息
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct OllamaModelInfo {
+    pub name: String,
+    pub ref_key: String,
+    pub size: u64,
+    pub modified_at: String,
+    pub parameter_size: String,
+    pub quantization_level: String,
+    pub family: String,
+}
+
+/// Ollama 服务状态信息
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct OllamaStatusInfo {
+    pub service_available: bool,
+    pub version: String,
+    pub model_loaded: bool,
+    pub model_name: String,
+    pub running_models: Vec<String>,
+    pub error: Option<String>,
+}
+
 pub struct AgentService {
     db: Arc<Database>,
-    notebook: Arc<NotebookService>,
     terminal: Arc<TerminalService>,
 }
 
 impl AgentService {
-    pub fn new(db: Arc<Database>, notebook: Arc<NotebookService>, terminal: Arc<TerminalService>) -> Self {
-        AgentService { db, notebook, terminal }
+    pub fn new(db: Arc<Database>, terminal: Arc<TerminalService>) -> Self {
+        AgentService { db, terminal }
     }
 
     pub fn db(&self) -> Arc<Database> {
         self.db.clone()
-    }
-
-    pub fn notebook(&self) -> Arc<NotebookService> {
-        self.notebook.clone()
     }
 
     pub fn terminal(&self) -> Arc<TerminalService> {
@@ -201,6 +218,132 @@ impl AgentService {
         }
     }
 
+    /// 扫描本地 Ollama 服务，获取可用模型列表
+    pub async fn scan_ollama_models(&self, base_url: &str) -> Result<Vec<OllamaModelInfo>, String> {
+        let url = format!("{}/api/tags", base_url.trim_end_matches('/'));
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| format!("Failed to create client: {}", e))?;
+
+        let resp = client.get(&url)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_connect() {
+                    "Ollama service not found. Please make sure Ollama is installed and running.".to_string()
+                } else {
+                    format!("Failed to connect to Ollama: {}", e)
+                }
+            })?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(format!("Ollama API error (HTTP {}): {}", status, resp.text().await.unwrap_or_default()));
+        }
+
+        let body: serde_json::Value = resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))?;
+        let models = body["models"].as_array()
+            .ok_or_else(|| "Invalid response: no models field".to_string())?;
+
+        let mut result = Vec::new();
+        for m in models {
+            let name = m["name"].as_str().unwrap_or("").to_string();
+            let size = m["size"].as_u64().unwrap_or(0);
+            let modified_at = m["modified_at"].as_str().unwrap_or("").to_string();
+            let details = m["details"].as_object();
+            let parameter_size = details.and_then(|d| d["parameter_size"].as_str()).unwrap_or("").to_string();
+            let quantization_level = details.and_then(|d| d["quantization_level"].as_str()).unwrap_or("").to_string();
+            let family = details.and_then(|d| d["family"].as_str()).unwrap_or("").to_string();
+
+            result.push(OllamaModelInfo {
+                name: name.clone(),
+                ref_key: name.clone(),
+                size,
+                modified_at,
+                parameter_size,
+                quantization_level,
+                family,
+            });
+        }
+
+        Ok(result)
+    }
+
+    /// 检查 Ollama 服务状态和模型加载情况
+    pub async fn check_ollama_status(&self, base_url: &str, model_name: Option<&str>) -> Result<OllamaStatusInfo, String> {
+        let base = base_url.trim_end_matches('/');
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .connect_timeout(std::time::Duration::from_secs(3))
+            .build()
+            .map_err(|e| format!("Failed to create client: {}", e))?;
+
+        let mut status_info = OllamaStatusInfo {
+            service_available: false,
+            version: String::new(),
+            model_loaded: false,
+            model_name: model_name.unwrap_or("").to_string(),
+            running_models: Vec::new(),
+            error: None,
+        };
+
+        // 1. 获取版本信息（同时检测服务是否可用）
+        match client.get(format!("{}/api/version", base)).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                status_info.service_available = true;
+                if let Ok(json) = resp.json::<serde_json::Value>().await {
+                    status_info.version = json["version"].as_str().unwrap_or("unknown").to_string();
+                }
+            }
+            Ok(resp) => {
+                status_info.error = Some(format!("Version API returned HTTP {}", resp.status()));
+                return Ok(status_info);
+            }
+            Err(e) => {
+                if e.is_connect() {
+                    status_info.error = Some("Ollama service not found. Please make sure Ollama is installed and running.".to_string());
+                } else {
+                    status_info.error = Some(format!("Failed to connect to Ollama: {}", e));
+                }
+                return Ok(status_info);
+            }
+        }
+
+        // 2. 获取运行中的模型列表
+        match client.get(format!("{}/api/ps", base)).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(json) = resp.json::<serde_json::Value>().await {
+                    if let Some(models) = json["models"].as_array() {
+                        for m in models {
+                            if let Some(name) = m["name"].as_str() {
+                                status_info.running_models.push(name.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(resp) => {
+                status_info.error = Some(format!("PS API returned HTTP {}", resp.status()));
+            }
+            Err(e) => {
+                status_info.error = Some(format!("Failed to get running models: {}", e));
+            }
+        }
+
+        // 3. 检查指定模型是否已加载
+        if let Some(model) = model_name {
+            for running_model in &status_info.running_models {
+                if running_model == model || running_model.starts_with(&format!("{}:", model)) {
+                    status_info.model_loaded = true;
+                    break;
+                }
+            }
+        }
+
+        Ok(status_info)
+    }
+
     pub fn list_agents(&self) -> Result<Vec<AiAgentRow>, String> {
         AiAgentRepo::list(&self.db)
     }
@@ -234,6 +377,8 @@ impl AgentService {
             title: title.to_string(),
             metadata: metadata.to_string(),
             compaction_summary: String::new(),
+            status: "idle".to_string(),
+            message_count: 0,
             created_at: now,
             updated_at: now,
         };
@@ -241,8 +386,28 @@ impl AgentService {
         Ok(conv)
     }
 
+    pub fn update_conversation_status(&self, id: &str, status: &str) -> Result<(), String> {
+        AiConversationRepo::update_status(&self.db, id, status)
+    }
+
+    /// 应用启动时重置所有运行中的会话为中断状态
+    pub fn reset_running_conversations(&self) -> Result<i64, String> {
+        AiConversationRepo::reset_running_to_interrupted(&self.db)
+    }
+
     pub fn delete_conversation(&self, id: &str) -> Result<(), String> {
         AiConversationRepo::delete(&self.db, id)
+    }
+
+    /// 清理旧会话：保留最近 keep_count 个，超过 max_age_days 的一并清理
+    /// 返回被删除的会话数
+    pub fn cleanup_old_conversations(
+        &self,
+        agent_id: &str,
+        keep_count: i64,
+        max_age_days: Option<i64>,
+    ) -> Result<i64, String> {
+        AiConversationRepo::cleanup_old_conversations(&self.db, agent_id, keep_count, max_age_days)
     }
 
     pub fn list_messages(&self, conversation_id: &str) -> Result<Vec<AiMessageRow>, String> {

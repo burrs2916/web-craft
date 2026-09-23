@@ -55,7 +55,6 @@ impl CommandExecutor {
             exit_code: None,
             executed_at: chrono_now_ms(),
             linked: false,
-            linked_notes: Vec::new(),
         };
 
         CommandRepo::save(&self.db, &entry)?;

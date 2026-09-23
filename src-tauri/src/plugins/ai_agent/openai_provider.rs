@@ -8,7 +8,10 @@ use super::provider::{ChatMessage, ChatOptions, ChatResponse, ProviderConfig, Ll
 
 pub struct OpenAiCompatProvider {
     config: ProviderConfig,
+    /// 普通请求客户端（带全局超时，用于非流式 chat）
     client: reqwest::Client,
+    /// 流式请求客户端（无全局超时，在流式循环中做空闲超时控制）
+    stream_client: reqwest::Client,
 }
 
 impl OpenAiCompatProvider {
@@ -18,9 +21,16 @@ impl OpenAiCompatProvider {
             .connect_timeout(std::time::Duration::from_secs(10))
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
+        // 流式客户端：仅设置连接超时，不设置全局超时
+        // 流式的超时由调用方通过空闲超时机制控制
+        let stream_client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
         OpenAiCompatProvider {
             config,
             client,
+            stream_client,
         }
     }
 
@@ -122,6 +132,7 @@ impl OpenAiCompatProvider {
         Ok(ChatResponse {
             role: "assistant".to_string(),
             content: if text_content.is_empty() { None } else { Some(text_content) },
+            reasoning_content: None,
             tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
             finish_reason: stop_reason,
         })
@@ -138,6 +149,7 @@ impl OpenAiCompatProvider {
                     "text_delta" => {
                         Some(super::provider::ChatChunk {
                             content: delta["text"].as_str().map(|s| s.to_string()),
+                            reasoning_content: None,
                             tool_calls: None,
                             finish_reason: None,
                         })
@@ -145,6 +157,7 @@ impl OpenAiCompatProvider {
                     "input_json_delta" => {
                         Some(super::provider::ChatChunk {
                             content: None,
+                            reasoning_content: None,
                             tool_calls: Some(vec![super::provider::ToolCallDelta {
                                 index: json["index"].as_i64().unwrap_or(0) as i32,
                                 id: None,
@@ -163,6 +176,7 @@ impl OpenAiCompatProvider {
                 let stop_reason = json["delta"]["stop_reason"].as_str().map(|s| s.to_string());
                 Some(super::provider::ChatChunk {
                     content: None,
+                    reasoning_content: None,
                     tool_calls: None,
                     finish_reason: stop_reason,
                 })
@@ -172,6 +186,7 @@ impl OpenAiCompatProvider {
                 if content_block["type"].as_str() == Some("tool_use") {
                     Some(super::provider::ChatChunk {
                         content: None,
+                        reasoning_content: None,
                         tool_calls: Some(vec![super::provider::ToolCallDelta {
                             index: json["index"].as_i64().unwrap_or(0) as i32,
                             id: content_block["id"].as_str().map(|s| s.to_string()),
@@ -233,6 +248,7 @@ impl LlmProvider for OpenAiCompatProvider {
         let message = &choice["message"];
 
         let content = message["content"].as_str().map(|s| s.to_string());
+        let reasoning_content = message["reasoning_content"].as_str().map(|s| s.to_string());
         let tool_calls: Option<Vec<super::provider::ToolCall>> = if let Some(tc) = message["tool_calls"].as_array() {
             Some(tc.iter().map(|t| serde_json::from_value(t.clone()).unwrap_or_else(|_| {
                 super::provider::ToolCall {
@@ -253,6 +269,7 @@ impl LlmProvider for OpenAiCompatProvider {
         Ok(ChatResponse {
             role: "assistant".to_string(),
             content,
+            reasoning_content,
             tool_calls,
             finish_reason,
         })
@@ -267,7 +284,11 @@ impl LlmProvider for OpenAiCompatProvider {
         let body = self.build_chat_body(messages, options, true);
         let (auth_header_name, auth_header_value) = self.build_auth_header();
 
-        let mut req = self.client
+        let body_size = serde_json::to_string(&body).map(|s| s.len()).unwrap_or(0);
+        tracing::info!("[OpenAI stream] Sending request: url={}, model={}, body_size_bytes={}, messages={}",
+            url, options.model, body_size, messages.len());
+
+        let mut req = self.stream_client
             .post(&url)
             .header(&auth_header_name, &auth_header_value)
             .header("Content-Type", "application/json");
@@ -324,6 +345,7 @@ impl LlmProvider for OpenAiCompatProvider {
                     let delta = &choice["delta"];
 
                     let content = delta["content"].as_str().map(|s| s.to_string());
+                    let reasoning_content = delta["reasoning_content"].as_str().map(|s| s.to_string());
                     let finish_reason = choice["finish_reason"].as_str().map(|s| s.to_string());
 
                     let tool_calls = if let Some(tc) = delta["tool_calls"].as_array() {
@@ -345,6 +367,7 @@ impl LlmProvider for OpenAiCompatProvider {
 
                     chunks.push(super::provider::ChatChunk {
                         content,
+                        reasoning_content,
                         tool_calls,
                         finish_reason,
                     });
@@ -365,9 +388,11 @@ impl LlmProvider for OpenAiCompatProvider {
                         let choice = &json["choices"][0];
                         let delta = &choice["delta"];
                         let content = delta["content"].as_str().map(|s| s.to_string());
+                        let reasoning_content = delta["reasoning_content"].as_str().map(|s| s.to_string());
                         let finish_reason = choice["finish_reason"].as_str().map(|s| s.to_string());
                         chunks.push(super::provider::ChatChunk {
                             content,
+                            reasoning_content,
                             tool_calls: None,
                             finish_reason,
                         });
@@ -389,6 +414,51 @@ impl LlmProvider for OpenAiCompatProvider {
         Ok(())
     }
 
+    async fn preload_model(&self, _model: &str, _keep_alive: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn check_health(&self) -> bool {
+        let base = self.config.base_url.trim_end_matches('/');
+        let (auth_header_name, auth_header_value) = self.build_auth_header();
+
+        // 尝试 /v1/models 接口（标准 OpenAI 兼容）
+        let models_url = if base.ends_with("/v1") {
+            format!("{}/models", base)
+        } else if base.contains("/v1/") {
+            // base_url 可能已经包含具体路径，尝试其根路径
+            let v1_pos = base.find("/v1/").unwrap();
+            format!("{}/v1/models", &base[..v1_pos])
+        } else {
+            format!("{}/v1/models", base)
+        };
+
+        if let Ok(resp) = self.client
+            .get(&models_url)
+            .header(&auth_header_name, &auth_header_value)
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                return true;
+            }
+        }
+
+        // 退而求其次：尝试 base_url 根路径
+        if let Ok(resp) = self.client.get(base).send().await {
+            if resp.status().is_success() || resp.status().is_client_error() {
+                // 只要服务器有响应（即使 401/403 也说明服务在线）
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn provider_type(&self) -> &'static str {
+        "openai-compat"
+    }
+
     async fn chat_stream_realtime(
         &self,
         messages: &[ChatMessage],
@@ -399,7 +469,11 @@ impl LlmProvider for OpenAiCompatProvider {
         let body = self.build_chat_body(messages, options, true);
         let (auth_header_name, auth_header_value) = self.build_auth_header();
 
-        let mut req = self.client
+        let body_size = serde_json::to_string(&body).map(|s| s.len()).unwrap_or(0);
+        tracing::info!("[OpenAI stream_realtime] Sending request: url={}, model={}, body_size_bytes={}, messages={}",
+            url, options.model, body_size, messages.len());
+
+        let mut req = self.stream_client
             .post(&url)
             .header(&auth_header_name, &auth_header_value)
             .header("Content-Type", "application/json");
@@ -420,15 +494,60 @@ impl LlmProvider for OpenAiCompatProvider {
             return Err(format!("API error {}: {}", status, text));
         }
 
+        tracing::debug!("[OpenAI stream] response received, status={}, model={}", response.status(), options.model);
+
         let mut full_content = String::new();
+        let mut full_reasoning = String::new();
         let mut tool_calls_map: std::collections::BTreeMap<i32, (Option<String>, String, String)> = std::collections::BTreeMap::new();
         let mut finish_reason: Option<String> = None;
         let mut buffer = String::new();
         let mut stream = response.bytes_stream();
         use futures::StreamExt;
 
-        while let Some(chunk_result) = stream.next().await {
+        // 首字节超时：等待第一个有效数据块的最长时间
+        // 设置为 300 秒，给本地模型（如 Ollama）足够的加载时间
+        let first_byte_timeout = std::time::Duration::from_secs(300);
+        // 空闲超时：两个数据块之间的最大间隔
+        let idle_timeout = std::time::Duration::from_secs(120);
+        let mut first_chunk_received = false;
+        let mut first_content_received = false;
+        let mut first_tool_call_received = false;
+
+        loop {
+            let timeout_duration = if first_chunk_received {
+                idle_timeout
+            } else {
+                first_byte_timeout
+            };
+
+            let chunk_result = match tokio::time::timeout(timeout_duration, stream.next()).await {
+                Ok(Some(result)) => result,
+                Ok(None) => break, // 流正常结束
+                Err(_) => {
+                    // 超时
+                    if !first_chunk_received {
+                        return Err(format!(
+                            "Stream timeout: no data received within {}s. \
+                            The model may still be loading (especially for local models like Ollama). \
+                            Please check if the model is properly loaded and try again.",
+                            first_byte_timeout.as_secs()
+                        ));
+                    } else {
+                        return Err(format!(
+                            "Stream idle timeout: no data received for {}s. \
+                            The connection may have been lost.",
+                            idle_timeout.as_secs()
+                        ));
+                    }
+                }
+            };
+
             let chunk_bytes = chunk_result.map_err(|e| format!("Stream read error: {}", e))?;
+            if !first_chunk_received {
+                tracing::debug!("[OpenAI stream] first byte received, model={}", options.model);
+                first_chunk_received = true;
+            }
+
             let chunk_str = String::from_utf8_lossy(&chunk_bytes);
             buffer.push_str(&chunk_str);
 
@@ -453,6 +572,7 @@ impl LlmProvider for OpenAiCompatProvider {
                         let choice = &json["choices"][0];
                         let delta = &choice["delta"];
                         let content = delta["content"].as_str().map(|s| s.to_string());
+                        let reasoning_content = delta["reasoning_content"].as_str().map(|s| s.to_string());
                         let fr = choice["finish_reason"].as_str().map(|s| s.to_string());
                         let tool_calls = if let Some(tc) = delta["tool_calls"].as_array() {
                             Some(tc.iter().map(|t| super::provider::ToolCallDelta {
@@ -472,6 +592,7 @@ impl LlmProvider for OpenAiCompatProvider {
                         };
                         Some(super::provider::ChatChunk {
                             content,
+                            reasoning_content,
                             tool_calls,
                             finish_reason: fr,
                         })
@@ -480,10 +601,30 @@ impl LlmProvider for OpenAiCompatProvider {
                     if let Some(chunk) = chat_chunk {
                         if let Some(content) = &chunk.content {
                             if !content.is_empty() {
+                                if !first_content_received {
+                                    tracing::debug!("[OpenAI stream] first text content received, model={}, preview={:?}",
+                                        options.model, super::engine::truncate_bytes(content, 80));
+                                    first_content_received = true;
+                                }
                                 full_content.push_str(content);
                             }
                         }
+                        if let Some(reasoning) = &chunk.reasoning_content {
+                            if !reasoning.is_empty() {
+                                if !first_content_received {
+                                    tracing::debug!("[OpenAI stream] first reasoning content received, model={}, preview={:?}",
+                                        options.model, super::engine::truncate_bytes(reasoning, 80));
+                                    first_content_received = true;
+                                }
+                                full_reasoning.push_str(reasoning);
+                            }
+                        }
                         if let Some(tc_deltas) = &chunk.tool_calls {
+                            if !tc_deltas.is_empty() && !first_tool_call_received {
+                                tracing::debug!("[OpenAI stream] first tool call delta received, model={}, count={}",
+                                    options.model, tc_deltas.len());
+                                first_tool_call_received = true;
+                            }
                             for delta in tc_deltas {
                                 let entry = tool_calls_map
                                     .entry(delta.index)
@@ -519,9 +660,17 @@ impl LlmProvider for OpenAiCompatProvider {
             })
             .collect();
 
+        tracing::info!("[OpenAI stream] completed, model={}, content_len={}, reasoning_len={}, tool_calls={}, finish_reason={:?}",
+            options.model,
+            full_content.len(),
+            full_reasoning.len(),
+            tool_calls.len(),
+            finish_reason);
+
         Ok(super::provider::ChatResponse {
             role: "assistant".to_string(),
             content: if full_content.is_empty() { None } else { Some(full_content) },
+            reasoning_content: if full_reasoning.is_empty() { None } else { Some(full_reasoning) },
             tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
             finish_reason,
         })
