@@ -2,12 +2,17 @@
 name = "web-craft"
 version = "0.6.2"
 description = "WebCraft - Personal Website CMS"
-authors = ["Biosphere Team"]
+authors = ["WebCraft Team"]
 edition = "2021"
+default-run = "web-craft"
 
 [lib]
 name = "web_craft_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "deploy_cli"
+path = "src/bin/deploy_cli.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -23,7 +28,6 @@ aes-gcm = "0.10"
 getrandom = "0.2"
 regex = "1"
 encoding_rs = "0.8"
-webcraft-common = { path = "../common" }
 
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }
@@ -34,6 +38,8 @@ bytes = "1"
 rusqlite = { version = "0.37", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
+hex = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -47,6 +53,15 @@ anyhow = "1"
 chrono = "0.4"
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-notification = "2"
+
+# SSG 静态站点生成（docs/ssg-engine-design.md §2）
+tera = "1"
+pulldown-cmark = "0.13"
+
+# 打包/压缩（源码部署用）
+tar = "0.4"
+flate2 = "1"
 
 # Windows.Services.Store API (Microsoft Store IAP) — Windows-only.
 # Pinned to windows 0.61 to align with the transitive `windows-core 0.61.2`
