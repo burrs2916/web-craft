@@ -1,6 +1,5 @@
 export { default as AppNavbar } from "./AppNavbar";
 export { default as AppFooter } from "./AppFooter";
-export { default as SelectContent } from "./SelectContent";
 export { default as MenuContent } from "./MenuContent";
 export { default as CardAlert } from "./CardAlert";
 export { AppShell } from "./AppShell";
