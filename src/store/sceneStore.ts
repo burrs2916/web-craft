@@ -44,7 +44,6 @@ interface SceneState {
   updateCategory: (id: string, updates: Partial<SceneCategory>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
 
-  saveScene: (scene: SceneDSL) => Promise<void>;
   publishScene: (id: string) => Promise<void>;
   unpublishScene: (id: string) => Promise<void>;
   bindSite: (sceneId: string, siteId: string | null) => Promise<void>;
@@ -370,22 +369,6 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         categories: [categoryToDelete, ...state.categories].sort((a, b) => a.sortOrder - b.sortOrder),
         error: err instanceof Error ? err.message : String(err),
       }));
-    }
-  },
-
-  saveScene: async (scene: SceneDSL) => {
-    try {
-      const synced: SceneDSL = {
-        ...scene,
-        updatedAt: Math.floor(Date.now() / 1000),
-      };
-      await sceneApi.update(synced);
-      set((state) => ({
-        scenes: state.scenes.map((s) => (s.id === synced.id ? synced : s)),
-      }));
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
-      throw err;
     }
   },
 

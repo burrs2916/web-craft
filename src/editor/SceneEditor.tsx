@@ -40,8 +40,6 @@ import { SceneTabBar } from "./components/SceneTabBar";
 import logger from "../utils/logger";
 import { previewScene, publishScene as codegenPublish } from "../services/codegenService";
 import { openPreviewWindow } from "../core/services/window.service";
-import { FrameworkSelectDialog } from "../components/codegen/FrameworkSelectDialog";
-import type { CodegenFramework } from "../codegen/types";
 import { ComponentCenterPanel } from "./panels/ComponentCenterPanel";
 import { PerformanceMonitor } from "./monitors/PerformanceMonitor";
 import { useEditorStore, useDirtyStore } from "../store/editorStore";
