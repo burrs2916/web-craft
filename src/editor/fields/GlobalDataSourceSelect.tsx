@@ -31,7 +31,18 @@ export function GlobalDataSourceSelect({ value, onChange }: { value: string; onC
         options={opts}
         getOptionLabel={(opt) => (typeof opt === "string" ? opt : opt.label)}
         isOptionEqualToValue={(opt, val) => opt.value === (typeof val === "string" ? val : val.value)}
-        renderInput={(params) => <TextField {...params} size="small" placeholder="不绑定" />}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            size="small"
+            placeholder="不绑定"
+            sx={{
+              '& .MuiInputBase-input': { fontSize: 11.5 },
+              '& .MuiOutlinedInput-root': { borderRadius: 0.75 },
+              '& .MuiOutlinedInput-root:not(.MuiInputBase-multiline)': { height: 32 },
+            }}
+          />
+        )}
         onChange={(_, newVal) => onChange(typeof newVal === "string" ? newVal : (newVal?.value ?? ""))}
       />
       {orphaned && (

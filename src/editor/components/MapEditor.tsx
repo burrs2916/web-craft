@@ -87,8 +87,9 @@ export function MapEditor({ value, onChange, label, keyPlaceholder = "字段名"
               onChange={(e) => setRow(i, { key: e.target.value })}
               sx={{
                 flex: 1,
-                "& .MuiInputBase-root": { fontSize: 12 },
-                "& .MuiOutlinedInput-notchedOutline": { borderColor: "divider" },
+                '& .MuiInputBase-input': { fontSize: 11.5 },
+                '& .MuiOutlinedInput-root': { borderRadius: 0.75 },
+                '& .MuiOutlinedInput-root:not(.MuiInputBase-multiline)': { height: 32 },
               }}
             />
             <TextField
@@ -98,8 +99,9 @@ export function MapEditor({ value, onChange, label, keyPlaceholder = "字段名"
               onChange={(e) => setRow(i, { value: e.target.value })}
               sx={{
                 flex: 1,
-                "& .MuiInputBase-root": { fontSize: 12 },
-                "& .MuiOutlinedInput-notchedOutline": { borderColor: "divider" },
+                '& .MuiInputBase-input': { fontSize: 11.5 },
+                '& .MuiOutlinedInput-root': { borderRadius: 0.75 },
+                '& .MuiOutlinedInput-root:not(.MuiInputBase-multiline)': { height: 32 },
               }}
             />
             <IconButton

@@ -107,6 +107,14 @@ describe("image codegen：内容 / 链接 / 空态 / 样式", () => {
     expect(withSrc).toContain("addEventListener('error'");
   });
 
+  test("空态层带媒体族骨架屏（虚线框 + 45° 斜纹），与 video/iframe 发布端同构", () => {
+    expect(renderImg({})).toMatch(/dashed rgba\(0,0,0,0\.12\)/);
+    expect(renderImg({})).toContain("repeating-linear-gradient(45deg");
+    // 只读统一 token 的白色背景与深灰文字（defaultConfig 不再硬编码旧灰色）
+    expect(renderImg({})).toContain("background:#ffffff");
+    expect(renderImg({})).toContain("color:#555555");
+  });
+
   test("题注：可配置文案/字号/文字色/背景，且不拦截指针", () => {
     const out = renderImg({ source: "/a.png", caption: "图 1 首页", captionFontSize: 15, captionColor: "#123456" });
     expect(out).toContain("图 1 首页");
@@ -211,9 +219,16 @@ describe("video codegen：播放属性 / 样式 / 空态", () => {
 
   test("无资源时输出空态且不渲染 video 元素", () => {
     const out = renderVid({});
-    expect(out).toContain("未设置视频");
+    expect(out).toContain("暂无视频");
     expect(out).not.toContain("<video");
     expect(out).toContain("display:flex");
+    // 空态层骨架屏与图片/iframe 同构（虚线框 + 45° 斜纹）
+    expect(out).toMatch(/dashed rgba\(0,0,0,0\.12\)/);
+    expect(out).toContain("repeating-linear-gradient(45deg");
+    // 链接：配置后包裹 <a>，未配置不包裹
+    const linked = renderVid({ link: "/product", linkTarget: "_blank" });
+    expect(linked).toContain('<a href="/product" target="_blank" rel="noopener noreferrer"');
+    expect(out).not.toContain("<a ");
   });
 
   test("题注与圆角/边框/阴影", () => {

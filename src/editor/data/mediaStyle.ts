@@ -13,6 +13,10 @@
 
 import { SHAPE_RADIUS } from "./fieldStyle";
 
+/** 媒体族统一的空态层配色 token —— 白色背景 + 深灰文字，不依赖容器底色 */
+export const MEDIA_EMPTY_BG = "#ffffff";
+export const MEDIA_EMPTY_COLOR = "#555555";
+
 export type MediaFit = "cover" | "contain" | "fill" | "none" | "scale-down";
 
 const FITS: readonly MediaFit[] = ["cover", "contain", "fill", "none", "scale-down"];
@@ -107,9 +111,9 @@ export function resolveMediaStyle(
     objectPosition,
     hoverScale,
     transitionCss: `transform ${duration}s cubic-bezier(0, 0, 0.2, 1)`,
-    emptyBg: str(c.emptyBg, defaults?.emptyBg ?? "rgba(128,128,128,0.10)"),
-    emptyColor: str(c.emptyColor, defaults?.emptyColor ?? "#999999"),
-    emptyText: str(c.emptyText, defaults?.emptyText ?? "未设置资源"),
+    emptyBg: str(c.emptyBg, defaults?.emptyBg ?? MEDIA_EMPTY_BG),
+    emptyColor: str(c.emptyColor, defaults?.emptyColor ?? MEDIA_EMPTY_COLOR),
+    emptyText: str(c.emptyText, defaults?.emptyText ?? "暂无图片"),
     caption: String(c.caption ?? ""),
     captionColor: str(c.captionColor, "rgba(255,255,255,0.92)"),
     captionBg: str(c.captionBg, "linear-gradient(transparent, rgba(0,0,0,0.62))"),

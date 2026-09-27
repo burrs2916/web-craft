@@ -212,7 +212,11 @@ export function TabEditor({
                   label="标签名称"
                   value={tab.label}
                   onChange={(e) => updateTab(i, { label: e.target.value })}
-                  sx={{ "& .MuiInputBase-input": { fontSize: 12.5 } }}
+                  sx={{
+                    '& .MuiInputBase-input': { fontSize: 11.5 },
+                    '& .MuiOutlinedInput-root': { borderRadius: 0.75 },
+                    '& .MuiOutlinedInput-root:not(.MuiInputBase-multiline)': { height: 32 },
+                  }}
                 />
                 {/* 标签图标 */}
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
@@ -277,7 +281,12 @@ export function TabEditor({
                       value={tab.contentBg}
                       onChange={(e) => updateTab(i, { contentBg: e.target.value })}
                       placeholder="rgba(255,255,255,0.02)"
-                      sx={{ flex: 1, "& .MuiInputBase-input": { fontSize: 11.5, fontFamily: "monospace" } }}
+                      sx={{
+                        flex: 1,
+                        '& .MuiInputBase-input': { fontSize: 11.5, fontFamily: 'monospace' },
+                        '& .MuiOutlinedInput-root': { borderRadius: 0.75 },
+                        '& .MuiOutlinedInput-root:not(.MuiInputBase-multiline)': { height: 32 },
+                      }}
                     />
                   </Box>
                 )}

@@ -1,7 +1,7 @@
 import type { ComponentCodegenFn } from "../types";
 import { textCodegen } from "./text";
 import { shapeCodegen, metricCodegen } from "./basic";
-import { imageCodegen, videoCodegen, audioCodegen } from "./media";
+import { imageCodegen, videoCodegen, audioCodegen, iframeCodegen } from "./media";
 import {
   containerCodegen,
   gridCodegen,
@@ -110,6 +110,7 @@ export function initBuiltinCodegens(): void {
   registerCodegen("shape", shapeCodegen);
   registerCodegen("video", videoCodegen);
   registerCodegen("audio", audioCodegen);
+  registerCodegen("iframe", iframeCodegen);
   registerCodegen("metric", metricCodegen);
   registerCodegen("container", containerCodegen);
   registerCodegen("grid", gridCodegen);

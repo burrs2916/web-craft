@@ -104,6 +104,9 @@ const BASE_ENRICH: Record<string, Record<string, unknown>> = {
   image: { source: "https://example.com/a.png" },
   video: { source: "https://example.com/a.mp4", poster: "" },
   audio: { source: "https://example.com/a.mp3" },
+  // iframe 的资源键是 src（区别于三件套的 source）：空地址时不渲染 <iframe> 元素，
+  // title/allowFullscreen/loading/sandbox/allow/referrerPolicy 会全部失活误报假控件
+  iframe: { src: "https://example.com/embed" },
 };
 
 /** 校验组字段：只在开启校验（有规则）时写入 data-vrules → 这些组件基线统一 required:true */

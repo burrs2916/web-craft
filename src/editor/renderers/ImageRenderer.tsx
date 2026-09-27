@@ -24,8 +24,11 @@ import { readAuthEnabled } from "../data/authMode";
  * 动态资源：`dataMode=api` 时走统一 `useApiDataFetch`（与发布端同一取数骨架），
  * 按 `apiSrcField` 从响应取 URL；`authEnabled` 三态即「认证 / 非认证」接入切换点。
  */
-export function ImageRenderer({ config }: ComponentRendererProps) {
-  const s = resolveMediaStyle(config, { emptyText: "未设置图片" });
+export function ImageRenderer({ config, mode }: ComponentRendererProps) {
+  // 编辑态裁剪：与 iframe/video 渲染器同一约定——编辑画布中内容层不接收指针事件，
+  // 点击落入组件根（选中/拖拽），发布预览（mode === "preview"）才让链接可点击。
+  const isEdit = mode !== "preview";
+  const s = resolveMediaStyle(config, { emptyText: "暂无图片" });
 
   const alt = String(config.alt ?? "").trim();
   const link = String(config.link ?? "").trim();
@@ -94,6 +97,9 @@ export function ImageRenderer({ config }: ComponentRendererProps) {
             objectPosition: s.objectPosition,
             transformOrigin: "center center",
             transition: s.transitionCss,
+            // 编辑态虚线：链接包裹时子元素 img 默认仍接收指针事件，
+            // 会以 img 为目标冒泡触发 <a> 导航，故与容器一起裁剪
+            ...(isEdit && link ? { pointerEvents: "none" } : {}),
           }}
         />
       )}
@@ -109,6 +115,9 @@ export function ImageRenderer({ config }: ComponentRendererProps) {
             color: s.emptyColor,
             fontSize: "12px",
             userSelect: "none",
+            border: "2px dashed rgba(0,0,0,0.12)",
+            borderRadius: s.radiusCss,
+            backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(0,0,0,0.02) 8px, rgba(0,0,0,0.02) 16px)",
           }}
         >
           {s.emptyText}
@@ -160,7 +169,13 @@ export function ImageRenderer({ config }: ComponentRendererProps) {
           href={link}
           target={target}
           rel={target === "_blank" ? "noopener noreferrer" : undefined}
-          sx={{ display: "block", width: "100%", height: "100%", textDecoration: "none" }}
+          sx={{
+            display: "block",
+            width: "100%",
+            height: "100%",
+            textDecoration: "none",
+            ...(isEdit ? { pointerEvents: "none" } : {}),
+          }}
         >
           {content}
         </Box>
