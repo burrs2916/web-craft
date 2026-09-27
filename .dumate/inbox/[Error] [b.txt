@@ -1,0 +1,220 @@
+[Error] [bootstrap][error] – "[window.onerror] ReferenceError: Can't find variable: FrameworkSelectDialog at http://localhost:1521/src/editor/SceneEditor.tsx:1209:2…"
+"[window.onerror] ReferenceError: Can't find variable: FrameworkSelectDialog at http://localhost:1521/src/editor/SceneEditor.tsx:1209:28 stack=SceneEditor@http://localhost:1521/src/editor/SceneEditor.tsx:1209:28
+renderWithHooks@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:11596:35
+mountIndeterminateComponent@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:14974:36
+callCallback2@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:3680:27
+dispatchEvent@[native code]
+invokeGuardedCallbackDev@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:3705:37
+invokeGuardedCallback@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:3739:44
+beginWork$1@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:19818:36
+performUnitOfWork@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:19251:31
+workLoopConcurrent@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:19242:30
+renderRootConcurrent@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:19217:33
+performConcurrentWorkOnRoot@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:18728:66
+workLoop@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:197:50
+flushWork@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:176:30
+performWorkUntilDeadline@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:384:50"
+	bootstrapLog (bootstrapDiagnostics.ts:15)
+	(anonymous function) (bootstrapDiagnostics.ts:44)
+	dispatchEvent
+	invokeGuardedCallbackDev (chunk-VF3F2CFT.js:3705)
+	invokeGuardedCallback (chunk-VF3F2CFT.js:3739)
+	beginWork$1 (chunk-VF3F2CFT.js:19818)
+	performUnitOfWork (chunk-VF3F2CFT.js:19251)
+	workLoopConcurrent (chunk-VF3F2CFT.js:19242)
+	renderRootConcurrent (chunk-VF3F2CFT.js:19217)
+	performConcurrentWorkOnRoot (chunk-VF3F2CFT.js:18728)
+	workLoop (chunk-VF3F2CFT.js:197)
+	flushWork (chunk-VF3F2CFT.js:176)
+	performWorkUntilDeadline (chunk-VF3F2CFT.js:384)
+[Error] ReferenceError: Can't find variable: FrameworkSelectDialog
+	SceneEditor (SceneEditor.tsx:1209)
+	renderWithHooks (chunk-VF3F2CFT.js:11596)
+	mountIndeterminateComponent (chunk-VF3F2CFT.js:14974)
+	callCallback2 (chunk-VF3F2CFT.js:3680)
+	dispatchEvent
+	invokeGuardedCallbackDev (chunk-VF3F2CFT.js:3705)
+	invokeGuardedCallback (chunk-VF3F2CFT.js:3739)
+	beginWork$1 (chunk-VF3F2CFT.js:19818)
+	performUnitOfWork (chunk-VF3F2CFT.js:19251)
+	workLoopConcurrent (chunk-VF3F2CFT.js:19242)
+	renderRootConcurrent (chunk-VF3F2CFT.js:19217)
+	performConcurrentWorkOnRoot (chunk-VF3F2CFT.js:18728)
+	workLoop (chunk-VF3F2CFT.js:197)
+	flushWork (chunk-VF3F2CFT.js:176)
+	performWorkUntilDeadline (chunk-VF3F2CFT.js:384)
+[Error] [bootstrap][error] – "[window.onerror] ReferenceError: Can't find variable: FrameworkSelectDialog at http://localhost:1521/src/editor/SceneEditor.tsx:1209:2…"
+"[window.onerror] ReferenceError: Can't find variable: FrameworkSelectDialog at http://localhost:1521/src/editor/SceneEditor.tsx:1209:28 stack=SceneEditor@http://localhost:1521/src/editor/SceneEditor.tsx:1209:28
+renderWithHooks@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:11596:35
+mountIndeterminateComponent@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:14974:36
+callCallback2@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:3680:27
+dispatchEvent@[native code]
+invokeGuardedCallbackDev@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:3705:37
+invokeGuardedCallback@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:3739:44
+beginWork$1@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:19818:36
+performUnitOfWork@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:19251:31
+workLoopSync@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:19190:30
+renderRootSync@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:19169:27
+recoverFromConcurrentError@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:18786:42
+performConcurrentWorkOnRoot@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:18734:56
+workLoop@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:197:50
+flushWork@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:176:30
+performWorkUntilDeadline@http://localhost:1521/node_modules/.vite/deps/chunk-VF3F2CFT.js:384:50"
+	bootstrapLog (bootstrapDiagnostics.ts:15)
+	(anonymous function) (bootstrapDiagnostics.ts:44)
+	dispatchEvent
+	invokeGuardedCallbackDev (chunk-VF3F2CFT.js:3705)
+	invokeGuardedCallback (chunk-VF3F2CFT.js:3739)
+	beginWork$1 (chunk-VF3F2CFT.js:19818)
+	performUnitOfWork (chunk-VF3F2CFT.js:19251)
+	workLoopSync (chunk-VF3F2CFT.js:19190)
+	renderRootSync (chunk-VF3F2CFT.js:19169)
+	recoverFromConcurrentError (chunk-VF3F2CFT.js:18786)
+	performConcurrentWorkOnRoot (chunk-VF3F2CFT.js:18734)
+	workLoop (chunk-VF3F2CFT.js:197)
+	flushWork (chunk-VF3F2CFT.js:176)
+	performWorkUntilDeadline (chunk-VF3F2CFT.js:384)
+[Error] ReferenceError: Can't find variable: FrameworkSelectDialog
+	SceneEditor (SceneEditor.tsx:1209)
+	renderWithHooks (chunk-VF3F2CFT.js:11596)
+	mountIndeterminateComponent (chunk-VF3F2CFT.js:14974)
+	callCallback2 (chunk-VF3F2CFT.js:3680)
+	dispatchEvent
+	invokeGuardedCallbackDev (chunk-VF3F2CFT.js:3705)
+	invokeGuardedCallback (chunk-VF3F2CFT.js:3739)
+	beginWork$1 (chunk-VF3F2CFT.js:19818)
+	performUnitOfWork (chunk-VF3F2CFT.js:19251)
+	workLoopSync (chunk-VF3F2CFT.js:19190)
+	renderRootSync (chunk-VF3F2CFT.js:19169)
+	recoverFromConcurrentError (chunk-VF3F2CFT.js:18786)
+	performConcurrentWorkOnRoot (chunk-VF3F2CFT.js:18734)
+	workLoop (chunk-VF3F2CFT.js:197)
+	flushWork (chunk-VF3F2CFT.js:176)
+	performWorkUntilDeadline (chunk-VF3F2CFT.js:384)
+[Error] The above error occurred in the <SceneEditor> component:
+
+SceneEditor@http://localhost:1521/src/editor/SceneEditor.tsx:67:21
+div
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+WebsiteEditorPage@http://localhost:1521/src/pages/WebsiteEditorPage.tsx:24:29
+RenderedRoute@http://localhost:1521/node_modules/.vite/deps/react-router-dom.js:6542:33
+Routes@http://localhost:1521/node_modules/.vite/deps/react-router-dom.js:7414:19
+Suspense
+div
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+main
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+div
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+div
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+AppShell@http://localhost:1521/src/components/layout/AppShell.tsx:19:32
+AppLayout@http://localhost:1521/src/components/layout/AppLayout.tsx:65:41
+Suspense
+RootRouter@http://localhost:1521/src/App.tsx:46:31
+ErrorBoundary@http://localhost:1521/src/components/ErrorBoundary.tsx:11:10
+NotificationProvider@http://localhost:1521/src/core/notification.tsx:31:6
+LicenseProvider@http://localhost:1521/src/features/licensing/LicenseProvider.tsx:24:5
+DefaultPropsProvider@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:1054:33
+RtlProvider@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:1026:22
+ThemeProvider@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:985:12
+ThemeProvider2@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:1205:12
+ThemeProviderNoVars@http://localhost:1521/node_modules/.vite/deps/chunk-2KVNUIBR.js:280:30
+ThemeProvider@http://localhost:1521/node_modules/.vite/deps/chunk-2KVNUIBR.js:430:8
+AppTheme@http://localhost:1521/src/theme/AppTheme.tsx:195:5
+Router@http://localhost:1521/node_modules/.vite/deps/react-router-dom.js:7353:17
+HashRouter@http://localhost:1521/node_modules/.vite/deps/react-router-dom.js:10668:17
+App@http://localhost:1521/src/App.tsx:73:40
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+	logCapturedError (chunk-VF3F2CFT.js:14080)
+	callback (chunk-VF3F2CFT.js:14126)
+	callCallback (chunk-VF3F2CFT.js:11296)
+	commitUpdateQueue (chunk-VF3F2CFT.js:11313)
+	commitLayoutEffectOnFiber (chunk-VF3F2CFT.js:17123)
+	commitLayoutMountEffects_complete (chunk-VF3F2CFT.js:18030)
+	commitLayoutEffects_begin (chunk-VF3F2CFT.js:18019)
+	commitLayoutEffects (chunk-VF3F2CFT.js:17970)
+	commitRootImpl (chunk-VF3F2CFT.js:19406)
+	commitRoot (chunk-VF3F2CFT.js:19330)
+	finishConcurrentRender (chunk-VF3F2CFT.js:18813)
+	performConcurrentWorkOnRoot (chunk-VF3F2CFT.js:18768)
+	workLoop (chunk-VF3F2CFT.js:197)
+	flushWork (chunk-VF3F2CFT.js:176)
+	performWorkUntilDeadline (chunk-VF3F2CFT.js:384)
+[Error] [ErrorBoundary] caught error: – ReferenceError: Can't find variable: FrameworkSelectDialog
+ReferenceError: Can't find variable: FrameworkSelectDialog
+	componentDidCatch (ErrorBoundary.tsx:21)
+	callback (chunk-VF3F2CFT.js:14132)
+	callCallback (chunk-VF3F2CFT.js:11296)
+	commitUpdateQueue (chunk-VF3F2CFT.js:11313)
+	commitLayoutEffectOnFiber (chunk-VF3F2CFT.js:17123)
+	commitLayoutMountEffects_complete (chunk-VF3F2CFT.js:18030)
+	commitLayoutEffects_begin (chunk-VF3F2CFT.js:18019)
+	commitLayoutEffects (chunk-VF3F2CFT.js:17970)
+	commitRootImpl (chunk-VF3F2CFT.js:19406)
+	commitRoot (chunk-VF3F2CFT.js:19330)
+	finishConcurrentRender (chunk-VF3F2CFT.js:18813)
+	performConcurrentWorkOnRoot (chunk-VF3F2CFT.js:18768)
+	workLoop (chunk-VF3F2CFT.js:197)
+	flushWork (chunk-VF3F2CFT.js:176)
+	performWorkUntilDeadline (chunk-VF3F2CFT.js:384)
+[Error] [ErrorBoundary] component stack: – "↵SceneEditor@http://localhost:1521/src/editor/SceneEditor.tsx:67:21↵di…"
+"
+SceneEditor@http://localhost:1521/src/editor/SceneEditor.tsx:67:21
+div
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+WebsiteEditorPage@http://localhost:1521/src/pages/WebsiteEditorPage.tsx:24:29
+RenderedRoute@http://localhost:1521/node_modules/.vite/deps/react-router-dom.js:6542:33
+Routes@http://localhost:1521/node_modules/.vite/deps/react-router-dom.js:7414:19
+Suspense
+div
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+main
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+div
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+div
+Styled(div)@http://localhost:1521/node_modules/.vite/deps/chunk-MCWAXEOA.js:1444:45
+Box3@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:602:35
+AppShell@http://localhost:1521/src/components/layout/AppShell.tsx:19:32
+AppLayout@http://localhost:1521/src/components/layout/AppLayout.tsx:65:41
+Suspense
+RootRouter@http://localhost:1521/src/App.tsx:46:31
+ErrorBoundary@http://localhost:1521/src/components/ErrorBoundary.tsx:11:10
+NotificationProvider@http://localhost:1521/src/core/notification.tsx:31:6
+LicenseProvider@http://localhost:1521/src/features/licensing/LicenseProvider.tsx:24:5
+DefaultPropsProvider@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:1054:33
+RtlProvider@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:1026:22
+ThemeProvider@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:985:12
+ThemeProvider2@http://localhost:1521/node_modules/.vite/deps/chunk-CDUTOKO5.js:1205:12
+ThemeProviderNoVars@http://localhost:1521/node_modules/.vite/deps/chunk-2KVNUIBR.js:280:30
+ThemeProvider@http://localhost:1521/node_modules/.vite/deps/chunk-2KVNUIBR.js:430:8
+AppTheme@http://localhost:1521/src/theme/AppTheme.tsx:195:5
+Router@http://localhost:1521/node_modules/.vite/deps/react-router-dom.js:7353:17
+HashRouter@http://localhost:1521/node_modules/.vite/deps/react-router-dom.js:10668:17
+App@http://localhost:1521/src/App.tsx:73:40"
+	componentDidCatch (ErrorBoundary.tsx:22)
+	callback (chunk-VF3F2CFT.js:14132)
+	callCallback (chunk-VF3F2CFT.js:11296)
+	commitUpdateQueue (chunk-VF3F2CFT.js:11313)
+	commitLayoutEffectOnFiber (chunk-VF3F2CFT.js:17123)
+	commitLayoutMountEffects_complete (chunk-VF3F2CFT.js:18030)
+	commitLayoutEffects_begin (chunk-VF3F2CFT.js:18019)
+	commitLayoutEffects (chunk-VF3F2CFT.js:17970)
+	commitRootImpl (chunk-VF3F2CFT.js:19406)
+	commitRoot (chunk-VF3F2CFT.js:19330)
+	finishConcurrentRender (chunk-VF3F2CFT.js:18813)
+	performConcurrentWorkOnRoot (chunk-VF3F2CFT.js:18768)
+	workLoop (chunk-VF3F2CFT.js:197)
+	flushWork (chunk-VF3F2CFT.js:176)
+	performWorkUntilDeadline (chunk-VF3F2CFT.js:384)
