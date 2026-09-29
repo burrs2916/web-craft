@@ -105,7 +105,13 @@ describe("字段型「文字随框缩放」契约", () => {
   });
 
   test("七个字段型 codegen 全部接入（源码守卫：读 fieldScaleFactor 且 factor 乘进字号）", () => {
-    const src = fs.readFileSync(path.resolve(__dirname, "../components/form.ts"), "utf8");
+    // form.ts 已拆分到 components/form/ 目录，聚合源码以目录内全部文件为准
+    const dir = path.resolve(__dirname, "../components/form");
+    const src = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".ts") && f !== "index.ts")
+      .map((f) => fs.readFileSync(path.join(dir, f), "utf8"))
+      .join("\n");
     for (const [type, fnName] of [
       ["form-input", "formInputCodegen"],
       ["form-textarea", "formTextareaCodegen"],
