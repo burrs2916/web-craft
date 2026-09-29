@@ -1,0 +1,86 @@
+/**
+ * 注册认证组件 · OAuth 按钮。
+ * 从 registerAuthComponents.ts 迁出，仅做代码搬迁。
+ */
+import { componentRegistry, lazy } from "../registryCore";
+
+export function registerAuthOauthButton(): void {
+  // ─── OAuth 按钮 ───
+  componentRegistry.register({
+    type: "auth-oauth-button",
+    name: "OAuth 登录",
+    icon: "vpn_key",
+    description: "OAuth 2.0 授权码模式登录按钮，支持 PKCE",
+    category: "ccat_auth",
+    version: "1.0.0",
+    builtIn: true,
+    enabled: true,
+    defaultSize: { width: 200, height: 40 },
+    minSize: { width: 120, height: 28 },
+    defaultConfig: {
+      text: "使用第三方登录",
+      authUrl: "",
+      clientId: "",
+      clientSecret: "",
+      redirectUri: "",
+      scope: "openid profile email",
+      usePKCE: false,
+      tokenEndpoint: "",
+      userInfoEndpoint: "",
+      tokenField: "access_token",
+      refreshTokenField: "refresh_token",
+      expiresInField: "expires_in",
+      syncWithLoginForm: true,
+      tokenKey: "auth_token",
+      tokenStorage: "localStorage",
+      variant: "outlined",
+      bgColor: "#1976d2",
+      textColor: "#ffffff",
+      fontSize: 14,
+      borderRadius: 4,
+    },
+    capabilities: {
+      resizable: true,
+      rotatable: false,
+      draggable: true,
+      connectable: false,
+      embeddable: false,
+    },
+    renderer: lazy(() => import("../renderers/OAuthButtonRenderer").then(m => ({ default: m.OAuthButtonRenderer }))),
+    configSchema: [
+      { key: "text", label: "按钮文字", type: "text" , group: "OAuth 配置" },
+      { key: "authUrl", label: "授权 URL", type: "text", placeholder: "https://accounts.google.com/o/oauth2/v2/auth" , group: "OAuth 配置" },
+      { key: "clientId", label: "Client ID", type: "text" , group: "OAuth 配置" },
+      { key: "clientSecret", label: "Client Secret", type: "text", hidden: (c) => c.usePKCE === true, help: "PKCE 模式无需填写；标准授权码模式用于后端换 token" , group: "OAuth 配置" },
+      { key: "redirectUri", label: "回调地址", type: "text", placeholder: "https://yoursite.com/callback" , group: "OAuth 配置" },
+      { key: "scope", label: "Scope", type: "text" , group: "OAuth 配置" },
+      { key: "usePKCE", label: "启用 PKCE", type: "toggle" , group: "OAuth 配置" },
+      { key: "tokenEndpoint", label: "Token 端点", type: "text", placeholder: "https://oauth2.googleapis.com/token", help: "用授权码换 access_token 的 API 地址" , group: "Token 交换" },
+      { key: "userInfoEndpoint", label: "用户信息端点", type: "text", placeholder: "https://openidconnect.googleapis.com/v1/userinfo", help: "获取用户信息的 API 地址（可选）" , group: "Token 交换" },
+      { key: "tokenField", label: "Token 字段路径", type: "text", placeholder: "access_token", help: "token 端点响应中凭证字段的路径，支持点号嵌套，如 data.access_token" , group: "Token 交换" },
+      { key: "refreshTokenField", label: "刷新令牌字段", type: "text", placeholder: "refresh_token", help: "token 端点响应中刷新令牌字段的路径" , group: "Token 交换" },
+      { key: "expiresInField", label: "过期秒数字段", type: "text", placeholder: "expires_in", help: "token 端点响应中过期时间（秒）字段的路径" , group: "Token 交换" },
+      { key: "syncWithLoginForm", label: "与登录组件同步配置", type: "toggle", defaultValue: true, help: "开启时自动跟随登录表单的 Token 存储方式与键名", group: "Token 交换" },
+      { key: "tokenKey", label: "Token 键名", type: "text", placeholder: "auth_token", help: "必须与登录组件的 Token 键名一致", hidden: (c) => c.syncWithLoginForm !== false, group: "Token 交换" },
+        { key: "tokenStorage", label: "存储方式", type: "select", group: "Token 交换",
+        options: [
+          { label: "localStorage", value: "localStorage" },
+          { label: "sessionStorage", value: "sessionStorage" },
+          { label: "内存（刷新页面后清除）", value: "memory" },
+        ],
+        help: "内存模式仅限单页应用，多页面站点请用 localStorage/sessionStorage",
+        hidden: (c) => c.syncWithLoginForm !== false,
+      },
+        { key: "variant", label: "样式", type: "select", group: "UI 样式",        options: [
+          { label: "实心", value: "contained" },
+          { label: "描边", value: "outlined" },
+          { label: "文字", value: "text" },
+        ],
+      },
+      { key: "bgColor", label: "背景色", type: "color" , group: "UI 样式" },
+      { key: "textColor", label: "文字色", type: "color" , group: "UI 样式" },
+      { key: "fontSize", label: "字体大小", type: "slider", min: 10, max: 24, step: 1 , group: "UI 样式" },
+      { key: "borderRadius", label: "圆角", type: "slider", min: 0, max: 20, step: 1 , group: "UI 样式" },
+    ],
+  });
+}
