@@ -574,6 +574,8 @@ export interface WebsiteAuthState {
   getUserProfileCandidateKeys: () => string[];
   /** v5 按端点类型提取并缓存响应（使用端点自身的 responseMapping） */
   extractAndCacheByEndpoint: (endpoint: AuthEndpoint, responseData: Record<string, unknown>) => void;
+  /** A-P0：编辑器启动恢复登录态（从 storage 读回 token/user/过期时间）；cookie 会话型无法本地恢复 */
+  restoreSession: () => boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -693,6 +695,10 @@ export const useWebsiteAuthStore = create<WebsiteAuthState>((set, get) => ({
     }
     if (expiresAt) {
       get().setCachedValue("__webcraft_auth_expires_at", String(expiresAt));
+    }
+    // A-P0：user 落缓存（__webcraft_ 前缀，clearAllCachedValues 会一并清除），供刷新后恢复
+    if (user) {
+      get().setCachedValue("__webcraft_auth_user", JSON.stringify(user));
     }
 
     if (typeof window !== "undefined") {
@@ -1007,7 +1013,67 @@ export const useWebsiteAuthStore = create<WebsiteAuthState>((set, get) => ({
       }
     });
   },
+
+  // ─── A-P0：编辑器启动恢复登录态 ───
+
+  restoreSession: () => {
+    const { config } = get();
+    const tokenKey = config.token.key || "auth_token";
+    const token = get().getCachedValue(tokenKey);
+    if (!token) return false;
+
+    const expiresAtStr = get().getCachedValue("__webcraft_auth_expires_at");
+    const expiresAt = expiresAtStr ? Number(expiresAtStr) : 0;
+    if (expiresAt && checkExpired(expiresAt)) {
+      // 已过期：清缓存，按未登录处理（不静默带过期 token）
+      get().clearAllCachedValues();
+      return false;
+    }
+
+    // user 恢复：优先 storage 缓存（setLogin 落盘），否则 JWT 解码（不验签，仅展示用）
+    let user: WebsiteAuthUser | null = null;
+    const userStr = get().getCachedValue("__webcraft_auth_user");
+    if (userStr) {
+      try { user = JSON.parse(userStr) as WebsiteAuthUser; } catch { user = null; }
+    }
+    if (!user) user = extractUserFromJwt(token);
+
+    set({
+      token,
+      refreshToken: get().getRefreshToken(),
+      user,
+      expiresAt,
+      isAuthenticated: true,
+    });
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("auth-state-change", {
+          detail: { token, user, isAuthenticated: true, authMode: get().authMode },
+        }),
+      );
+    }
+
+    if (expiresAt && config.refresh.enabled) {
+      const expiresIn = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      if (expiresIn > 0) {
+        get().startRefreshTimer(expiresIn);
+      }
+    }
+    return true;
+  },
 }));
+
+// 模块加载即恢复一次（编辑器刷新后不再丢登录态）。
+// 非 DOM 环境（vitest/SSR）getStorage 返回 null → getCachedValue 走空 memoryCache → 安全返回 false。
+// cookie 会话型（cookieBased，无本地 token）无法恢复，属后端会话语义，超出本次范围。
+if (typeof window !== "undefined") {
+  try {
+    useWebsiteAuthStore.getState().restoreSession();
+  } catch {
+    /* 恢复失败按未登录处理，不阻塞启动 */
+  }
+}
 
 /** 非 React 上下文获取认证状态（供 HttpAdapter 等使用） */
 export function getWebsiteAuthState(): WebsiteAuthState {
