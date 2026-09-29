@@ -79,7 +79,11 @@ describe("源码级不变量：反模式不得回流", () => {
     path.join(panelDir, "EditorPropertyPanel", "inputs.tsx"),
     path.join(panelDir, "EditorPropertyPanel", "ConfigFieldRenderer.tsx"),
     path.join(panelDir, "property", "SensorSprayConfigSection.tsx"),
-    path.join(panelDir, "property", "legacyIotWidgets.tsx"),
+    path.join(panelDir, "property", "legacyIotWidgets", "DataSourceFields.tsx"),
+    path.join(panelDir, "property", "legacyIotWidgets", "DatabaseFields.tsx"),
+    path.join(panelDir, "property", "legacyIotWidgets", "ActionField.tsx"),
+    path.join(panelDir, "property", "legacyIotWidgets", "DeviceFields.tsx"),
+    path.join(panelDir, "property", "legacyIotWidgets", "DeviceStatusSection.tsx"),
   ]
     .map((f) => fs.readFileSync(f, "utf8"))
     .join("\n");
