@@ -11,7 +11,7 @@
  * - 用户信息                           → auth-user-profile
  * - 退出登录                           → auth-logout-button
  *
- * 三层架构：renderer（src/editor/renderers/）+ codegen（src/codegen/components/auth.ts）
+ * 三层架构：renderer（src/editor/renderers/）+ codegen（src/codegen/components/auth/）
  *           + configSchema（本文件）
  * 三层字段名和默认值保持一致。
  */
