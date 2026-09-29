@@ -5,7 +5,8 @@
  * 1. **最后一个数字删不掉** —— 旧实现「受控 value + onChange 里 `if (v === '') return`」，
  *    空串不提交 → React 重渲染把旧值打回输入框，永远清不空。修复 = 草稿层 + 明确落点。
  * 2. **落点口径唯一** —— 空值语义（unset 回退默认 / keep 保持原值）与越界夹取收口为纯函数，
- *    面板 4 处数字输入（NumberConfigField / CompactNumberInput / 喷雾参数 / Z-Index）共用。
+ *    面板数字输入（NumberConfigField / CompactNumberInput / 喷雾参数 / Z-Index）共用。
+ *    属性面板已按功能拆分（property/ 子模块），故源码级校验跨模块汇总。
  */
 import { describe, test, expect } from "vitest";
 import fs from "node:fs";
@@ -71,10 +72,15 @@ describe("commitNumberDraft：失焦落点判定", () => {
 });
 
 describe("源码级不变量：反模式不得回流", () => {
-  const panelSrc = fs.readFileSync(
-    path.join(__dirname, "../../editor/panels/EditorPropertyPanel.tsx"),
-    "utf8",
-  );
+  // 属性面板已按功能拆分：数字输入分布在主面板与 property/ 子模块，需汇总校验
+  const panelDir = path.join(__dirname, "../../editor/panels");
+  const panelSrc = [
+    path.join(panelDir, "EditorPropertyPanel.tsx"),
+    path.join(panelDir, "property", "SensorSprayConfigSection.tsx"),
+    path.join(panelDir, "property", "legacyIotWidgets.tsx"),
+  ]
+    .map((f) => fs.readFileSync(f, "utf8"))
+    .join("\n");
 
   test("面板不得再出现「空串拒绝提交」反模式（会导致最后一个数字删不掉）", () => {
     expect(panelSrc).not.toContain("if (v === '' || v === '-') return;");
@@ -82,7 +88,7 @@ describe("源码级不变量：反模式不得回流", () => {
     expect(panelSrc).not.toContain("onChange(field.key, numMin > 0 ? numMin : 0)");
   });
 
-  test("四处数字输入统一走 commitNumberDraft 落点口径", () => {
+  test("数字输入统一走 commitNumberDraft 落点口径", () => {
     const uses = panelSrc.match(/commitNumberDraft\(/g) ?? [];
     expect(uses.length).toBeGreaterThanOrEqual(4);
   });
