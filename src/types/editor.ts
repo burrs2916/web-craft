@@ -117,6 +117,16 @@ export interface TimerTriggerConfig {
   delay?: number;
 }
 
+/** 动作序列单步（A3 IR）：一条绑定触发后按序执行的多个动作 */
+export interface EventActionStep {
+  /** 动作目标组件 ID */
+  targetComponentId: string;
+  /** 动作名（与 targetAction 同一口径） */
+  targetAction: string;
+  /** 动作参数（与单动作 params 同口径，支持 {{value}} 占位符） */
+  params?: Record<string, unknown>;
+}
+
 export interface EventBinding {
   id: string;
   sourceComponentId: string;
@@ -125,6 +135,13 @@ export interface EventBinding {
   targetAction: string;
   params?: Record<string, unknown>;
   condition?: string;
+  /** ── 动作序列（A3）── */
+  /**
+   * 按序执行的动作数组（优先于 targetAction/params 单动作路径）。
+   * 单动作绑定不必填写；两端（编辑区引擎 / 发布端生成脚本）语义一致：
+   * condition / throttle / debounce 作用于整条绑定，序列内各步共享触发事件的 {{value}} 通道。
+   */
+  actions?: EventActionStep[];
   /** ── 运行时控制 ── */
   /** 是否启用（默认 true） */
   enabled?: boolean;
@@ -297,7 +314,7 @@ export interface ComponentDefinition {
 export interface ConfigField {
   key: string;
   label: string;
-  type?: "number" | "text" | "select" | "color" | "toggle" | "slider" | "textarea" | "json" | "file" | "group" | "mapLibrary" | "datasource" | "datafield" | "deviceSelect" | "tagMultiSelect" | "dbTable" | "dbColumn" | "action" | "deviceMultiSelect" | "keyValueMapping" | "dataSourceInfo" | "menu-items" | "pane-editor" | "tab-editor" | "icon-picker" | "metric-icon-picker" | "json-data" | "map-editor" | "list-editor" | "cascader-options" | "api-field-picker" | "form-fields" | "global-datasource" | "button-action";
+  type?: "number" | "text" | "select" | "color" | "toggle" | "slider" | "textarea" | "json" | "file" | "group" | "mapLibrary" | "datasource" | "datafield" | "deviceSelect" | "tagMultiSelect" | "dbTable" | "dbColumn" | "action" | "deviceMultiSelect" | "keyValueMapping" | "dataSourceInfo" | "menu-items" | "pane-editor" | "tab-editor" | "icon-picker" | "metric-icon-picker" | "json-data" | "map-editor" | "list-editor" | "cascader-options" | "api-field-picker" | "form-fields" | "global-datasource" | "table-editor" | "button-action";
   /** menu-items 专用：是否允许子级菜单（侧边栏 true，水平导航 false） */
   nested?: boolean;
   defaultValue?: unknown;
@@ -406,6 +423,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   ccat_form: "表单组件",
   ccat_auth: "认证组件",
   ccat_media: "媒体组件",
+  ccat_embed: "外部嵌入",
   ccat_table: "表格组件",
   ccat_chart: "图表组件",
   ccat_shape: "形状组件",

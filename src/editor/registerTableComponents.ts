@@ -27,21 +27,37 @@ export function registerTableComponents(): void {
     type: "table",
     name: "表格",
     icon: "table_chart",
-    description: "结构化数据表格：表头/行样式、斑马纹、边框、密度、悬浮高亮、固定表头、空态，支持静态或接口动态数据",
+    description: "结构化数据表格：列定义模型（字段/类型/宽度/对齐）、对象数组数据、斑马纹/边框/密度/悬浮高亮/固定表头/空态，支持静态或接口动态数据；兼容旧版逗号分隔表头",
     category: "ccat_table",
-    version: "2.0.0",
+    version: "2.1.0",
     builtIn: true,
     enabled: true,
     defaultSize: { width: 500, height: 300 },
     minSize: { width: 200, height: 100 },
     defaultConfig: {
-      // 内容
+      // 内容 —— 统一表格编辑器（列定义 + 数据行同时管理）
       showHeader: true,
+      tableData: {
+        columns: [
+          { field: "name", header: "名称", type: "text", align: "left", sortable: true, visible: true },
+          { field: "price", header: "价格", type: "number", align: "right", sortable: true, visible: true },
+          { field: "count", header: "数量", type: "number", align: "right", sortable: true, visible: true },
+        ],
+        rows: [
+          { name: "苹果", price: 5.5, count: 10, detail: { 产地: "山东烟台", 等级: "A" } },
+          { name: "香蕉", price: 3.2, count: 20 },
+          { name: "橙子", price: 4.8, count: 15 },
+        ],
+      },
+      // 旧版兼容字段（保留在配置中供旧场景回退，新面板不暴露）
+      columnDefs: [],
+      data: [],
       headers: ["列1", "列2", "列3"],
       rows: [
         ["行1-1", "行1-2", "行1-3"],
         ["行2-1", "行2-2", "行2-3"],
       ],
+      columnStyles: "",
       // 表头
       headerBgColor: "rgba(255,255,255,0.08)",
       headerColor: "#ffffff",
@@ -67,6 +83,29 @@ export function registerTableComponents(): void {
       rowHoverEnabled: true,
       rowHoverBg: "rgba(255,255,255,0.06)",
       stickyHeader: false,
+      // 高级（P4）：列宽拖拽 / 虚拟滚动
+      resizableColumns: false,
+      // 冻结列（P2）：冻结前 N 列，横向滚动时常驻左侧
+      frozenColumns: 0,
+      virtualScroll: false,
+      virtualScrollHeight: 360,
+      // 分页
+      showPagination: false,
+      pageSize: 10,
+      showPageSizeOptions: true,
+      showQuickJumper: false,
+      // 行选择
+      showRowSelection: false,
+      // 行展开详情（与虚拟滚动互斥：详情行破坏等高窗口数学）
+      showRowExpand: false,
+      detailField: "detail",
+      // 单元格编辑（多维第一档）：开启后双击可编辑类型单元格进入编辑态
+      editEnabled: false,
+      editApiUrl: "",
+      editApiMethod: "PUT",
+      editIdField: "id",
+      // 导出
+      exportCsv: false,
       // 空态
       emptyText: "暂无数据",
       emptyColor: "rgba(255,255,255,0.35)",
@@ -86,10 +125,54 @@ export function registerTableComponents(): void {
     configSchema: [
       // —— 内容 ——
       { key: "showHeader", label: "显示表头", type: "toggle", group: "内容" },
-      { key: "headers", label: "表头（逗号分隔）", type: "text", group: "内容",
-        help: "多列表头用英文逗号分隔，如：名称,价格,库存" },
-      { key: "rows", label: "行数据", type: "textarea", group: "内容",
-        help: "每行一个记录，列之间用英文逗号分隔，行之间用换行分隔" },
+      { key: "tableData", label: "表格数据", type: "table-editor", group: "内容",
+        help: "列定义与数据行统一管理：添加列自动同步到所有行，添加行自动按列定义填充空单元格" },
+      // 旧版兼容（tableData 有值时自动隐藏）
+      { key: "columnDefs", label: "列定义（旧版兼容）", type: "list-editor", group: "内容（兼容）",
+        help: "新版请用「表格数据」替代",
+        addItemLabel: "添加列", itemLabelKey: "header",
+        itemFields: [
+          { key: "field", label: "字段名", type: "text", placeholder: "如 name" },
+          { key: "header", label: "列标题", type: "text", placeholder: "如 名称" },
+          { key: "type", label: "数据类型", type: "select", options: [
+            { label: "文本", value: "text" },
+            { label: "数字", value: "number" },
+            { label: "日期", value: "date" },
+            { label: "布尔", value: "boolean" },
+            { label: "状态", value: "status" },
+            { label: "链接", value: "link" },
+            { label: "图片", value: "image" },
+            { label: "下拉", value: "select" },
+          ], defaultValue: "text" },
+          { key: "options", label: "选项（逗号分隔）", type: "text", placeholder: "如 高,中,低",
+            help: "仅下拉（select）类型生效" },
+          { key: "width", label: "列宽", type: "text", placeholder: "如 120px" },
+          { key: "align", label: "对齐", type: "select", options: [
+            { label: "左对齐", value: "left" },
+            { label: "居中", value: "center" },
+            { label: "右对齐", value: "right" },
+          ], defaultValue: "left" },
+          { key: "sortable", label: "允许排序", type: "toggle", defaultValue: true },
+          { key: "visible", label: "显示", type: "toggle", defaultValue: true },
+          { key: "editable", label: "可编辑", type: "toggle", defaultValue: true,
+            help: "仅编辑型类型（文本/数字/日期/布尔/下拉）生效" },
+        ],
+        hidden: (c) => c.tableData != null && typeof c.tableData === "object" && !Array.isArray(c.tableData) && (c.tableData as Record<string, unknown>).columns != null && ((c.tableData as Record<string, unknown>).columns as unknown[]).length > 0,
+      },
+      { key: "data", label: "数据（旧版兼容）", type: "json-data", group: "内容（兼容）",
+        help: "新版请用「表格数据」替代", hidden: (c) => c.tableData != null && typeof c.tableData === "object" && !Array.isArray(c.tableData) && (c.tableData as Record<string, unknown>).columns != null && ((c.tableData as Record<string, unknown>).columns as unknown[]).length > 0 },
+      { key: "columnStyles", label: "列样式覆盖（旧版兼容）", type: "json-data", group: "内容（兼容）",
+        help: "新版请用「表格数据」替代", hidden: (c) => c.tableData != null && typeof c.tableData === "object" && !Array.isArray(c.tableData) && (c.tableData as Record<string, unknown>).columns != null && ((c.tableData as Record<string, unknown>).columns as unknown[]).length > 0 },
+      { key: "headers", label: "表头（旧版兼容）", type: "text", group: "内容（兼容）",
+        help: "逗号分隔。推荐用「表格数据」替代", hidden: (c) =>
+          (c.tableData != null && typeof c.tableData === "object" && !Array.isArray(c.tableData) && (c.tableData as Record<string, unknown>).columns != null && ((c.tableData as Record<string, unknown>).columns as unknown[]).length > 0) ||
+          (Array.isArray(c.columnDefs) && c.columnDefs.length > 0),
+      },
+      { key: "rows", label: "行数据（旧版兼容）", type: "textarea", group: "内容（兼容）",
+        help: "每行一个记录，列之间用英文逗号分隔。推荐用「表格数据」替代", hidden: (c) =>
+          (c.tableData != null && typeof c.tableData === "object" && !Array.isArray(c.tableData) && (c.tableData as Record<string, unknown>).columns != null && ((c.tableData as Record<string, unknown>).columns as unknown[]).length > 0) ||
+          (Array.isArray(c.columnDefs) && c.columnDefs.length > 0),
+      },
       // —— 数据源（共享字段组：全局源 / 静态 / 接口 + 认证三态）——
       ...dataSourceSchemaFields,
       // —— 表头样式 ——
@@ -131,10 +214,56 @@ export function registerTableComponents(): void {
         ] },
       { key: "borderRadius", label: "圆角", type: "number", min: 0, max: 60, group: "边框" },
       // —— 交互 ——
+      { key: "showSearch", label: "显示搜索框", type: "toggle", group: "交互",
+        help: "在表格顶部显示实时搜索输入框，按任意列内容过滤" },
+      { key: "searchPlaceholder", label: "搜索占位文字", type: "text", group: "交互", hidden: (c) => c.showSearch !== true },
       { key: "rowHoverEnabled", label: "行悬浮高亮", type: "toggle", group: "交互" },
       { key: "rowHoverBg", label: "悬浮背景色", type: "color", group: "交互", hidden: (c) => c.rowHoverEnabled === false },
       { key: "stickyHeader", label: "固定表头", type: "toggle", group: "交互",
         help: "纵向滚动时表头保持在顶部" },
+      { key: "showPagination", label: "显示分页", type: "toggle", group: "交互",
+        help: "在表格底部显示分页控件（页码导航、每页条数、快速跳转）；开启虚拟滚动时自动忽略",
+        hidden: (c) => c.showPagination !== true || c.virtualScroll === true },
+      { key: "pageSize", label: "每页条数", type: "number", min: 1, max: 500, group: "交互",
+        hidden: (c) => c.showPagination !== true || c.virtualScroll === true },
+      { key: "showPageSizeOptions", label: "显示每页条数选择", type: "toggle", group: "交互",
+        hidden: (c) => c.showPagination !== true || c.virtualScroll === true },
+      { key: "showQuickJumper", label: "快速跳转", type: "toggle", group: "交互",
+        hidden: (c) => c.showPagination !== true || c.virtualScroll === true },
+      { key: "showRowSelection", label: "行选择（复选框）", type: "toggle", group: "交互",
+        help: "首列显示复选框，支持全选/单选/反选，选中变化时通过 row-selection-change 事件暴露选中行数据" },
+      { key: "showRowExpand", label: "行展开详情", type: "toggle", group: "交互",
+        help: "行首显示展开箭头，展开后显示详情行；与虚拟滚动互斥（开启虚拟滚动时忽略）" },
+      { key: "detailField", label: "详情字段名", type: "text", group: "交互",
+        hidden: (c) => c.showRowExpand !== true,
+        help: '行对象中承载详情的字段：对象→键值对列表，字符串→文本；该字段为空的行不显示箭头，如 [{"name":"苹果","detail":{"产地":"山东"}}]' },
+      // —— 单元格编辑（多维第一档）——
+      { key: "editEnabled", label: "单元格编辑", type: "toggle", group: "编辑",
+        help: "开启后双击可编辑类型（文本/数字/日期/布尔/下拉）的单元格进入编辑态；编辑区仅本地预览，发布端按下方配置写回" },
+      { key: "editApiUrl", label: "写回接口地址", type: "text", group: "编辑",
+        hidden: (c) => c.editEnabled !== true,
+        help: "留空 = 仅本地修改不写回服务器；请求体为 { 行主键: 值, 字段: 新值 }，认证注入与数据接口同口径" },
+      { key: "editApiMethod", label: "写回方法", type: "select", group: "编辑",
+        hidden: (c) => c.editEnabled !== true,
+        options: [
+          { label: "PUT", value: "PUT" },
+          { label: "POST", value: "POST" },
+          { label: "PATCH", value: "PATCH" },
+        ] },
+      { key: "editIdField", label: "行主键字段", type: "text", group: "编辑",
+        hidden: (c) => c.editEnabled !== true,
+        help: "写回请求体中标识行的字段名（行数据里应存在该字段），如 id" },
+      { key: "resizableColumns", label: "列宽拖拽", type: "toggle", group: "交互",
+        help: "表头右侧出现拖拽手柄，拖动调整列宽（运行时交互，不写入列定义）" },
+      { key: "frozenColumns", label: "冻结列数", type: "number", min: 0, max: 10, group: "交互",
+        help: "冻结前 N 列：横向滚动时这些列常驻左侧。被冻结列建议设置显式宽度以保证对齐" },
+      { key: "virtualScroll", label: "虚拟滚动", type: "toggle", group: "交互",
+        help: "大数据量（万行级）下仅渲染可视区行，大幅降低 DOM 与重绘成本；开启后忽略分页" },
+      { key: "virtualScrollHeight", label: "滚动区高度", type: "number", min: 120, max: 2000, group: "交互",
+        hidden: (c) => c.virtualScroll !== true,
+        help: "虚拟滚动模式下表格滚动区的高度（px），行超出时出现纵向滚动条" },
+      { key: "exportCsv", label: "允许导出 CSV", type: "toggle", group: "交互",
+        help: "在表格顶部显示「导出 CSV」按钮，访客可将当前加载的数据下载为 CSV（带 BOM，Excel 中文不乱码）" },
       // —— 空态 ——
       { key: "emptyText", label: "空数据提示", type: "text", group: "空态" },
       { key: "emptyColor", label: "空态文字颜色", type: "color", group: "空态" },

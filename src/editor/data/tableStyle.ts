@@ -12,6 +12,7 @@
  */
 
 import type { PaginationModel, TableModel } from "./tableData";
+import { resolveTableData, getColumnDefs } from "./tableData";
 import {
   type CssDecls,
   alignToFlex,
@@ -50,6 +51,26 @@ const DENSITY_PADDING: Record<TableDensity, [number, number]> = {
   default: [8, 12],
   comfortable: [12, 16],
 };
+
+/** 单列差异化样式（由 ColumnDef 驱动） */
+export interface ColumnStyle {
+  /** 列宽：支持 px / % / fr / auto */
+  width?: string;
+  /** 水平对齐 */
+  align?: string;
+  /** 列内边距：覆盖整表 padY */
+  padY?: number;
+  /** 列内边距：覆盖整表 padX */
+  padX?: number;
+  /** 列字号：覆盖整表 rowFontSize */
+  fontSize?: number;
+  /** 列文字颜色：覆盖整表 rowColor */
+  color?: string;
+  /** 列背景色（仅表头或斑马纹外单独指定） */
+  bgColor?: string;
+  /** 列最小宽度 */
+  minWidth?: string;
+}
 
 export interface TableStyle {
   headerBg: string;
@@ -90,6 +111,8 @@ export interface TableStyle {
   td: (rowIndex: number) => CssDecls;
   /** 空态单元格声明 */
   emptyTd: CssDecls;
+  /** 按列解析出的差异化样式（无定义时回退整表默认） */
+  columnStyles: (colIndex: number) => ColumnStyle;
 }
 
 export function resolveTableStyle(c: Record<string, unknown>): TableStyle {
@@ -148,6 +171,55 @@ export function resolveTableStyle(c: Record<string, unknown>): TableStyle {
     return d;
   };
 
+  // 列差异化样式：与数据层同一口径取最终列定义（columnDefs → headers → data 推断，
+// 含 visible 过滤与 type 启发式对齐），config.columnStyles 再显式覆盖。
+  const rawColDefs = getColumnDefs(resolveTableData({ config: c, isApi: false }));
+  // 面板 columnStyles 是 textarea（JSON 字符串）或数组：双形态统一解析
+  let colStylesRaw: unknown[] = [];
+  if (Array.isArray(c.columnStyles)) {
+    colStylesRaw = c.columnStyles as unknown[];
+  } else if (typeof c.columnStyles === "string") {
+    const trimmed = c.columnStyles.trim();
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) colStylesRaw = parsed;
+      } catch {
+        /* 非法 JSON：按无列样式覆盖处理 */
+      }
+    }
+  }
+  const rawColStyles = colStylesRaw as Record<string, unknown>[];
+  const columnStyles = (colIndex: number): ColumnStyle => {
+    // 先取 ColumnDef 口径（缺省 align 时 number 列右对齐，与 inferColumnDefs 同启发式）
+    const def = rawColDefs[colIndex];
+    const out: ColumnStyle = {};
+    if (def) {
+      if (def.align) out.align = alignToText(def.align);
+      else if (def.type === "number") out.align = "right";
+      if (def.width) out.width = String(def.width);
+    }
+    const raw = rawColStyles[colIndex];
+    if (!raw || typeof raw !== "object") return out;
+    const colWidth = raw.width != null ? String(raw.width) : undefined;
+    const colAlign = raw.align != null ? alignToText(raw.align) : undefined;
+    const colPadY = raw.padY != null ? clampNum(raw.padY, 0, 0, 40) : undefined;
+    const colPadX = raw.padX != null ? clampNum(raw.padX, 0, 0, 60) : undefined;
+    const colFontSize = raw.fontSize != null ? clampNum(raw.fontSize, 0, 8, 32) : undefined;
+    const colColor = raw.color != null ? String(raw.color) : undefined;
+    const colBg = raw.bgColor != null ? String(raw.bgColor) : undefined;
+    const colMinW = raw.minWidth != null ? String(raw.minWidth) : undefined;
+    if (colWidth !== undefined) out.width = colWidth;
+    if (colAlign !== undefined) out.align = colAlign;
+    if (colPadY !== undefined) out.padY = colPadY;
+    if (colPadX !== undefined) out.padX = colPadX;
+    if (colFontSize !== undefined) out.fontSize = colFontSize;
+    if (colColor !== undefined) out.color = colColor;
+    if (colBg !== undefined) out.bgColor = colBg;
+    if (colMinW !== undefined) out.minWidth = colMinW;
+    return out;
+  };
+
   return {
     headerBg,
     headerColor,
@@ -193,12 +265,17 @@ export function resolveTableStyle(c: Record<string, unknown>): TableStyle {
       textAlign: "center",
       border: borderCss,
     },
+    columnStyles,
   };
 }
 
 /** 表格实际列数（表头与首行取较大者；用于补齐表头空列） */
 export function tableColumnCount(model: TableModel): number {
-  return model.headers.length || model.rows[0]?.length || 0;
+  if (model.columns && model.columns.length > 0) return model.columns.length;
+  const headersLen = model.headers?.length ?? 0;
+  const dataLen = model.data?.length ?? 0;
+  const firstRowCells = model.rows?.[0]?.length ?? 0;
+  return headersLen || (dataLen > 0 ? Object.keys(model.data![0]).length : firstRowCells) || 0;
 }
 
 /* ══════════════════════════════════════════════

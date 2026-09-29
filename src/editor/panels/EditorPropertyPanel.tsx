@@ -49,6 +49,7 @@ import { TabEditor } from '../components/TabEditor';
 import { IconPicker } from '../../components/component';
 import { MetricIconPicker } from '../components/MetricIconPicker';
 import { StaticDataEditor } from '../components/StaticDataEditor';
+import { TableDataEditor } from '../components/TableDataEditor';
 import { MapEditor } from '../components/MapEditor';
 import { ObjectListEditor } from '../components/ObjectListEditor';
 import { CascaderOptionsEditor } from '../components/CascaderOptionsEditor';
@@ -2172,6 +2173,7 @@ export const HANDLED_FIELD_TYPES = [
   "map-editor",
   "json",
   "json-data",
+  "table-editor",
   "cascader-options",
   "file",
   "api-field-picker",
@@ -2625,9 +2627,35 @@ function ConfigFieldRenderer({
         />
       );
 
-    case 'json-data':
+    case 'json-data': {
+      // 表格数据字段：从当前组件的 columnDefs 提取字段名，作为数据编辑器的预置列
+      let suggestedColumns: string[] | undefined;
+      if (field.key === 'data' && config.columnDefs) {
+        try {
+          const defs = Array.isArray(config.columnDefs) ? config.columnDefs : [];
+          suggestedColumns = defs
+            .map((c: unknown) => {
+              if (c && typeof c === 'object' && !Array.isArray(c)) {
+                return String((c as Record<string, unknown>).field ?? '');
+              }
+              return '';
+            })
+            .filter(Boolean);
+        } catch { /* ignore */ }
+      }
       return (
         <StaticDataEditor
+          value={value}
+          onChange={(v) => onChange(field.key, v)}
+          help={field.help}
+          suggestedColumns={suggestedColumns}
+        />
+      );
+    }
+
+    case 'table-editor':
+      return (
+        <TableDataEditor
           value={value}
           onChange={(v) => onChange(field.key, v)}
           help={field.help}

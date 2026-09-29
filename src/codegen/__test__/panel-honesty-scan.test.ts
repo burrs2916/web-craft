@@ -62,8 +62,12 @@ const CONDITIONAL_ALLOWED = new Set([
   "form-rate.labelPlacement",
   // 副标题颜色只在副标题文案非空时出现
   "audio.subtitleColor",
+  // 空态文案：iframe 无地址时渲染；有地址时先显示硬编码加载中，onload 后隐藏（条件激活）
+  "iframe.emptyText",
   // 空态三件套：只在数据为空时渲染
   "table.emptyText", "table.emptyColor", "table.emptyBg",
+  // 合法 JSON 才参与解析：data 是对象数组（缺列定义时自动推断）、columnStyles 是按索引的样式覆盖
+  "table.data", "table.columnStyles",
   // 合法日期 / JSON 才参与解析（基线候选值是非法占位串）
   "calendar.value", "calendar.marks", "tree.data",
   // 描述列表：标题样式只在标题非空时输出；gap/斑马纹只在有条目时可见

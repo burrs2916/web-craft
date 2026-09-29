@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
@@ -13,13 +13,12 @@ import TableRow from "@mui/material/TableRow";
 import TableCell from "@mui/material/TableCell";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
-import DeleteOutlineIcon from "@mui/icons-material/Delete";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import EditIcon from "@mui/icons-material/Edit";
 
 /**
  * 通用静态数据编辑器（全可视化，不向用户暴露 JSON）：
- * - 数组 → 表格逐行/格编辑（自动推断列）
- * - 对象 → 键值对表单
+ * - 数组 → 表格逐行/格编辑（自动推断列；可传入 suggestedColumns 预置列名）
  * - 标量 → 单值输入
  * 内部仍以 JSON 序列化存取（与既有 staticData 存储兼容），但界面全程可视化。
  */
@@ -27,10 +26,13 @@ export function StaticDataEditor({
   value,
   onChange,
   help,
+  suggestedColumns,
 }: {
   value?: unknown;
   onChange: (next: string) => void;
   help?: string;
+  /** 外部传入的期望列名（如表格的 columnDefs.field），空数组/null 时完全从数据推断 */
+  suggestedColumns?: string[];
 }) {
   const raw = useMemo(() => {
     if (typeof value === "string") return value;
@@ -54,16 +56,47 @@ export function StaticDataEditor({
   // 空数据按空数组处理，便于直接进入表格逐行添加
   const data = parsed.ok && parsed.data !== undefined ? parsed.data : [];
   const isArray = parsed.ok && Array.isArray(data);
-  const isObject = parsed.ok && !Array.isArray(data) && data !== null && typeof data === "object";
+
+  // 高级模式：直接编辑 JSON 原文（适用于需要批量粘贴或精确控制的场景）
+  const [advanced, setAdvanced] = useState(false);
 
   return (
     <Box sx={{ width: "100%" }}>
-      {!parsed.ok ? (
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", mb: 0.5 }}>
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => setAdvanced((v) => !v)}
+          sx={{ textTransform: "none", fontSize: 11, minWidth: 0, p: 0.25, color: "text.secondary" }}
+          startIcon={<EditIcon sx={{ fontSize: 13 }} />}
+        >
+          {advanced ? "返回可视化编辑" : "高级模式（JSON）"}
+        </Button>
+      </Box>
+
+      {advanced ? (
+        <TextField
+          size="small"
+          fullWidth
+          multiline
+          rows={6}
+          value={raw}
+          onChange={(e) => {
+            const text = e.target.value;
+            onChange(text);
+          }}
+          sx={{
+            "& .MuiInputBase-input": { fontSize: 11, fontFamily: "monospace" },
+          }}
+        />
+      ) : !parsed.ok ? (
         <FormatError onChange={() => onChange("[]")} />
       ) : isArray ? (
-        <TableEditor rows={data as unknown[]} onChange={(next) => onChange(JSON.stringify(next))} />
-      ) : isObject ? (
-        <ObjectEditor obj={data as Record<string, unknown>} onChange={(next) => onChange(JSON.stringify(next))} />
+        <TableEditor
+          rows={data as unknown[]}
+          onChange={(next) => onChange(JSON.stringify(next))}
+          suggestedColumns={suggestedColumns}
+        />
       ) : (
         <ScalarEditor
           v={data as string | number | boolean}
@@ -116,16 +149,26 @@ function ScalarEditor({ v, onChange }: { v: string | number | boolean; onChange:
   );
 }
 
-function TableEditor({ rows, onChange }: { rows: unknown[]; onChange: (next: unknown[]) => void }) {
+function TableEditor({
+  rows,
+  onChange,
+  suggestedColumns,
+}: {
+  rows: unknown[];
+  onChange: (next: unknown[]) => void;
+  suggestedColumns?: string[];
+}) {
   const allCols = useMemo(() => {
-    const map = new Map<string, number>();
+    // 优先使用外部传入的列名（保证空数据时也有列可编辑）
+    const set = new Set<string>(suggestedColumns ?? []);
+    // 再从已有数据补全
     rows.forEach((row) => {
       if (row && typeof row === "object" && !Array.isArray(row)) {
-        Object.keys(row as Record<string, unknown>).forEach((k) => map.set(k, map.size));
+        Object.keys(row as Record<string, unknown>).forEach((k) => set.add(k));
       }
     });
-    return Array.from(map.keys());
-  }, [rows]);
+    return Array.from(set);
+  }, [rows, suggestedColumns]);
 
   const updateRow = (i: number, key: string, cell: string) => {
     onChange(rows.map((row, r) => (r !== i ? row : { ...struct(row), [key]: coerceCell(cell) })));
@@ -136,7 +179,9 @@ function TableEditor({ rows, onChange }: { rows: unknown[]; onChange: (next: unk
       const first = { 字段1: "" };
       onChange([...(rows.map((r) => ({ ...struct(r), 字段1: "" }))), first]);
     } else {
-      onChange([...rows, {}]);
+      const newRow: Record<string, unknown> = {};
+      allCols.forEach((c) => { newRow[c] = ""; });
+      onChange([...rows, newRow]);
     }
   };
   const removeRow = (i: number) => onChange(rows.filter((_, r) => r !== i));
@@ -144,6 +189,15 @@ function TableEditor({ rows, onChange }: { rows: unknown[]; onChange: (next: unk
     const name = window.prompt("新列名", `字段${allCols.length + 1}`);
     if (!name) return;
     onChange(rows.map((row) => ({ ...struct(row), [name]: "" })));
+  };
+  const removeCol = (colName: string) => {
+    onChange(
+      rows.map((row) => {
+        const next = { ...struct(row) };
+        delete next[colName];
+        return next;
+      })
+    );
   };
 
   return (
@@ -154,10 +208,17 @@ function TableEditor({ rows, onChange }: { rows: unknown[]; onChange: (next: unk
             <TableRow>
               {allCols.map((c) => (
                 <TableCell key={c} sx={{ p: 0.25, borderBottom: "1px solid rgba(128,128,128,0.25)", minWidth: 90, backgroundColor: "rgba(128,128,128,0.08)" }}>
-                  <Typography noWrap sx={{ fontSize: 10.5, color: "text.secondary", fontWeight: 600 }}>{c || "(空列)"}</Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <Typography noWrap sx={{ fontSize: 10.5, color: "text.secondary", fontWeight: 600 }}>{c || "(空列)"}</Typography>
+                    <Tooltip title="删除列">
+                      <IconButton size="small" onClick={() => removeCol(c)} sx={{ p: 0.1, color: "text.disabled", "&:hover": { color: "error.main" } }}>
+                        <RemoveIcon sx={{ fontSize: 11 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 </TableCell>
               ))}
-              <TableCell sx={{ p: 0.25, width: 30, borderBottom: "1px solid rgba(128,128,128,0.25)", backgroundColor: "rgba(128,128,128,0.08)" }}>
+              <TableCell sx={{ p: 0.25, width: 36, borderBottom: "1px solid rgba(128,128,128,0.25)", backgroundColor: "rgba(128,128,128,0.08)" }}>
                 <Tooltip title="新增列">
                   <IconButton size="small" onClick={addCol} sx={{ p: 0.2 }}><AddIcon sx={{ fontSize: 13 }} /></IconButton>
                 </Tooltip>
@@ -181,7 +242,7 @@ function TableEditor({ rows, onChange }: { rows: unknown[]; onChange: (next: unk
                       <CellInput value={o[c]} onCommit={(v) => updateRow(r, c, v)} />
                     </TableCell>
                   ))}
-                  <TableCell sx={{ p: 0.25, width: 30, textAlign: "center", borderBottom: "1px solid rgba(128,128,128,0.12)" }}>
+                  <TableCell sx={{ p: 0.25, width: 36, textAlign: "center", borderBottom: "1px solid rgba(128,128,128,0.12)" }}>
                     <IconButton size="small" onClick={() => removeRow(r)} sx={{ p: 0.2, color: "text.disabled", "&:hover": { color: "error.main" } }}>
                       <RemoveIcon sx={{ fontSize: 13 }} />
                     </IconButton>
@@ -203,78 +264,8 @@ function TableEditor({ rows, onChange }: { rows: unknown[]; onChange: (next: unk
   );
 }
 
-function ObjectEditor({ obj, onChange }: { obj: Record<string, unknown>; onChange: (next: Record<string, unknown>) => void }) {
-  const entries = useMemo(() => Object.entries(obj), [obj]);
-  const set = (next: Record<string, unknown>) => onChange(next);
-
-  const updateKey = (oldK: string, newK: string) => {
-    if (!newK || newK === oldK) return;
-    const next: Record<string, unknown> = {};
-    Object.entries(obj).forEach(([k, v]) => { next[k === oldK ? newK : k] = v; });
-    set(next);
-  };
-  const updateVal = (k: string, v: string) => set({ ...obj, [k]: coerceCell(v) });
-  const remove = (k: string) => { const next = { ...obj }; delete next[k]; set(next); };
-  const add = () => {
-    const name = window.prompt("新字段名", `字段${entries.length + 1}`);
-    if (!name) return;
-    set({ ...obj, [name]: "" });
-  };
-
-  return (
-    <Box sx={{ width: "100%" }}>
-      <Box sx={{ border: "1px solid rgba(128,128,128,0.2)", borderRadius: 1 }}>
-        {entries.length === 0 && (
-          <Typography variant="caption" sx={{ display: "block", p: 1, textAlign: "center", color: "text.disabled" }}>
-            暂无字段，点击"添加字段"填充
-          </Typography>
-        )}
-        {entries.map(([k, v]) => (
-          <Box key={k} sx={{ display: "flex", alignItems: "center", gap: 0.5, p: 0.5, borderBottom: "1px solid rgba(128,128,128,0.12)" }}>
-            <TextField
-              size="small"
-              defaultValue={k}
-              onBlur={(e) => updateKey(k, e.target.value.trim())}
-              sx={{
-                width: "32%",
-                "& .MuiInputBase-input": { fontSize: 11, fontWeight: 600 },
-                "& .MuiOutlinedInput-root fieldset": { display: "none" },
-                "& .MuiOutlinedInput-root:hover fieldset": { display: "block", borderWidth: 1 },
-              }}
-            />
-            <Box sx={{ width: "4%" }} />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              {isNested(v) ? <NestedValueHint v={v} /> : <CellInput value={v} onCommit={(val) => updateVal(k, val)} />}
-            </Box>
-            <IconButton size="small" onClick={() => remove(k)} sx={{ p: 0.2, color: "text.disabled", "&:hover": { color: "error.main" } }}>
-              <DeleteOutlineIcon sx={{ fontSize: 13 }} />
-            </IconButton>
-          </Box>
-        ))}
-      </Box>
-      <Button size="small" variant="text" onClick={add} sx={{ textTransform: "none", minWidth: 0, mt: 0.25, p: 0.25, fontSize: 11, color: "#0D9488" }} startIcon={<AddIcon sx={{ fontSize: 13 }} />}>
-        添加字段
-      </Button>
-    </Box>
-  );
-}
-
-function NestedValueHint({ v }: { v: unknown }) {
-  const isArr = Array.isArray(v);
-  const label = isArr ? `数组 · ${(v as unknown[]).length} 项` : `对象 · ${Object.keys(v as Record<string, unknown>).length} 字段`;
-  return (
-    <Box sx={{ p: 0.5, borderRadius: 0.5, bgcolor: "rgba(128,128,128,0.1)", mr: 0.25 }}>
-      <Typography noWrap sx={{ fontSize: 11, color: "text.secondary" }}>▸ {label}（只读）</Typography>
-    </Box>
-  );
-}
-
 function struct(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
-}
-
-function isNested(v: unknown): boolean {
-  return v !== null && typeof v === "object";
 }
 
 function coerceCell(s: string): unknown {
