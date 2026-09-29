@@ -1,0 +1,80 @@
+import { componentRegistry, lazy } from "../registryCore";
+import {
+  bindVisibilitySchemaFields,
+} from "../dataSourceFields";
+
+export function registerSpin(): void {
+  componentRegistry.register({
+    type: "spin",
+    name: "加载动画",
+    icon: "progress_activity",
+    description: "加载中动画，支持圆环/点阵/条形变体，可由接口探测驱动显隐",
+    category: "ccat_basic",
+    version: "2.0.0",
+    builtIn: true,
+    enabled: true,
+    defaultSize: { width: 80, height: 80 },
+    defaultConfig: {
+      visibilityMode: "always",
+      bindUrl: "",
+      bindMethod: "GET",
+      bindHeaders: "",
+      bindBody: "",
+      bindInterval: 0,
+      bindAuthEnabled: null,
+      hideOnError: false,
+      variant: "circle",
+      size: "medium",
+      customSize: 0,
+      color: "#2196F3",
+      speed: 1,
+      strokeWidth: 3,
+      gradientEnabled: false,
+      gradientFrom: "#0D9488",
+      gradientTo: "#0EA5E9",
+      tip: "",
+      tipPosition: "bottom",
+      tipFontSize: 13,
+      tipColor: "rgba(255,255,255,0.5)",
+    },
+    capabilities: { resizable: true, rotatable: false, draggable: true, connectable: true, embeddable: false },
+    renderer: lazy(() => import("../renderers/SpinRenderer").then((m) => ({ default: m.SpinRenderer }))),
+    events: [{ id: "click", name: "点击" }],
+    actions: [],
+    configSchema: [
+      ...bindVisibilitySchemaFields,
+      // ── 内容 ──
+      { key: "variant", label: "变体", type: "select", group: "内容",
+        options: [
+          { label: "圆环", value: "circle" },
+          { label: "点阵", value: "dots" },
+          { label: "条形", value: "bars" },
+        ],
+      },
+      { key: "tip", label: "提示文字", type: "text", group: "内容", placeholder: "加载中..." },
+      { key: "tipPosition", label: "文字位置", type: "select", group: "内容",
+        options: [
+          { label: "下方", value: "bottom" },
+          { label: "右侧", value: "right" },
+        ],
+        hidden: (c) => !c.tip },
+      { key: "tipFontSize", label: "文字字号", type: "number", group: "内容", min: 8, defaultValue: 13, hidden: (c) => !c.tip },
+      { key: "tipColor", label: "文字颜色", type: "color", group: "内容", hidden: (c) => !c.tip },
+      // ── 样式 ──
+      { key: "size", label: "尺寸", type: "select", group: "样式",
+        options: [
+          { label: "小", value: "small" },
+          { label: "中", value: "medium" },
+          { label: "大", value: "large" },
+        ],
+      },
+      { key: "customSize", label: "自定义尺寸(px)", type: "number", group: "样式", min: 0, help: "0 = 跟随尺寸档位" },
+      { key: "color", label: "颜色", type: "color", group: "样式", defaultValue: "#2196F3" },
+      { key: "speed", label: "速度(秒/圈)", type: "number", group: "样式", min: 0.2, step: 0.1, defaultValue: 1 },
+      { key: "strokeWidth", label: "描边宽(px)", type: "number", group: "样式", min: 1, defaultValue: 3, hidden: (c) => c.variant !== "circle" },
+      { key: "gradientEnabled", label: "渐变", type: "toggle", group: "样式", hidden: (c) => c.variant !== "circle" },
+      { key: "gradientFrom", label: "渐变起点色", type: "color", group: "样式", hidden: (c) => c.variant !== "circle" || c.gradientEnabled !== true },
+      { key: "gradientTo", label: "渐变终点色", type: "color", group: "样式", hidden: (c) => c.variant !== "circle" || c.gradientEnabled !== true },
+    ],
+  });
+}

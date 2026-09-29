@@ -1,0 +1,77 @@
+import { componentRegistry, lazy } from "../registryCore";
+import {
+  bindVisibilitySchemaFields,
+} from "../dataSourceFields";
+
+export function registerSkeleton(): void {
+  componentRegistry.register({
+    type: "skeleton",
+    name: "骨架屏",
+    icon: "view_agenda",
+    description: "内容加载占位，支持预设模板与自定义行布局，可由接口探测驱动显隐",
+    category: "ccat_basic",
+    version: "2.0.0",
+    builtIn: true,
+    enabled: true,
+    defaultSize: { width: 320, height: 200 },
+    defaultConfig: {
+      visibilityMode: "always",
+      bindUrl: "",
+      bindMethod: "GET",
+      bindHeaders: "",
+      bindBody: "",
+      bindInterval: 0,
+      bindAuthEnabled: null,
+      hideOnError: false,
+      preset: "custom",
+      layout: "simple",
+      rows: [],
+      baseColor: "rgba(255,255,255,0.08)",
+      highlightColor: "rgba(255,255,255,0.15)",
+      animation: "wave",
+      animationDuration: 1500,
+      gap: 10,
+      paddingX: 16,
+      paddingY: 16,
+      borderRadius: 4,
+      bgColor: "transparent",
+      avatarSize: 40,
+      avatarGap: 12,
+    },
+    capabilities: { resizable: true, rotatable: false, draggable: true, connectable: true, embeddable: false },
+    renderer: lazy(() => import("../renderers/SkeletonRenderer").then((m) => ({ default: m.SkeletonRenderer }))),
+    events: [{ id: "click", name: "点击" }],
+    actions: [],
+    configSchema: [
+      ...bindVisibilitySchemaFields,
+      // ── 骨架内容 ──
+      { key: "preset", label: "预设模板", type: "text", group: "内容", help: "如 card；custom 为手动配置" },
+      { key: "layout", label: "布局", type: "select", group: "内容",
+        options: [
+          { label: "简洁", value: "simple" },
+          { label: "卡片", value: "card" },
+        ],
+      },
+      { key: "rows", label: "行配置", type: "list-editor", group: "内容", itemLabelKey: "label", addItemLabel: "添加行", maxItems: 12,
+        itemFields: [{ key: "label", label: "标签", type: "text" }] },
+      // ── 样式 ──
+      { key: "baseColor", label: "底色", type: "color", group: "样式" },
+      { key: "highlightColor", label: "高亮色", type: "color", group: "样式" },
+      { key: "animation", label: "动画", type: "select", group: "样式",
+        options: [
+          { label: "无", value: "none" },
+          { label: "波浪", value: "wave" },
+          { label: "闪烁", value: "pulse" },
+        ],
+      },
+      { key: "animationDuration", label: "动画时长(ms)", type: "number", group: "样式", min: 200, defaultValue: 1500 },
+      { key: "gap", label: "间距(px)", type: "number", group: "样式", min: 0, defaultValue: 10 },
+      { key: "paddingX", label: "内边距X", type: "number", group: "样式", min: 0, defaultValue: 16 },
+      { key: "paddingY", label: "内边距Y", type: "number", group: "样式", min: 0, defaultValue: 16 },
+      { key: "borderRadius", label: "圆角(px)", type: "number", group: "样式", min: 0, defaultValue: 4 },
+      { key: "bgColor", label: "背景色", type: "color", group: "样式", defaultValue: "transparent" },
+      { key: "avatarSize", label: "头像尺寸", type: "number", group: "样式", min: 0, defaultValue: 40, help: "布局含头像时生效" },
+      { key: "avatarGap", label: "头像间距", type: "number", group: "样式", min: 0, defaultValue: 12 },
+    ],
+  });
+}
