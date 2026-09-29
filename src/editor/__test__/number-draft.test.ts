@@ -72,10 +72,12 @@ describe("commitNumberDraft：失焦落点判定", () => {
 });
 
 describe("源码级不变量：反模式不得回流", () => {
-  // 属性面板已按功能拆分：数字输入分布在主面板与 property/ 子模块，需汇总校验
+  // 属性面板已按功能拆分：数字输入分布在面板子模块与 property/ 子模块，需汇总校验
   const panelDir = path.join(__dirname, "../../editor/panels");
   const panelSrc = [
-    path.join(panelDir, "EditorPropertyPanel.tsx"),
+    path.join(panelDir, "EditorPropertyPanel", "index.tsx"),
+    path.join(panelDir, "EditorPropertyPanel", "inputs.tsx"),
+    path.join(panelDir, "EditorPropertyPanel", "ConfigFieldRenderer.tsx"),
     path.join(panelDir, "property", "SensorSprayConfigSection.tsx"),
     path.join(panelDir, "property", "legacyIotWidgets.tsx"),
   ]
