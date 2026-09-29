@@ -1,63 +1,41 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  Box, Typography, Divider, Chip, IconButton, Tooltip, Button, TextField, InputAdornment,
-  LinearProgress, Alert, Accordion, AccordionSummary, AccordionDetails,
+  Box, Typography, Divider, Chip, IconButton, Tooltip,
 } from '@mui/material';
 import {
-  RobotIcon, SparkleIcon, PlusIcon, ListIcon, TrashIcon,
-  CheckCircleIcon, XCircleIcon, ClockIcon, CaretDownIcon,
-  ArrowCounterClockwiseIcon, MagnifyingGlassIcon,
-  WarningCircleIcon,
+  RobotIcon, SparkleIcon, PlusIcon, ListIcon,
 } from '@phosphor-icons/react';
-import { useAgentStore } from '../features/agent/store/agentStore';
-import { runAgent, saveMessage, listMessages, createConversation, listConversations, stopAgent, updateConversationTitle, deleteConversation, appendEnvOpsLog } from '../core/services/agent.service';
-import { terminalSessionAlive } from '../core/services/terminal.service';
-import type { MessageDto, ConversationDto } from '../proto/agent';
+import { useAgentStore } from '../../features/agent/store/agentStore';
+import { runAgent, saveMessage, listMessages, createConversation, listConversations, stopAgent, updateConversationTitle, deleteConversation, appendEnvOpsLog } from '../../core/services/agent.service';
+import { terminalSessionAlive } from '../../core/services/terminal.service';
+import type { MessageDto, ConversationDto } from '../../proto/agent';
 import { listen, emit } from '@tauri-apps/api/event';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { useNotify } from '../core/notification';
-import { ChatMessagesArea, ChatInputArea, type FileAttachment } from '../components/chat/ChatComponents';
-import type { ToolCallDisplay } from '../components/chat/ChatComponents';
-import { useFeatureGate, LockedScreen } from '../features/licensing';
-import { localizeBackendError } from '../core/backendError';
+import { useNotify } from '../../core/notification';
+import { ChatMessagesArea, ChatInputArea, type FileAttachment } from '../../components/chat/ChatComponents';
+import type { ToolCallDisplay } from '../../components/chat/ChatComponents';
+import { useFeatureGate, LockedScreen } from '../../features/licensing';
+import { localizeBackendError } from '../../core/backendError';
+import {
+  getTerminalCopilotAgentId,
+  setTerminalCopilotAgentId,
+  type StreamChunk,
+  type StreamDone,
+  type StreamError,
+  type ToolCallPayload,
+  type EnvFixStep,
+  type OllamaStatusState,
+  type LongRunningTask,
+} from './types';
+import { ConversationSidebar } from './ConversationSidebar';
+import { OllamaStatusAlerts } from './OllamaStatusAlerts';
+import { SessionNotices } from './SessionNotices';
+import { ContextInstallCards } from './ContextInstallCards';
+import { EnvFixCards } from './EnvFixCards';
 
-const STORAGE_KEY = 'webcraft_terminal_copilot_agent_id';
-
-export function getTerminalCopilotAgentId(): string | null {
-  return localStorage.getItem(STORAGE_KEY);
-}
-
-export function setTerminalCopilotAgentId(id: string | null) {
-  if (id) {
-    localStorage.setItem(STORAGE_KEY, id);
-  } else {
-    localStorage.removeItem(STORAGE_KEY);
-  }
-}
-
-interface StreamChunk { conversationId: string; chunk: string }
-interface StreamDone { conversationId: string; response: string }
-interface StreamError { conversationId: string; error: string }
-interface ToolCallEvent {
-  tool_name: string;
-  arguments: Record<string, unknown>;
-  result: string | null;
-  success: boolean | null;
-  status: 'running' | 'done';
-}
-interface ToolCallPayload { conversationId: string; toolCall: ToolCallEvent }
-
-// 环境修复步骤追踪
-interface EnvFixStep {
-  index: number;        // 序号，从 1 开始
-  total: number;        // 总步骤数
-  service: string;      // 服务名
-  description: string;  // 简短描述
-  status: 'pending' | 'running' | 'success' | 'failed';
-  errorReason?: string; // 失败原因
-}
+export { getTerminalCopilotAgentId, setTerminalCopilotAgentId };
 
 export function AiCopilotPage() {
   // Pro 功能：未付费时显示锁定页
@@ -113,12 +91,7 @@ export function AiCopilotPage() {
   const toolCallCounterRef = useRef(0);
 
   // ===== 长耗时命令倒计时等待 =====
-  const [longRunningTask, setLongRunningTask] = useState<{
-    description: string;
-    totalSeconds: number;
-    remainingSeconds: number;
-    active: boolean;
-  } | null>(null);
+  const [longRunningTask, setLongRunningTask] = useState<LongRunningTask | null>(null);
   const longRunningTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sendMessageRef = useRef<((msg: string) => Promise<void>) | null>(null);
   const longRunningDetectedRef = useRef(false); // 流式检测去重
@@ -244,13 +217,7 @@ export function AiCopilotPage() {
   }, [streamingToolCalls, toolCalls]);
 
   // Ollama 本地模型状态检测
-  const [ollamaStatus, setOllamaStatus] = useState<{
-    checking: boolean;
-    available: boolean;
-    modelLoaded: boolean;
-    version: string;
-    error: string | null;
-  } | null>(null);
+  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatusState | null>(null);
 
   // 过滤后的会话列表（按标题搜索）
   const filteredConvList = useMemo(() => {
@@ -1054,83 +1021,20 @@ export function AiCopilotPage() {
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'row', bgcolor: 'background.default' }}>
-      {sidebarOpen && (
-        <Box sx={{
-          width: 240, flexShrink: 0, borderRight: `1px solid ${mutedBorder}`,
-          display: 'flex', flexDirection: 'column',
-          bgcolor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 1, borderBottom: `1px solid ${mutedBorder}` }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: 11 }}>
-              {t('copilot.sessions_title')}
-            </Typography>
-            <Tooltip title={t('copilot.new_chat')} arrow>
-              <IconButton size="small" onClick={handleNewChat} sx={{ borderRadius: 2, border: `1px solid ${agentColor}30`, color: agentColor }}>
-                <PlusIcon size={14} weight="bold" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-          {/* 搜索框 */}
-          <Box sx={{ px: 1, py: 0.75, borderBottom: `1px solid ${mutedBorder}` }}>
-            <TextField
-              size="small"
-              fullWidth
-              placeholder="搜索会话..."
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <MagnifyingGlassIcon size={14} style={{ color: 'text.secondary' }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-              sx={{
-                '& .MuiInputBase-input': { fontSize: 12, py: 0.5 },
-                '& .MuiOutlinedInput-root': { borderRadius: 1.5 },
-              }}
-            />
-          </Box>
-          <Box sx={{ flex: 1, overflow: 'auto', p: 1 }}>
-            {filteredConvList.length === 0 ? (
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textAlign: 'center', mt: 2, fontSize: 11 }}>
-                {searchKeyword.trim() ? '没有匹配的会话' : t('copilot.no_sessions')}
-              </Typography>
-            ) : (
-              filteredConvList.map((c) => (
-                <Box
-                  key={c.id}
-                  onClick={() => selectConversation(c.id)}
-                  sx={{
-                    display: 'flex', alignItems: 'center', gap: 0.5, p: 1, mb: 0.5, borderRadius: 2, cursor: 'pointer',
-                    bgcolor: c.id === conversationId ? `${agentColor}18` : 'transparent',
-                    border: c.id === conversationId ? `1px solid ${agentColor}40` : '1px solid transparent',
-                    '&:hover': { bgcolor: `${agentColor}10` },
-                  }}
-                >
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontSize: 12, fontWeight: c.id === conversationId ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {c.title || 'AI Copilot'}
-                    </Typography>
-                    <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary' }}>
-                      {new Date(c.updatedAt).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </Typography>
-                  </Box>
-                  <IconButton
-                    size="small"
-                    onClick={(e) => { e.stopPropagation(); handleDeleteConv(c.id); }}
-                    sx={{ p: 0.25, opacity: 0.5, '&:hover': { opacity: 1, color: 'error.main' } }}
-                  >
-                    <TrashIcon size={14} />
-                  </IconButton>
-                </Box>
-              ))
-            )}
-          </Box>
-        </Box>
-      )}
+      <ConversationSidebar
+        open={sidebarOpen}
+        mutedBorder={mutedBorder}
+        isDark={isDark}
+        agentColor={agentColor}
+        t={t}
+        searchKeyword={searchKeyword}
+        onSearchChange={setSearchKeyword}
+        conversations={filteredConvList}
+        activeId={conversationId}
+        onSelect={selectConversation}
+        onDelete={handleDeleteConv}
+        onNewChat={handleNewChat}
+      />
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.75 }}>
           <IconButton size="small" onClick={() => setSidebarOpen((o) => !o)} sx={{ borderRadius: 2, border: `1px solid ${agentColor}30`, color: agentColor }}>
@@ -1156,130 +1060,24 @@ export function AiCopilotPage() {
           </Tooltip>
         </Box>
         <Divider sx={{ borderColor: mutedBorder }} />
-        {/* Ollama 服务状态检测提示 */}
-        {isOllamaModel && ollamaStatus && !ollamaStatus.checking && !ollamaStatus.available && (
-          <Box sx={{ mx: 2, mt: 1, mb: 0.5 }}>
-            <Alert
-              severity="warning"
-              icon={<WarningCircleIcon size={18} />}
-              sx={{
-                fontSize: 12,
-                '& .MuiAlert-message': { p: 0 },
-                '& .MuiAlert-icon': { p: 0, mr: 1 },
-              }}
-              action={
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="warning"
-                  sx={{ fontSize: 11, py: 0.25 }}
-                  onClick={async () => {
-                    if (!currentEndpoint || !boundModel) return;
-                    setOllamaStatus({ checking: true, available: false, modelLoaded: false, version: '', error: null });
-                    try {
-                      const status = await checkOllamaStatus(currentEndpoint.baseUrl, boundModel.refKey);
-                      setOllamaStatus({
-                        checking: false,
-                        available: status.serviceAvailable,
-                        modelLoaded: status.modelLoaded,
-                        version: status.version,
-                        error: status.error,
-                      });
-                    } catch (err) {
-                      setOllamaStatus({
-                        checking: false,
-                        available: false,
-                        modelLoaded: false,
-                        version: '',
-                        error: err instanceof Error ? err.message : String(err),
-                      });
-                    }
-                  }}
-                >
-                  重新检测
-                </Button>
-              }
-            >
-              <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
-                无法连接到 Ollama 本地服务
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}>
-                请确保 Ollama 已启动（运行 <code style={{ fontFamily: 'monospace', fontSize: 10 }}>ollama serve</code>），
-                并确认模型 <strong>{boundModel?.name}</strong> 已通过 <code style={{ fontFamily: 'monospace', fontSize: 10 }}>ollama pull {boundModel?.refKey}</code> 下载。
-              </Typography>
-            </Alert>
-          </Box>
-        )}
-        {/* Ollama 服务可用但模型未加载提示 */}
-        {isOllamaModel && ollamaStatus && !ollamaStatus.checking && ollamaStatus.available && !ollamaStatus.modelLoaded && (
-          <Box sx={{ mx: 2, mt: 1, mb: 0.5 }}>
-            <Alert
-              severity="info"
-              icon={<ClockIcon size={18} />}
-              sx={{
-                fontSize: 12,
-                '& .MuiAlert-message': { p: 0 },
-                '& .MuiAlert-icon': { p: 0, mr: 1 },
-              }}
-            >
-              <Typography variant="caption" sx={{ fontWeight: 500, display: 'block' }}>
-                Ollama 服务正常（v{ollamaStatus.version}）
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}>
-                模型 <strong>{boundModel?.name}</strong> 尚未加载到内存，首次对话可能需要较长加载时间。
-              </Typography>
-            </Alert>
-          </Box>
-        )}
-        {/* 会话已断开警告横幅 */}
-        {sessionDead && (
-          <Alert
-            severity="error"
-            icon={<WarningCircleIcon size={20} weight="fill" />}
-            sx={{ mx: 2, mt: 1.5, mb: 1, borderRadius: 2 }}
-          >
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {t('copilot.session_lost_title', '终端会话已丢失')}
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
-              {sessionDeadReason}
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.8 }}>
-              {t('copilot.session_lost_hint', '请从运维中心重新打开环境修复/部署工具，系统会自动建立新的 SSH 连接。')}
-            </Typography>
-          </Alert>
-        )}
-
-        {/* 长耗时命令倒计时等待 */}
-        {longRunningTask && (
-          <Box sx={{ mx: 2, mt: 1.5, mb: 1, p: 2, borderRadius: 2,
-            bgcolor: isDark ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.08)',
-            border: `1px solid ${agentColor}30`,
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-              <ClockIcon size={20} weight="fill" color={agentColor} />
-              <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
-                {longRunningTask.description}
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace', color: agentColor }}>
-                {formatTimeLeft(longRunningTask.remainingSeconds)}
-              </Typography>
-            </Box>
-            <LinearProgress
-              variant="determinate"
-              value={((longRunningTask.totalSeconds - longRunningTask.remainingSeconds) / longRunningTask.totalSeconds) * 100}
-              sx={{ height: 6, borderRadius: 3, bgcolor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }}
-            />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-              <Typography variant="caption" sx={{ opacity: 0.7 }}>
-                正在等待命令执行完成，请勿关闭窗口
-              </Typography>
-              <Button size="small" variant="text" onClick={handleSkipWait} sx={{ minWidth: 'auto', py: 0, fontSize: 12 }}>
-                跳过等待
-              </Button>
-            </Box>
-          </Box>
-        )}
+        <OllamaStatusAlerts
+          isOllamaModel={isOllamaModel}
+          ollamaStatus={ollamaStatus}
+          setOllamaStatus={setOllamaStatus}
+          currentEndpoint={currentEndpoint}
+          boundModel={boundModel}
+          checkOllamaStatus={checkOllamaStatus}
+        />
+        <SessionNotices
+          t={t}
+          isDark={isDark}
+          agentColor={agentColor}
+          sessionDead={sessionDead}
+          sessionDeadReason={sessionDeadReason}
+          longRunningTask={longRunningTask}
+          formatTimeLeft={formatTimeLeft}
+          onSkipWait={handleSkipWait}
+        />
 
         <ChatMessagesArea
           messages={messages}
@@ -1315,355 +1113,37 @@ export function AiCopilotPage() {
           disabled={sessionDead || longRunningTask?.active}
           disabledReason={sessionDead ? sessionDeadReason : longRunningTask?.active ? '⏳ 长耗时命令执行中，请等待倒计时结束或跳过等待' : undefined}
         />
-        {hasRdContext && !isSrvEnvScene && !loading && rdStatus === 'not_installed' && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: `1px solid ${agentColor}55`,
-            bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-          }}>
-            <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
-              {t('copilot.rd_install_confirm_title', '检测到远程服务器尚未安装 VNC 远程桌面')}
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 1 }}>
-              {t('copilot.rd_install_confirm_desc', '是否让 AI 助手辅助安装并配置？安装过程会修改远程服务器（非交互式安装 TigerVNC 与桌面环境）。')}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-              <Button size="small" variant="text" onClick={handleDeclineInstall} disabled={sessionDead}>
-                {t('copilot.rd_install_decline', '暂不安装')}
-              </Button>
-              <Button size="small" variant="contained" onClick={handleAgreeInstall} sx={{ bgcolor: agentColor }} disabled={sessionDead}>
-                {t('copilot.rd_install_agree', '同意，开始安装')}
-              </Button>
-            </Box>
-          </Box>
-        )}
-        {hasRdContext && !isSrvEnvScene && !loading && rdStatus === 'installed' && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: `1px solid ${mutedBorder}`,
-            bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-          }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {t('copilot.rd_already_installed', '已检测到 VNC 远程桌面，可直接连接使用。')}
-            </Typography>
-          </Box>
-        )}
-        {hasRdContext && isSrvEnvScene && !loading && (srvEnvStatus === 'missing' || srvEnvStatus === 'partial') && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: `1px solid ${agentColor}55`,
-            bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-          }}>
-            <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
-              {srvEnvStatus === 'missing'
-                ? t('copilot.srv_missing_title', '服务器尚未安装 nginx')
-                : t('copilot.srv_partial_title', 'nginx 已安装但尚未就绪（未运行或端口未监听）')}
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 1 }}>
-              {t('copilot.srv_install_confirm_desc', '是否让 AI 助手安装并配置部署环境（nginx + systemd 自启 + 防火墙放行 80/443）？过程会修改远程服务器。')}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-              <Button size="small" variant="text" onClick={handleDeclineEnvInstall} disabled={sessionDead}>
-                {t('copilot.srv_install_decline', '暂不安装')}
-              </Button>
-              <Button size="small" variant="contained" onClick={handleAgreeEnvInstall} sx={{ bgcolor: agentColor }} disabled={sessionDead}>
-                {t('copilot.srv_install_agree', '同意，开始安装')}
-              </Button>
-            </Box>
-          </Box>
-        )}
-        {hasRdContext && isSrvEnvScene && !loading && srvEnvStatus === 'ready' && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: `1px solid ${mutedBorder}`,
-            bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-          }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {t('copilot.srv_already_ready', '部署环境已就绪（nginx 运行中），可以开始部署站点。')}
-            </Typography>
-          </Box>
-        )}
-        {/* 环境修复：需要修复 — 确认卡 */}
-        {isEnvFixScene && !loading && envFixStatus === 'need_fix' && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: `1px solid ${agentColor}55`,
-            bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-          }}>
-            <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
-              {t('copilot.env_fix_need_fix_title', '检测到环境问题需要修复')}
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 1 }}>
-              {t('copilot.env_fix_confirm_desc', '是否让 AI 助手自动修复环境问题？过程会修改远程服务器配置，需要 sudo 权限。')}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-              <Button size="small" variant="text" onClick={handleDeclineEnvFix} disabled={sessionDead}>
-                {t('copilot.env_fix_decline', '暂不修复')}
-              </Button>
-              <Button size="small" variant="contained" onClick={handleAgreeEnvFix} sx={{ bgcolor: agentColor }} disabled={sessionDead}>
-                {t('copilot.env_fix_agree', '同意，开始修复')}
-              </Button>
-            </Box>
-          </Box>
-        )}
-
-        {/* 环境修复：一切正常 */}
-        {isEnvFixScene && !loading && envFixStatus === 'all_good' && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: `1px solid ${mutedBorder}`,
-            bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-          }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {t('copilot.env_fix_all_good', '环境检测一切正常，无需修复。')}
-            </Typography>
-          </Box>
-        )}
-
-        {/* 环境修复：修复中 — 进度条 + 当前项 + 步骤时间线 */}
-        {isEnvFixScene && envFixStatus === 'fixing' && envFixSteps.length > 0 && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: `1px solid ${agentColor}55`,
-            bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: agentColor }}>
-                {t('copilot.env_fix_in_progress', '修复进行中')}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {envFixSteps.filter(s => s.status === 'success' || s.status === 'failed').length} / {envFixSteps[0]?.total || '?'}
-              </Typography>
-            </Box>
-            {currentFixStep && (
-              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 1 }}>
-                {t('copilot.env_fix_current_step', '正在处理：')}{currentFixStep}
-              </Typography>
-            )}
-            <LinearProgress
-              variant="determinate"
-              value={envFixSteps[0]?.total
-                ? Math.round((envFixSteps.filter(s => s.status === 'success' || s.status === 'failed').length / envFixSteps[0].total) * 100)
-                : 0}
-              sx={{ height: 6, borderRadius: 3, mb: 1.5, bgcolor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
-                '& .MuiLinearProgress-bar': { bgcolor: agentColor, borderRadius: 3 } }}
-            />
-            {/* 步骤时间线折叠面板 */}
-            <Accordion
-              disableGutters
-              sx={{
-                bgcolor: 'transparent',
-                boxShadow: 'none',
-                '&:before': { display: 'none' },
-                border: `1px solid ${mutedBorder}`,
-                borderRadius: 1.5,
-              }}
-            >
-              <AccordionSummary
-                expandIcon={<CaretDownIcon size={14} />}
-                sx={{ minHeight: 32, '& .MuiAccordionSummary-content': { my: 0.5 } }}
-              >
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  {t('copilot.env_fix_step_details', '修复步骤详情')}
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails sx={{ pt: 0, pb: 1 }}>
-                {envFixSteps.map((step) => (
-                  <Box key={`${step.index}-${step.service}`} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1, '&:last-child': { mb: 0 } }}>
-                    <Box sx={{ mt: 0.3, flexShrink: 0 }}>
-                      {step.status === 'success' && <CheckCircleIcon size={16} color="success.main" />}
-                      {step.status === 'failed' && <XCircleIcon size={16} color="error.main" />}
-                      {step.status === 'running' && <ClockIcon size={16} color={agentColor} />}
-                      {step.status === 'pending' && <ClockIcon size={16} color="disabled" />}
-                    </Box>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 500, display: 'block' }}>
-                        {step.index}. {step.service} — {step.description}
-                      </Typography>
-                      {step.status === 'failed' && step.errorReason && (
-                        <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mt: 0.3 }}>
-                          {step.errorReason}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
-                ))}
-              </AccordionDetails>
-            </Accordion>
-          </Box>
-        )}
-
-        {/* 环境修复：全部成功 */}
-        {isEnvFixScene && !loading && envFixStatus === 'done' && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: '1px solid',
-            borderColor: 'success.main',
-            bgcolor: isDark ? 'rgba(46,125,50,0.15)' : 'rgba(46,125,50,0.08)',
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-              <CheckCircleIcon size={18} color="success.main" />
-              <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }}>
-                {t('copilot.env_fix_done', '环境修复完成')}
-              </Typography>
-            </Box>
-            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 1 }}>
-              {t('copilot.env_fix_done_desc', '所有环境问题已修复。建议返回环境检测页面重新检测确认。')}
-            </Typography>
-            {envFixSteps.length > 0 && (
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {t('copilot.env_fix_success_count', '成功修复 {{count}} 项', { count: envFixSteps.filter(s => s.status === 'success').length })}
-              </Typography>
-            )}
-          </Box>
-        )}
-
-        {/* 环境修复：部分成功 */}
-        {isEnvFixScene && !loading && envFixStatus === 'partial' && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: '1px solid',
-            borderColor: 'warning.main',
-            bgcolor: isDark ? 'rgba(237,108,2,0.12)' : 'rgba(237,108,2,0.08)',
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-              <Alert severity="warning" sx={{ p: 0, '& .MuiAlert-icon': { p: 0 }, '& .MuiAlert-message': { p: 0 } }}>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {t('copilot.env_fix_partial', '部分修复成功')}
-                </Typography>
-              </Alert>
-            </Box>
-            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 1 }}>
-              {t('copilot.env_fix_partial_desc', '部分环境问题已修复，但有一些项失败了。可以查看失败原因后重试。')}
-            </Typography>
-            {envFixSteps.length > 0 && (
-              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 1 }}>
-                {t('copilot.env_fix_result_count', '成功 {{success}} 项，失败 {{failed}} 项', {
-                  success: envFixSteps.filter(s => s.status === 'success').length,
-                  failed: envFixSteps.filter(s => s.status === 'failed').length,
-                })}
-              </Typography>
-            )}
-            {/* 失败项列表 */}
-            {envFixSteps.filter(s => s.status === 'failed').length > 0 && (
-              <Accordion
-                disableGutters
-                sx={{
-                  bgcolor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.5)',
-                  boxShadow: 'none',
-                  '&:before': { display: 'none' },
-                  border: `1px solid ${mutedBorder}`,
-                  borderRadius: 1.5,
-                  mb: 1.5,
-                }}
-              >
-                <AccordionSummary
-                  expandIcon={<CaretDownIcon size={14} />}
-                  sx={{ minHeight: 32, '& .MuiAccordionSummary-content': { my: 0.5 } }}
-                >
-                  <Typography variant="caption" sx={{ color: 'error.main', fontWeight: 500 }}>
-                    {t('copilot.env_fix_failed_items', '失败项复盘')}
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 0, pb: 1 }}>
-                  {envFixSteps.filter(s => s.status === 'failed').map((step) => (
-                    <Box key={`${step.index}-${step.service}`} sx={{ mb: 1, '&:last-child': { mb: 0 } }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
-                        {step.index}. {step.service} — {step.description}
-                      </Typography>
-                      {step.errorReason && (
-                        <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mt: 0.3 }}>
-                          {t('copilot.env_fix_error_reason', '失败原因：')}{step.errorReason}
-                        </Typography>
-                      )}
-                    </Box>
-                  ))}
-                </AccordionDetails>
-              </Accordion>
-            )}
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={<ArrowCounterClockwiseIcon size={14} />}
-                onClick={handleRetryEnvFix}
-                sx={{ bgcolor: 'warning.main', color: '#fff', '&:hover': { bgcolor: 'warning.dark' } }}
-                disabled={sessionDead}
-              >
-                {t('copilot.env_fix_retry', '重新修复')}
-              </Button>
-            </Box>
-          </Box>
-        )}
-
-        {/* 环境修复：全部失败 */}
-        {isEnvFixScene && !loading && envFixStatus === 'failed' && (
-          <Box sx={{
-            mx: 2, mb: 1.5, p: 1.5, borderRadius: 2,
-            border: '1px solid',
-            borderColor: 'error.main',
-            bgcolor: isDark ? 'rgba(211,47,47,0.12)' : 'rgba(211,47,47,0.08)',
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-              <XCircleIcon size={18} color="error.main" />
-              <Typography variant="body2" sx={{ fontWeight: 600, color: 'error.main' }}>
-                {t('copilot.env_fix_failed', '修复失败')}
-              </Typography>
-            </Box>
-            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 1 }}>
-              {t('copilot.env_fix_failed_desc', '所有修复项都失败了。可以查看聊天记录中的详细错误信息，或尝试重新修复。')}
-            </Typography>
-            {/* 失败项列表 */}
-            {envFixSteps.filter(s => s.status === 'failed').length > 0 && (
-              <Accordion
-                disableGutters
-                sx={{
-                  bgcolor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.5)',
-                  boxShadow: 'none',
-                  '&:before': { display: 'none' },
-                  border: `1px solid ${mutedBorder}`,
-                  borderRadius: 1.5,
-                  mb: 1.5,
-                }}
-              >
-                <AccordionSummary
-                  expandIcon={<CaretDownIcon size={14} />}
-                  sx={{ minHeight: 32, '& .MuiAccordionSummary-content': { my: 0.5 } }}
-                >
-                  <Typography variant="caption" sx={{ color: 'error.main', fontWeight: 500 }}>
-                    {t('copilot.env_fix_failed_items', '失败项复盘')}
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 0, pb: 1 }}>
-                  {envFixSteps.filter(s => s.status === 'failed').map((step) => (
-                    <Box key={`${step.index}-${step.service}`} sx={{ mb: 1, '&:last-child': { mb: 0 } }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
-                        {step.index}. {step.service} — {step.description}
-                      </Typography>
-                      {step.errorReason && (
-                        <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mt: 0.3 }}>
-                          {t('copilot.env_fix_error_reason', '失败原因：')}{step.errorReason}
-                        </Typography>
-                      )}
-                    </Box>
-                  ))}
-                </AccordionDetails>
-              </Accordion>
-            )}
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-              <Button
-                size="small"
-                variant="contained"
-                color="error"
-                startIcon={<ArrowCounterClockwiseIcon size={14} />}
-                onClick={handleRetryEnvFix}
-                disabled={sessionDead}
-              >
-                {t('copilot.env_fix_retry', '重新修复')}
-              </Button>
-            </Box>
-          </Box>
-        )}
+        <ContextInstallCards
+          t={t}
+          agentColor={agentColor}
+          mutedBorder={mutedBorder}
+          isDark={isDark}
+          loading={loading}
+          sessionDead={sessionDead}
+          hasRdContext={hasRdContext}
+          isSrvEnvScene={isSrvEnvScene}
+          rdStatus={rdStatus}
+          srvEnvStatus={srvEnvStatus}
+          onAgreeInstall={handleAgreeInstall}
+          onDeclineInstall={handleDeclineInstall}
+          onAgreeEnvInstall={handleAgreeEnvInstall}
+          onDeclineEnvInstall={handleDeclineEnvInstall}
+        />
+        <EnvFixCards
+          t={t}
+          agentColor={agentColor}
+          mutedBorder={mutedBorder}
+          isDark={isDark}
+          loading={loading}
+          sessionDead={sessionDead}
+          isEnvFixScene={isEnvFixScene}
+          envFixStatus={envFixStatus}
+          envFixSteps={envFixSteps}
+          currentFixStep={currentFixStep}
+          onAgree={handleAgreeEnvFix}
+          onDecline={handleDeclineEnvFix}
+          onRetry={handleRetryEnvFix}
+        />
       </Box>
     </Box>
   );
