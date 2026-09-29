@@ -1,7 +1,8 @@
 import type { ComponentCodegenFn } from "../types";
 import { textCodegen } from "./text";
 import { shapeCodegen, metricCodegen } from "./basic";
-import { imageCodegen, videoCodegen, audioCodegen, iframeCodegen } from "./media";
+import { imageCodegen, videoCodegen, audioCodegen } from "./media";
+import { iframeCodegen } from "./embed";
 import {
   containerCodegen,
   gridCodegen,

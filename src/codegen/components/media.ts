@@ -5,6 +5,9 @@ import { resolveEffectiveDataConfig } from "../../shared/resolveDataConfig";
 import { resolveMediaStyle } from "../../editor/data/mediaStyle";
 import { readAuthEnabled } from "../../editor/data/authMode";
 
+// NOTE: iframeCodegen 已拆出至 embed.ts（外部嵌入组件分类 ccat_embed），
+// media.ts 仅保留图片 / 视频 / 音频三个原生媒体组件。
+
 /**
  * 媒体组件组（图片 / 视频 / 音频）→ HTML。
  *
@@ -340,8 +343,6 @@ export const audioCodegen: ComponentCodegenFn = (component, ctx: CodegenContext)
     radius: 4,
     bgColor: "rgba(255,255,255,0.06)",
     emptyText: "未设置音频",
-    emptyBg: "transparent",
-    emptyColor: "rgba(229,231,235,0.6)",
   });
   const uid = "aud-" + Math.random().toString(36).slice(2, 9);
 
@@ -364,11 +365,12 @@ export const audioCodegen: ComponentCodegenFn = (component, ctx: CodegenContext)
   const textColor = String(c.textColor ?? "#E5E7EB");
   const subtitleColor = String(c.subtitleColor ?? "rgba(229,231,235,0.6)");
   const accentColor = String(c.accentColor ?? "#1976d2");
-  const borderColor = String(c.borderColor ?? "#d0d0d8");
   const gap = Number(c.gap ?? 12) || 12;
   const padding = Number(c.padding ?? 12) || 12;
   const alignMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
   const align = alignMap[String(c.align ?? "left")] ?? "flex-start";
+  const link = String(c.link ?? "").trim();
+  const linkTarget = String(c.linkTarget ?? "_self") === "_blank" ? "_blank" : "_self";
 
   const innerRadius = Math.max(0, s.radius * 10 - 2);
 
@@ -428,8 +430,9 @@ export const audioCodegen: ComponentCodegenFn = (component, ctx: CodegenContext)
   const emptyEl =
     `<div id="${uid}e" style="flex:0 1 260px;min-width:120px;max-width:320px;` +
     `display:${showAudio && !isApi ? "none" : "flex"};align-items:center;justify-content:center;height:36px;` +
-    `border:1px dashed ${borderColor};border-radius:${s.radiusCss};font-size:12px;color:${s.emptyColor};` +
-    `background:${s.emptyBg};user-select:none">${escapeHTML(s.emptyText)}</div>`;
+    `border:2px dashed rgba(0,0,0,0.12);border-radius:${s.radiusCss};font-size:12px;color:${s.emptyColor};` +
+    `background:${s.emptyBg};background-image:repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(0,0,0,0.02) 8px,rgba(0,0,0,0.02) 16px);` +
+    `user-select:none">${escapeHTML(s.emptyText)}</div>`;
 
   const wrapCss = [
     "position:relative",
@@ -486,113 +489,11 @@ export const audioCodegen: ComponentCodegenFn = (component, ctx: CodegenContext)
       })
     : "";
 
-  return `<div class="${uid}" style="${wrapCss}">${left}${meta}${audioEl}${emptyEl}</div>` + apiScript;
+  const inner = `${left}${meta}${audioEl}${emptyEl}`;
+  const body = link
+    ? `<a href="${escapeHTML(link)}" target="${linkTarget}"${linkTarget === "_blank" ? ' rel="noopener noreferrer"' : ""} style="display:block;width:100%;height:100%;text-decoration:none">${inner}</a>`
+    : inner;
+
+  return `<div class="${uid}" style="${wrapCss}">${body}</div>` + apiScript;
 };
 
-/**
- * iframe（网页嵌入）→ HTML（媒体组第四成员）
- *
- * 与图片/视频/音频完全同构：resolveMediaStyle 口径、统一取数骨架、空态/题注/悬浮放大。
- *
- * iframe 特有约束：
- * 1. sandbox / allow 只在配置了才输出（空 sandbox 属性 = 全限制沙箱，误带会锁死嵌入页）；
- * 2. referrerpolicy 默认值 "no-referrer-when-downgrade" 不赘写；
- * 3. 空态只在「无地址」时显示 —— 跨域嵌入加载失败没有可靠事件，不做失败探测。
- */
-export const iframeCodegen: ComponentCodegenFn = (component, ctx: CodegenContext) => {
-  const c = component.config as Record<string, unknown>;
-  const s = resolveMediaStyle(c, { bgColor: "transparent", emptyText: "未设置嵌入地址" });
-  const uid = "ifr-" + Math.random().toString(36).slice(2, 9);
-
-  // ── 数据源：绑定全局源时以全局源覆盖组件自带取数配置（与编辑端同一函数） ──
-  const dsId = String(c.dataSourceId ?? "");
-  const gds = ctx.globalDataSources as Record<string, unknown> | undefined;
-  const boundSource = dsId && gds ? (gds[dsId] as Record<string, unknown>) : undefined;
-  const eff: Record<string, unknown> = boundSource
-    ? (resolveEffectiveDataConfig(c, boundSource) as Record<string, unknown>)
-    : c;
-  const isApi = String(eff.dataMode ?? "static") === "api" && Boolean(eff.apiUrl || eff.apiPath);
-  const authEnabled = readAuthEnabled(eff.authEnabled);
-
-  const src = String(c.src ?? "").trim();
-  const title = String(c.title ?? "").trim() || "嵌入式内容";
-
-  const iframeAttrs: string[] = [];
-  if (c.allowFullscreen === true) iframeAttrs.push("allowfullscreen");
-  const loading = String(c.loading ?? "lazy");
-  if (loading) iframeAttrs.push(`loading="${escapeHTML(loading)}"`);
-  const rp = String(c.referrerPolicy ?? "");
-  if (rp && rp !== "no-referrer-when-downgrade") iframeAttrs.push(`referrerpolicy="${escapeHTML(rp)}"`);
-  const sandbox = String(c.sandbox ?? "").trim();
-  if (sandbox) iframeAttrs.push(`sandbox="${escapeHTML(sandbox)}"`);
-  const allow = String(c.allow ?? "").trim();
-  if (allow) iframeAttrs.push(`allow="${escapeHTML(allow)}"`);
-
-  const wrapCss = mediaWrapCss({
-    radiusCss: s.radiusCss,
-    bgColor: s.bgColor,
-    borderCss: s.borderCss,
-    boxShadow: s.boxShadow,
-    opacity: s.opacity,
-  });
-
-  const iframeStyle =
-    `width:100%;height:100%;display:block;border:none`;
-
-  const showIframe = !!src || isApi;
-  let inner = "";
-  if (showIframe) {
-    const srcAttr = isApi ? "" : ` src="${escapeHTML(src)}"`;
-    inner +=
-      `<iframe class="${uid}-img" id="${uid}f"${srcAttr} title="${escapeHTML(title)}"` +
-      (iframeAttrs.length ? ` ${iframeAttrs.join(" ")}` : "") +
-      ` style="${iframeStyle}"></iframe>`;
-  }
-  const emptyDisplay = showIframe && !isApi ? "none" : "flex";
-  inner +=
-    `<div class="${uid}-empty" id="${uid}e" style="position:absolute;inset:0;display:${emptyDisplay};` +
-    `align-items:center;justify-content:center;background:${s.emptyBg};color:${s.emptyColor};` +
-    `border:2px dashed rgba(0,0,0,0.12);border-radius:${s.radiusCss};` +
-    `background-image:repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(0,0,0,0.02) 8px,rgba(0,0,0,0.02) 16px);` +
-    `font-size:12px;user-select:none">${escapeHTML(s.emptyText)}</div>`;
-  if (s.caption) {
-    inner +=
-      `<div class="${uid}-cap" style="position:absolute;left:0;right:0;bottom:0;padding:6px 10px;` +
-      `font-size:${s.captionFontSize}px;line-height:1.4;color:${s.captionColor};background:${s.captionBg};` +
-      `pointer-events:none;user-select:none">${escapeHTML(s.caption)}</div>`;
-  }
-
-  const extraCss = hoverZoomCss(uid, s.hoverScale, s.transitionCss);
-
-  // 接口模式：数据到达后写入 iframe src；空值回落空态
-  const apiScript = isApi
-    ? dataLoaderScript({
-        container: `var fr=document.getElementById('${uid}f');`,
-        apiUrl: String(eff.apiUrl ?? ""),
-        apiPath: String(eff.apiPath ?? ""),
-        apiMethod: String(eff.apiMethod ?? "GET"),
-        apiHeaders: typeof eff.apiHeaders === "string" ? eff.apiHeaders : JSON.stringify(eff.apiHeaders ?? {}),
-        apiBody: typeof eff.apiBody === "string" ? eff.apiBody : JSON.stringify(eff.apiBody ?? {}),
-        apiInterval: Number(eff.apiInterval ?? 0) || 0,
-        apiDataPath: String(eff.apiDataPath ?? ""),
-        authEnabled,
-        renderBody: [
-          `var f=${JSON.stringify(String(eff.apiSrcField ?? c.apiSrcField ?? ""))};`,
-          `var src='';`,
-          `if(typeof data==='string'){src=data;}`,
-          `else if(data&&typeof data==='object'){`,
-          `  var keys=f?[f]:['url','src','iframe','embed','path'];`,
-          `  for(var i=0;i<keys.length;i++){var v=keys[i].split('.').reduce(function(a,k){return a==null?undefined:a[k];},data);if(v){src=String(v);break;}}`,
-          `}`,
-          `var fr=document.getElementById('${uid}f'),em=document.getElementById('${uid}e');`,
-          `if(src&&fr){fr.src=src;if(em)em.style.display='none';}else{if(em)em.style.display='flex';}`,
-        ].join("\n"),
-      })
-    : "";
-
-  return (
-    `<div class="${uid}" style="${wrapCss}">${inner}</div>` +
-    (extraCss ? `<style>${extraCss}</style>` : "") +
-    apiScript
-  );
-};

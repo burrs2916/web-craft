@@ -44,6 +44,7 @@ export const BUILTIN_CATEGORY_IDS = new Set([
   "ccat_form",
   "ccat_auth",
   "ccat_media",
+  "ccat_embed",
   "ccat_table",
   "ccat_chart",
   "ccat_shape",

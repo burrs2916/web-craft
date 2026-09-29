@@ -107,7 +107,7 @@ describe("image codegen：内容 / 链接 / 空态 / 样式", () => {
     expect(withSrc).toContain("addEventListener('error'");
   });
 
-  test("空态层带媒体族骨架屏（虚线框 + 45° 斜纹），与 video/iframe 发布端同构", () => {
+  test("空态层带媒体族骨架屏（虚线框 + 45° 斜纹），与 video/audio 发布端同构", () => {
     expect(renderImg({})).toMatch(/dashed rgba\(0,0,0,0\.12\)/);
     expect(renderImg({})).toContain("repeating-linear-gradient(45deg");
     // 只读统一 token 的白色背景与深灰文字（defaultConfig 不再硬编码旧灰色）
@@ -254,6 +254,18 @@ describe("audio codegen：内容 / 播放 / 空态", () => {
     const out = renderAud({});
     expect(out).toContain("未设置音频");
     expect(out).not.toContain("<audio");
+    expect(out).toContain("display:flex");
+    // 空态层骨架屏与图片/视频/iframe 发布端同构（虚线框 + 45° 斜纹）
+    expect(out).toMatch(/dashed rgba\(0,0,0,0\.12\)/);
+    expect(out).toContain("repeating-linear-gradient(45deg");
+  });
+
+  test("配置链接后整体被 <a> 包裹且安全属性正确", () => {
+    const linked = renderAud({ source: "/a.mp3", link: "/product", linkTarget: "_blank" });
+    expect(linked).toContain('<a href="/product" target="_blank" rel="noopener noreferrer"');
+    expect(linked).toContain("</a>");
+    const noLink = renderAud({ source: "/a.mp3" });
+    expect(noLink).not.toContain("<a ");
   });
 
   test("自动播放静音兜底 + 圆角同口径", () => {

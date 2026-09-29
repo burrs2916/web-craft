@@ -184,12 +184,12 @@ describe("audio：媒体族样式口径（resolveMediaStyle）", () => {
     expect(emptyStyled).toContain("color:#abcdef");
   });
 
-  it("默认外观与改动前逐字一致（零回归）", () => {
+  it("默认外观与媒体族统一空态 token 一致（白底 + 深灰文字，不再透明底）", () => {
     const html = render({ ...base(), source: "/a.mp3" });
-    // 空态底色 transparent、文字色沿用副标题色 —— 与补齐前的观感相同
+    // 空态底色白 #ffffff、文字色深灰 #555555 —— 与图片/视频/iframe 同口径（mediaStyle.ts 统一 token）
     const empty = render({ ...base(), source: "" });
-    expect(empty).toContain("background:transparent");
-    expect(empty).toContain("color:rgba(229,231,235,0.6)");
+    expect(empty).toContain("background:#ffffff");
+    expect(empty).toContain("color:#555555");
     expect(html).not.toContain("box-shadow");
   });
 });

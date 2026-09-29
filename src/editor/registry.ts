@@ -9,6 +9,7 @@ import { registerChartComponents } from "./registerChartComponents";
 import { registerTableComponents } from "./registerTableComponents";
 import { registerIconComponents } from "./registerIconComponents";
 import { registerAuthComponents } from "./registerAuthComponents";
+import { registerEmbedComponents } from "./registerEmbedComponents";
 import logger from "../utils/logger";
 
 /**
@@ -20,43 +21,21 @@ import logger from "../utils/logger";
  * - 图表组件（ECharts）
  * - 表格组件（表格/数据网格）
  * - 认证组件（登录/注册/OAuth/SSO/API Key/路由守卫）
+ * - 外部嵌入组件（iframe 网页嵌入）
  */
 export function registerBuiltinComponents(): void {
   logger.info("Registry", "registerBuiltinComponents START", {
     beforeCount: componentRegistry.getAll().length,
   });
   registerBasicComponents();
-  logger.info("Registry", "registerBasicComponents DONE", {
-    afterCount: componentRegistry.getAll().length,
-  });
   registerLayoutComponents();
-  logger.info("Registry", "registerLayoutComponents DONE", {
-    afterCount: componentRegistry.getAll().length,
-  });
   registerFormComponents();
-  logger.info("Registry", "registerFormComponents DONE", {
-    afterCount: componentRegistry.getAll().length,
-  });
   registerDecorationComponents();
-  logger.info("Registry", "registerDecorationComponents DONE", {
-    afterCount: componentRegistry.getAll().length,
-  });
   registerChartComponents();
-  logger.info("Registry", "registerChartComponents DONE", {
-    afterCount: componentRegistry.getAll().length,
-  });
   registerTableComponents();
-  logger.info("Registry", "registerTableComponents DONE", {
-    afterCount: componentRegistry.getAll().length,
-  });
   registerIconComponents();
-  logger.info("Registry", "registerIconComponents DONE", {
-    afterCount: componentRegistry.getAll().length,
-  });
   registerAuthComponents();
-  logger.info("Registry", "registerAuthComponents DONE", {
-    afterCount: componentRegistry.getAll().length,
-  });
+  registerEmbedComponents();
   logger.info("Registry", "registerBuiltinComponents END", {
     finalCount: componentRegistry.getAll().length,
   });

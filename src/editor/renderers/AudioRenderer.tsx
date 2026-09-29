@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import type { ComponentRendererProps } from "../../types/editor";
 import { resolveMediaStyle } from "../data/mediaStyle";
@@ -26,15 +26,12 @@ import { readAuthEnabled } from "../data/authMode";
  * `apiCoverField` 取封面地址；`authEnabled` 三态决定是否注入认证 Token
  * （null = 跟随站点全局认证态），即"认证 / 非认证"两种接入方式的切换点。
  */
-export function AudioRenderer({ config }: ComponentRendererProps) {
+export function AudioRenderer({ config, mode }: ComponentRendererProps) {
+  const isEdit = mode !== "preview";
   const s = resolveMediaStyle(config, {
     radius: 4,
     bgColor: "rgba(255,255,255,0.06)",
     emptyText: "未设置音频",
-    /* 空态底色/文字色的媒体族默认值在这里**显式收窄**为本组件改动前的观感
-       （空态原本就是"透明底 + 副标题色文字"）→ 历史场景产物逐项不变。 */
-    emptyBg: "transparent",
-    emptyColor: "rgba(229,231,235,0.6)",
   });
 
   // ── 数据源（与发布端同源：全局数据源覆盖 → 统一取数骨架） ──
@@ -101,6 +98,8 @@ export function AudioRenderer({ config }: ComponentRendererProps) {
   const padding = Number(config.padding ?? 12) || 12;
   const alignMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
   const align = alignMap[String(config.align ?? "left")] ?? "flex-start";
+  const link = String(config.link ?? "").trim();
+  const target = String(config.linkTarget ?? "_self") === "_blank" ? "_blank" : "_self";
 
   const innerRadius = Math.max(0, s.radius * 10 - 2);
   const autoplay = config.autoplay === true;
@@ -109,29 +108,23 @@ export function AudioRenderer({ config }: ComponentRendererProps) {
     ? String(config.preload)
     : "metadata";
 
-  /* 空态判定：接口模式下"等待数据"也走空态，与发布端脚本切换的语义一致 */
-  const showAudio = !!src;
+  /* 空态判定：接口模式下"等待数据"也走空态，与发布端脚本切换的语义一致；
+     加载失败（broken）时回退空态占位 */
+  const [broken, setBroken] = useState(false);
+  const showAudio = !!src && !broken;
 
-  return (
-    <Box
-      sx={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        boxSizing: "border-box",
-        overflow: "hidden",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: align,
-        gap: `${gap}px`,
-        padding: `0 ${padding}px`,
-        backgroundColor: s.bgColor,
-        borderRadius: s.radiusCss,
-        ...(s.borderCss ? { border: s.borderCss } : {}),
-        ...(s.boxShadow ? { boxShadow: s.boxShadow } : {}),
-        opacity: s.opacity,
-      }}
-    >
+  const flexSx = {
+    display: "flex" as const,
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: align,
+    gap: `${gap}px`,
+    padding: `0 ${padding}px`,
+  };
+
+  const inner = (
+    <>
       {cover ? (
         <Box
           component="img"
@@ -208,7 +201,8 @@ export function AudioRenderer({ config }: ComponentRendererProps) {
           muted={muted}
           loop={config.loop === true}
           preload={preload}
-          sx={{ flex: "0 1 260px", minWidth: 120, maxWidth: 320 }}
+          onError={() => setBroken(true)}
+          sx={{ flex: "0 1 260px", minWidth: 120, maxWidth: 320, ...(isEdit ? { pointerEvents: "none" } : {}) }}
         />
       ) : (
         <Box
@@ -220,16 +214,48 @@ export function AudioRenderer({ config }: ComponentRendererProps) {
             alignItems: "center",
             justifyContent: "center",
             height: 36,
-            border: `1px dashed ${String(config.borderColor ?? "#d0d0d8")}`,
+            border: "2px dashed rgba(0,0,0,0.12)",
             borderRadius: s.radiusCss,
             fontSize: "12px",
             color: s.emptyColor,
             backgroundColor: s.emptyBg,
             userSelect: "none",
+            backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(0,0,0,0.02) 8px, rgba(0,0,0,0.02) 16px)",
           }}
         >
           {s.emptyText}
         </Box>
+      )}
+    </>
+  );
+
+  return (
+    <Box
+      sx={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        boxSizing: "border-box",
+        overflow: "hidden",
+        backgroundColor: s.bgColor,
+        borderRadius: s.radiusCss,
+        ...(s.borderCss ? { border: s.borderCss } : {}),
+        ...(s.boxShadow ? { boxShadow: s.boxShadow } : {}),
+        opacity: s.opacity,
+      }}
+    >
+      {link ? (
+        <Box
+          component="a"
+          href={link}
+          target={target}
+          rel={target === "_blank" ? "noopener noreferrer" : undefined}
+          sx={{ ...flexSx, textDecoration: "none", ...(isEdit ? { pointerEvents: "none" } : {}) }}
+        >
+          {inner}
+        </Box>
+      ) : (
+        <Box sx={flexSx}>{inner}</Box>
       )}
     </Box>
   );

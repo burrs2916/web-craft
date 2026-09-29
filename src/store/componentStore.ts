@@ -64,7 +64,19 @@ const MEDIA_CATEGORY: ComponentCategory = {
   icon: "movie",
   color: "#FFD54F",
   sortOrder: 30,
-  description: "视频、音频等媒体元素",
+  description: "图片、视频、音频等原生多媒体元素",
+  createdAt: 0,
+  updatedAt: 0,
+};
+
+/** 内置"外部嵌入"分类 — 纯前端注入 */
+const EMBED_CATEGORY: ComponentCategory = {
+  id: "ccat_embed",
+  name: "外部嵌入",
+  icon: "web",
+  color: "#81D4FA",
+  sortOrder: 35,
+  description: "网页嵌入、第三方内容容器等非原生媒体嵌入组件",
   createdAt: 0,
   updatedAt: 0,
 };
@@ -141,6 +153,7 @@ function ensureBuiltinCategories(categories: ComponentCategory[]) {
   ensureCategory(categories, FORM_CATEGORY);
   ensureCategory(categories, AUTH_CATEGORY);
   ensureCategory(categories, MEDIA_CATEGORY);
+  ensureCategory(categories, EMBED_CATEGORY);
   ensureCategory(categories, TABLE_CATEGORY);
   ensureCategory(categories, CHART_CATEGORY);
   ensureCategory(categories, ICON_CATEGORY);
