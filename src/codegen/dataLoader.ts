@@ -152,11 +152,11 @@ export function dataLoaderScript(o: DataLoaderOptions): string {
 ${apiConfigVars(o)}
 ${apiFetchHelpers()}
 
-  function render(data) {
+  function render(data, json) {
     ${o.renderBody}
   }
 
-${apiDoFetch({ onFetchStart: o.onFetchStart, onData: "render(data);", onFetchFail: o.onFetchFail, onFetchError: o.onFetchError })}
+${apiDoFetch({ onFetchStart: o.onFetchStart, onData: "render(data, json);", onFetchFail: o.onFetchFail, onFetchError: o.onFetchError })}
 
   doFetch();
   if (apiInterval > 0) {

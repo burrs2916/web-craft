@@ -57,6 +57,17 @@ export function generateHTML(
 }
 
 /**
+ * 构建 viewId → 发布文件名映射（与 generateHTML 的文件名规则一致，供导航动作运行时查表）
+ */
+function buildViewFileMap(scene: SceneDSL): Record<string, string> {
+  const map: Record<string, string> = {};
+  (scene.views ?? []).forEach((v, i) => {
+    map[v.id] = i === 0 ? "index.html" : slugify(v.name) + ".html";
+  });
+  return map;
+}
+
+/**
  * 生成单个视图对应的 HTML 页面
  */
 function generateViewPage(
@@ -130,7 +141,19 @@ function generateViewPage(
   }
 
   // ── 生成全局配置脚本（注入到 <head>，在所有页面脚本之前执行） ──
-  const headScripts = generateGlobalConfigScript(scene, components);
+  let headScripts = generateGlobalConfigScript(scene, components);
+
+  // ── 导航映射（A1b）：switchView/navigateToScene/openDialog 运行时查表跳转 ──
+  // 产物为单场景静态站：views 映射覆盖同场景内切视图；scenes 映射仅含当前场景首页，
+  // 跨场景导航（目标场景不在本产物内）由运行时诚实降级 warn。
+  const viewFiles = buildViewFileMap(scene);
+  const firstViewFile = Object.keys(viewFiles).length > 0 ? viewFiles[Object.keys(viewFiles)[0]] : "index.html";
+  const sceneHome = (scene.activeViewId && viewFiles[scene.activeViewId]) || firstViewFile;
+  headScripts += `\n  <script>window.__WC_NAV_MAP=${JSON.stringify({
+    views: viewFiles,
+    scenes: { [scene.id]: sceneHome },
+    current: view.id,
+  })};</script>`;
 
   const pageTitle = canvasConfig.metadata?.title || view.name || scene.name || "Untitled";
 

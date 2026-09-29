@@ -474,12 +474,29 @@ function generateDataBody(
   }
 
   // 生成按数据源应用的绑定函数
-  lines.push("  // 按数据源应用绑定");
+  lines.push("  // 数据到达通知：供事件层 data/threshold 触发订阅（window.__wc_dataSubs）");
+  lines.push("  function __notifyData(sourceId, data) {");
+  lines.push("    var subs = window.__wc_dataSubs;");
+  lines.push("    if (!subs || !subs.length) return;");
+  lines.push("    for (var i = 0; i < subs.length; i++) {");
+  lines.push("      if (subs[i].sourceId === sourceId) { try { subs[i].fn(data); } catch(e) {} }");
+  lines.push("    }");
+  lines.push("  }");
+  lines.push("  // 供事件层订阅注册后补拉当前数据快照（消除脚本顺序耦合：数据触发有值变化去重，阈值触发有边沿状态，天然防双触发）");
+  lines.push("  window.__wc_getSourceData = function(sid) {");
+  for (const src of sources) {
+    lines.push(`    if (sid === '${src.id}') return __data_${safeId(src.id)};`);
+  }
+  lines.push("    return undefined;");
+  lines.push("  };");
+  lines.push("");
+  lines.push("  // 按数据源应用绑定 + 数据到达通知（每个数据源分支末尾必通知，无绑定的数据源也能驱动事件层触发）");
   lines.push("  function __applyBindingsForSource(sourceId) {");
-  for (const [sourceId, bwcList] of bindingsBySource) {
-    lines.push(`    if (sourceId === '${sourceId}') {`);
+  for (const src of sources) {
+    const sourceVar = `__data_${safeId(src.id)}`;
+    const bwcList = bindingsBySource.get(src.id) ?? [];
+    lines.push(`    if (sourceId === '${src.id}') {`);
     for (const bwc of bwcList) {
-      const sourceVar = `__data_${safeId(bwc.binding.sourceId)}`;
       const transformStr = bwc.binding.transform
         ? JSON.stringify(bwc.binding.transform)
         : "null";
@@ -488,7 +505,10 @@ function generateDataBody(
         `      applyBinding('${bwc.componentId}', { type: '${bwc.binding.type}', targetProperty: '${bwc.binding.targetProperty}', transform: ${transformStr} }, value);`,
       );
     }
-    lines.push(`    }`);
+    lines.push(
+      `      __notifyData('${src.id}', ${sourceVar});`,
+      `    }`,
+    );
   }
   lines.push("  }");
   lines.push("");

@@ -11,10 +11,10 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import CloseIcon from "@mui/icons-material/Close";
 import IconButton from "@mui/material/IconButton";
-import type { EventBinding, SceneComponent } from "../../types/editor";
+import type { EventBinding, EventActionStep, SceneComponent } from "../../types/editor";
 import { useEditorStore } from "../../store/editorStore";
 import { useSceneVariableStore } from "../../store/sceneVariableStore";
-import { getEventsForComponent, getActionsForTarget, type ActionInfo } from "../utils/eventActionRegistry";
+import { getEventsForComponent, getActionsForTarget, BUILTIN_ACTIONS, type ActionInfo, type ParamField } from "../utils/eventActionRegistry";
 import { NavigateToSceneParamsEditor } from "./NavigateToSceneParamsEditor";
 
 interface EventBindingEditorProps {
@@ -42,6 +42,200 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** 序列步骤参数字段渲染（A3）：text/number/select/boolean/json；scene/view 类型退化为 ID 文本输入 */
+function StepParamsFields({
+  schema,
+  params,
+  onChange,
+}: {
+  schema: ParamField[];
+  params: Record<string, unknown>;
+  onChange: (p: Record<string, unknown>) => void;
+}) {
+  return (
+    <>
+      {schema.map((field) => {
+        if (field.type === "boolean") {
+          return (
+            <Box key={field.key} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="caption" sx={{ fontSize: 11, color: "text.secondary", flex: 1 }}>
+                {field.label}
+              </Typography>
+              <input
+                type="checkbox"
+                style={{ accentColor: "#1976d2", width: 16, height: 16, cursor: "pointer" }}
+                checked={Boolean(params[field.key])}
+                onChange={(e) => onChange({ ...params, [field.key]: e.target.checked })}
+              />
+            </Box>
+          );
+        }
+        if (field.type === "select") {
+          return (
+            <TextField
+              key={field.key}
+              select
+              size="small"
+              label={field.label}
+              value={String(params[field.key] ?? "")}
+              onChange={(e) => onChange({ ...params, [field.key]: e.target.value })}
+              fullWidth
+            >
+              {(field.options ?? []).map((o) => (
+                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+              ))}
+            </TextField>
+          );
+        }
+        const isJson = field.type === "json";
+        const rawVal = params[field.key];
+        const display =
+          isJson && rawVal != null && typeof rawVal === "object"
+            ? JSON.stringify(rawVal)
+            : String(rawVal ?? "");
+        const isRef = field.type === "scene" || field.type === "view";
+        return (
+          <TextField
+            key={field.key}
+            size="small"
+            label={isRef ? `${field.label} (ID)` : field.label}
+            type={field.type === "number" ? "number" : "text"}
+            value={display}
+            onChange={(e) => {
+              let v: unknown = e.target.value;
+              if (field.type === "number") v = e.target.value === "" ? undefined : Number(e.target.value);
+              onChange({ ...params, [field.key]: v });
+            }}
+            placeholder={field.placeholder}
+            required={field.required}
+            multiline={isJson}
+            minRows={isJson ? 1 : undefined}
+            fullWidth
+            helperText={field.type === "scene" ? "填场景 ID" : field.type === "view" ? "填视图 ID" : undefined}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * ActionSequenceEditor - 动作序列编辑器（A3 IR 的面板 UI）
+ * 独立导出便于复用与测试；触发后步骤按序执行，condition/throttle/debounce 作用于整条序列
+ */
+export function ActionSequenceEditor({
+  steps,
+  components,
+  allActions,
+  groupedActions,
+  onChange,
+}: {
+  steps: EventActionStep[];
+  components: SceneComponent[];
+  allActions: ActionInfo[];
+  groupedActions: [string, ActionInfo[]][];
+  onChange: (steps: EventActionStep[]) => void;
+}) {
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+      {steps.length === 0 && (
+        <Typography variant="caption" color="text.secondary">
+          暂无步骤，点击下方按钮添加（也可由单动作迁移而来）
+        </Typography>
+      )}
+      {steps.map((step, idx) => {
+        const stepComp = components.find((c) => c.id === step.targetComponentId);
+        const stepDef = allActions.find((a) => a.name === step.targetAction);
+        const updateStep = (patch: Partial<EventActionStep>) =>
+          onChange(steps.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+        return (
+          <Box
+            key={idx}
+            sx={{
+              border: 1,
+              borderColor: "divider",
+              borderRadius: 1,
+              p: 1.25,
+              display: "flex",
+              flexDirection: "column",
+              gap: 1.25,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, fontSize: 11, color: "text.primary" }}>
+                步骤 {idx + 1}
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={() => onChange(steps.filter((_, i) => i !== idx))}
+                aria-label="删除步骤"
+              >
+                <CloseIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            </Box>
+            <Autocomplete<SceneComponent>
+              size="small"
+              options={components}
+              value={stepComp ?? null}
+              getOptionLabel={(opt) => opt.name || opt.type}
+              onChange={(_, newValue) =>
+                updateStep({ targetComponentId: newValue?.id ?? "", targetAction: "", params: {} })
+              }
+              renderInput={(inputProps) => (
+                <TextField {...inputProps} label="目标组件" placeholder="搜索组件..." />
+              )}
+              noOptionsText="无匹配组件"
+              slotProps={{ paper: { sx: { zIndex: 1500 } } }}
+            />
+            <TextField
+              select
+              size="small"
+              label="执行动作"
+              value={step.targetAction}
+              onChange={(e) => updateStep({ targetAction: e.target.value, params: {} })}
+              fullWidth
+              disabled={!step.targetComponentId}
+            >
+              {groupedActions.map(([cat, list]) => (
+                <Fragment key={cat}>
+                  <MenuItem disabled sx={{ opacity: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                      {cat}
+                    </Typography>
+                  </MenuItem>
+                  {list.map((action) => (
+                    <MenuItem key={action.name} value={action.name}>
+                      {action.label}
+                    </MenuItem>
+                  ))}
+                </Fragment>
+              ))}
+            </TextField>
+            {stepDef?.paramsSchema && stepDef.paramsSchema.length > 0 && (
+              <StepParamsFields
+                schema={stepDef.paramsSchema}
+                params={step.params ?? {}}
+                onChange={(p) => updateStep({ params: p })}
+              />
+            )}
+          </Box>
+        );
+      })}
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={() => onChange([...steps, { targetComponentId: "", targetAction: "" }])}
+        sx={{ textTransform: "none", alignSelf: "flex-start" }}
+      >
+        + 添加步骤
+      </Button>
+      <Typography variant="caption" color="text.secondary">
+        触发后按顺序依次执行各步骤；条件/节流/防抖作用于整条序列，各步骤参数中可用 {"{{value}}"} 接收事件值。
+      </Typography>
+    </Box>
+  );
+}
+
 /**
  * EventBindingEditor - 事件绑定编辑对话框
  * 提供完整的事件绑定配置表单
@@ -60,9 +254,12 @@ export function EventBindingEditor({ binding, onSave, onCancel }: EventBindingEd
   const [throttle, setThrottle] = useState<string>(binding.throttle ? String(binding.throttle) : '');
   const [debounce, setDebounce] = useState<string>(binding.debounce ? String(binding.debounce) : '');
 
-  // 动作类型：目标组件动作 / 调用接口
+  // 动作类型：目标组件动作 / 调用接口 / 动作序列（A3）
   const isCallApi = binding.targetAction === "callApi";
-  const [actionType, setActionType] = useState<"target" | "callApi">(isCallApi ? "callApi" : "target");
+  const [actionType, setActionType] = useState<"target" | "callApi" | "sequence">(
+    binding.actions && binding.actions.length > 0 ? "sequence" : isCallApi ? "callApi" : "target"
+  );
+  const [steps, setSteps] = useState<EventActionStep[]>(binding.actions ?? []);
   const [apiUrl, setApiUrl] = useState<string>((binding.params?.url as string) ?? "");
   const [apiMethod, setApiMethod] = useState<string>(String(binding.params?.method ?? "GET"));
   const [apiAuth, setApiAuth] = useState<boolean>((binding.params?.authEnabled as boolean) ?? false);
@@ -125,6 +322,9 @@ export function EventBindingEditor({ binding, onSave, onCancel }: EventBindingEd
     [targetComponent?.type]
   );
 
+  // A3：序列步动作查找（与目标组件无关的恒定清单）
+  const allActions = useMemo(() => getActionsForTarget(), []);
+
   const currentActionDef: ActionInfo | undefined = actions.find((a) => a.name === targetAction);
 
   // 动作按类别分组，避免 15 项平铺难选（按钮点击配置更清晰）
@@ -146,6 +346,43 @@ export function EventBindingEditor({ binding, onSave, onCancel }: EventBindingEd
   }, [actions]);
 
   const handleSave = () => {
+    if (actionType === "sequence") {
+      if (!sourceEvent) return;
+      // A3：清洗序列（json 字段字符串 → 对象；丢弃未完成的步骤）
+      const clean = steps
+        .filter((s) => s.targetComponentId && s.targetAction)
+        .map((s) => {
+          const def = BUILTIN_ACTIONS.find((a) => a.name === s.targetAction);
+          const out: Record<string, unknown> = { ...(s.params ?? {}) };
+          (def?.paramsSchema ?? []).forEach((f) => {
+            if (f.type === "json" && typeof out[f.key] === "string") {
+              const t = (out[f.key] as string).trim();
+              if (t) {
+                try { out[f.key] = JSON.parse(t); } catch { /* 保留原字符串 */ }
+              } else {
+                delete out[f.key];
+              }
+            }
+          });
+          return {
+            targetComponentId: s.targetComponentId,
+            targetAction: s.targetAction,
+            params: Object.keys(out).length > 0 ? out : undefined,
+          };
+        });
+      if (clean.length === 0) return;
+      onSave({
+        ...binding,
+        sourceEvent,
+        actions: clean,
+        condition: condition.trim() || undefined,
+        triggerSource: triggerSource as 'interaction' | 'data' | 'threshold' | 'timer' | 'state',
+        enabled,
+        throttle: throttle ? parseInt(throttle, 10) : undefined,
+        debounce: debounce ? parseInt(debounce, 10) : undefined,
+      });
+      return;
+    }
     if (actionType === "callApi") {
       if (!sourceEvent) return;
       if (bindCompApi && !sourceCompApi) return;
@@ -195,6 +432,7 @@ export function EventBindingEditor({ binding, onSave, onCancel }: EventBindingEd
       targetComponentId,
       targetAction,
       params: Object.keys(params).length > 0 ? params : undefined,
+      actions: undefined, // 切回单动作时清空序列
       condition: condition.trim() || undefined,
       triggerSource: triggerSource as 'interaction' | 'data' | 'threshold' | 'timer' | 'state',
       enabled,
@@ -203,9 +441,12 @@ export function EventBindingEditor({ binding, onSave, onCancel }: EventBindingEd
     });
   };
 
+  const validStepCount = steps.filter((s) => s.targetComponentId && s.targetAction).length;
   const isValid = actionType === "callApi"
     ? Boolean(sourceEvent && (bindCompApi ? !!sourceCompApi : apiUrl.trim()))
-    : Boolean(sourceEvent && targetComponentId && targetAction);
+    : actionType === "sequence"
+      ? Boolean(sourceEvent && validStepCount > 0)
+      : Boolean(sourceEvent && targetComponentId && targetAction);
 
   return (
     <Dialog
@@ -302,12 +543,24 @@ export function EventBindingEditor({ binding, onSave, onCancel }: EventBindingEd
             size="small"
             label="动作类型"
             value={actionType}
-            onChange={(e) => setActionType(e.target.value as "target" | "callApi")}
+            onChange={(e) => {
+              const v = e.target.value as "target" | "callApi" | "sequence";
+              setActionType(v);
+              // 切到序列时，把当前单动作预填为第一步（引导式迁移）
+              if (v === "sequence" && steps.length === 0 && binding.targetAction && binding.targetComponentId) {
+                setSteps([{
+                  targetComponentId: binding.targetComponentId,
+                  targetAction: binding.targetAction,
+                  params: binding.params ? { ...binding.params } : undefined,
+                }]);
+              }
+            }}
             fullWidth
             sx={{ mb: 1.5 }}
           >
             <MenuItem value="target">目标组件动作</MenuItem>
             <MenuItem value="callApi">调用接口（事件触发请求）</MenuItem>
+            <MenuItem value="sequence">动作序列（依次执行多步）</MenuItem>
           </TextField>
 
           {actionType === "callApi" ? (
@@ -472,6 +725,14 @@ export function EventBindingEditor({ binding, onSave, onCancel }: EventBindingEd
                 ))}
               </TextField>
             </Box>
+          ) : actionType === "sequence" ? (
+            <ActionSequenceEditor
+              steps={steps}
+              components={components}
+              allActions={allActions}
+              groupedActions={groupedActions}
+              onChange={setSteps}
+            />
           ) : (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
               <Autocomplete<SceneComponent>

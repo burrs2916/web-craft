@@ -411,7 +411,18 @@ export class EventBindingEngine {
   }
 
   private executeAction(binding: EventBinding, payload: unknown): void {
-    const { targetComponentId, targetAction } = binding;
+    // A3：动作序列优先（actions 非空时按序执行）；单动作（targetAction/params）路径保留兼容
+    if (binding.actions && binding.actions.length > 0) {
+      for (const step of binding.actions) {
+        this.runActionStep(step.targetComponentId, step.targetAction, step.params, payload);
+      }
+      return;
+    }
+    this.runActionStep(binding.targetComponentId, binding.targetAction, binding.params, payload);
+  }
+
+  /** 执行单个动作步骤（A3 IR）：{{value}} 注入 + actionHandler 钩子 + 动作分发 */
+  private runActionStep(targetComponentId: string, targetAction: string, rawParams: Record<string, unknown> | undefined, payload: unknown): void {
 
     // {{value}} 事件值通道（与发布端 scaffold/events.ts 同口径，两侧必须同步）：
     // 数据驱动 payload.value / 自定义事件 detail.value / 原生事件 target.value
@@ -427,7 +438,7 @@ export class EventBindingEngine {
         if (target && target.value !== undefined) evVal = target.value;
       }
     }
-    let params = binding.params;
+    let params = rawParams;
     if (evVal !== undefined && params && JSON.stringify(params).includes('{{value}}')) {
       params = injectEventValue(params, evVal) as Record<string, unknown>;
     }
