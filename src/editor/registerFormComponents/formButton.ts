@@ -1,0 +1,102 @@
+import { componentRegistry, lazy } from "../registryCore";
+import { scaleFitField, hAlignField, vAlignField } from "./shared";
+
+// ─── 按钮 ───
+export function registerFormButton(): void {
+  componentRegistry.register({
+    type: "form-button",
+    name: "按钮",
+    icon: "smart_button",
+    description: "表单按钮，支持主要/次要/文字三种样式，可居中并随拖动框等比缩放",
+    category: "ccat_form",
+    version: "2.0.0",
+    builtIn: true,
+    enabled: true,
+    defaultSize: { width: 120, height: 40 },
+    minSize: { width: 60, height: 28 },
+    defaultConfig: {
+      text: "提交",
+      variant: "contained",
+      size: "medium",
+      bgColor: "#1976d2",
+      textColor: "#ffffff",
+      fontSize: 14,
+      fontWeight: 500,
+      letterSpacing: 0,
+      borderRadius: 4,
+      borderColor: "",
+      borderWidth: 1,
+      shadow: "none",
+      icon: "",
+      iconPosition: "left",
+      iconGap: 6,
+      iconOnly: false,
+      fullWidth: false,
+      disabled: false,
+      // 「居中 + 随拖动框等比缩放」：与表单组其他成员同一套三层骨架
+      scaleFit: true,
+      align: "center",
+      vAlign: "center",
+    },
+    capabilities: {
+      resizable: true,
+      rotatable: false,
+      draggable: true,
+      connectable: false,
+      embeddable: false,
+    },
+    renderer: lazy(() => import("../renderers/FormButtonRenderer").then(m => ({ default: m.FormButtonRenderer }))),
+    configSchema: [
+      { key: "text", label: "按钮文字", type: "text", group: "内容" },
+      { key: "variant", label: "样式", type: "select", options: [
+        { label: "填充", value: "contained" },
+        { label: "描边", value: "outlined" },
+        { label: "文字", value: "text" },
+      ], group: "内容" },
+      { key: "size", label: "尺寸", type: "select", options: [
+        { label: "小", value: "small" },
+        { label: "中", value: "medium" },
+        { label: "大", value: "large" },
+      ], group: "内容",
+        help: "控制按钮高度与左右内距（宽度由文字与图标决定）；文字大小请用下方「字号」" },
+      { key: "fullWidth", label: "宽度撑满", type: "toggle", group: "内容",
+        help: "开：按钮铺满拖动框（宽高都随框拉伸），此时下方对齐/缩放设置不生效；"
+          + "关：按内容自然尺寸显示，在拖动框内居中并可等比缩放" },
+      { key: "bgColor", label: "背景色", type: "color", group: "样式" },
+      { key: "textColor", label: "文字颜色", type: "color", group: "样式" },
+      { key: "fontSize", label: "字号", type: "number", min: 10, max: 40, group: "样式" },
+      { key: "fontWeight", label: "字重", type: "number", min: 300, max: 900, step: 100, group: "样式" },
+      { key: "letterSpacing", label: "字间距", type: "number", min: 0, max: 10, group: "样式" },
+      { key: "borderRadius", label: "圆角", type: "number", min: 0, max: 40, group: "样式" },
+      { key: "borderColor", label: "边框色", type: "color", group: "样式",
+        hidden: (c) => !["outlined"].includes(c.variant as string) },
+      { key: "borderWidth", label: "边框粗细", type: "number", min: 1, max: 8, group: "样式",
+        hidden: (c) => !["outlined"].includes(c.variant as string) },
+      { key: "shadow", label: "阴影", type: "select", options: [
+        { label: "无", value: "none" },
+        { label: "浅", value: "soft" },
+        { label: "中", value: "medium" },
+      ], group: "样式" },
+      { key: "icon", label: "图标", type: "icon-picker", group: "样式" },
+      { key: "iconPosition", label: "图标位置", type: "select", options: [
+        { label: "文字左侧", value: "left" },
+        { label: "文字右侧", value: "right" },
+      ], group: "样式",
+        hidden: (c) => !c.icon },
+      { key: "iconGap", label: "图标间距", type: "number", min: 0, max: 20, group: "样式",
+        help: "图标与文字之间的距离（像素）",
+        hidden: (c) => !c.icon || !!c.iconOnly },
+      { key: "iconOnly", label: "纯图标按钮", type: "toggle", group: "内容",
+        help: "仅显示图标，隐藏按钮文字",
+        hidden: (c) => !c.icon },
+      { key: "__action", label: "点击行为", type: "button-action", group: "功能",
+        help: "配置按钮点击后触发的行为（跳转/打开链接/弹窗/调用接口等），映射为事件绑定" },
+      { key: "disabled", label: "禁用", type: "toggle", group: "状态" },
+      // 「宽度撑满」打开时按钮铺满拖动框、形状由框决定 → 对齐与缩放无意义，面板如实隐藏，
+      // 避免出现"改了没反应"的控件（这三条只在自然尺寸模式下暴露）
+      { ...scaleFitField, hidden: (c) => c.fullWidth === true },
+      { ...hAlignField, hidden: (c) => c.fullWidth === true },
+      { ...vAlignField, hidden: (c) => c.fullWidth === true },
+    ],
+  });
+}
