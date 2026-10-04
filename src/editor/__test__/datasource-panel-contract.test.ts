@@ -30,6 +30,19 @@ type SchemaRow = { type: string; fields: ConfigField[] };
 const allSchemas = (): SchemaRow[] =>
   componentRegistry.getAll().map((d) => ({ type: d.type, fields: d.configSchema ?? [] }));
 
+/**
+ * 面板已由单文件拆分为 `panels/EditorApiConfigPanel/` 目录，契约标记随实现分布在各区块文件，
+ * 因此源码守卫聚合目录下全部 .tsx（等价于守卫拆分前的整份源码）。
+ */
+const readPanelSource = (): string => {
+  const dir = path.resolve(__dirname, "../panels/EditorApiConfigPanel");
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".tsx"))
+    .map((f) => fs.readFileSync(path.join(dir, f), "utf8"))
+    .join("\n");
+};
+
 const field = (fields: ConfigField[], key: string): ConfigField | undefined =>
   fields.find((f) => f.key === key);
 
@@ -105,7 +118,7 @@ describe("数据源接入面板契约", () => {
   });
 
   test("面板由 schema 驱动（源码守卫：档位/显隐不得硬编码）", () => {
-    const src = fs.readFileSync(path.resolve(__dirname, "../panels/EditorApiConfigPanel.tsx"), "utf8");
+    const src = readPanelSource();
     expect(src, "模式档位应读 schema options").toContain('fieldOf("dataMode")?.options');
     expect(src, "数据源显隐应读 schema hidden").toContain('isHidden("dataSourceId")');
     expect(src, "不应硬编码「数据源绑定」档位").not.toContain('label: "数据源绑定"');
@@ -113,7 +126,7 @@ describe("数据源接入面板契约", () => {
   });
 
   test("接口字段映射：schema 的「数据源」api* 文本字段必须有渲染通道（本面板是唯一入口）", () => {
-    const src = fs.readFileSync(path.resolve(__dirname, "../panels/EditorApiConfigPanel.tsx"), "utf8");
+    const src = readPanelSource();
     // 判据与面板源码同源：group「数据源」+ text + api* + 排除本面板已渲染的取数键
     expect(src, "字段映射区未按 schema group 通用渲染").toContain('f.group === "数据源"');
     expect(src, "字段映射区未接排除表").toContain("API_MAPPING_RENDERED_KEYS");
