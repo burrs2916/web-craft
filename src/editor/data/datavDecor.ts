@@ -2,7 +2,7 @@
  * datav 装饰族（13 个边框 + 12 个装饰）的**唯一取值口径**。
  *
  * 此前这张元数据表在仓库里有**三份互不相同的副本**：
- *   1. `editor/registerDecorationComponents.ts`（面板 schema / defaultConfig / 尺寸）
+ *   1. `editor/registerDecorationComponents/`（面板 schema / defaultConfig / 尺寸）
  *   2. `editor/renderers/DataVRenderer.tsx` 的 `BORDER_DEFAULTS` / `DECO_DEFAULTS`
  *   3. `editor/renderers/DataVRenderer.tsx` 的 `*_WITH_REVERSE` / `*_WITH_DUR` 开关集合
  * 三份已经实际漂移：
