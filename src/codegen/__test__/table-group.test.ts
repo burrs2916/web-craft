@@ -6,16 +6,13 @@ import { createDefaultTransform } from "../../types/editor";
 import type { SceneComponent } from "../../types/editor";
 import {
   PAGE_SIZE_OPTIONS,
-  buildPaginationModel,
   padDescriptionItems,
   resolveDescriptionItems,
 } from "../../editor/data/tableData";
 import {
-  PAGINATION_FIT,
   cssText,
   resolveCalendarStyle,
   resolveDescriptionsStyle,
-  resolvePaginationStyle,
   resolveTableStyle,
   resolveTreeStyle,
 } from "../../editor/data/tableStyle";
@@ -23,7 +20,10 @@ import {
 initBuiltinCodegens();
 
 /**
- * 表格组件组（table / pagination / calendar / descriptions / tree）的发布端契约锁。
+ * 表格组件组（table / calendar / descriptions / tree）的发布端契约锁。
+ *
+ * 分页不在此列：独立分页器组件已删除，分页是表格的启动项（table.showPagination），
+ * 相关契约锁在 pagination-link.test.ts / pagination-not-standalone.test.ts。
  *
  * 三条不变量：
  * 1. **发布端产物里的样式值必须等于共享解析器的输出**（逐值对照）——
@@ -128,65 +128,6 @@ describe("表格：发布端样式 == resolveTableStyle 输出（逐值）", () 
   });
 });
 
-describe("分页：发布端样式 == resolvePaginationStyle 输出（逐值）", () => {
-  test("按钮基础声明的值完全来自解析器", () => {
-    const config = { size: "large", shape: "square", borderRadius: 8, gap: 12 };
-    const html = render("pagination", config);
-    const s = resolvePaginationStyle(config);
-    expectDeclsPresent(html, cssText(s.btn));
-    expect(html).toContain(`gap:${s.gap}px`);
-  });
-
-  test("圆形形状把圆角改成按钮半径的圆", () => {
-    const s = resolvePaginationStyle({ size: "medium", shape: "round", borderRadius: 4 });
-    expect(s.radius).toBe(16);
-    expect(s.radiusCss).toBe("16px");
-  });
-
-  test("页码序列与 buildPaginationModel 完全一致（服务端渲染）", () => {
-    const config = { current: 5, pageSize: 10, total: 100, maxButtons: 5 };
-    const html = render("pagination", config);
-    const m = buildPaginationModel(config);
-    for (const item of m.pageItems) {
-      if (item === "ellipsis") continue;
-      expect(html).toContain(`data-page="${item}"`);
-    }
-    expect(html).toContain("共 100 条");
-    // 当前页带 is-active（类规则承载选中态）
-    expect(html).toMatch(/class="pg-[a-z0-9]+-item is-active" style="[^"]*" data-page="5"/);
-  });
-
-  test("第一页时上一页带 is-disabled 类", () => {
-    const html = render("pagination", { current: 1, total: 100 });
-    expect(html).toContain("is-disabled");
-  });
-
-  test("只读时不绑定点击（脚本内条件为假）", () => {
-    const html = render("pagination", { disabled: true });
-    expect(html).toContain("if (false) {");
-  });
-
-  test("scaleFit 开关控制缩放舞台（与 PAGINATION_FIT 同一基准）", () => {
-    const on = render("pagination", {});
-    expect(on).toContain(`var RW=${PAGINATION_FIT.refW},RH=${PAGINATION_FIT.refH},MIN=${PAGINATION_FIT.min},MAX=${PAGINATION_FIT.max}`);
-    expect(on).toContain("-st\" style=");
-    expect(on).toMatch(/class="pg-[a-z0-9]+-in"/);
-
-    const off = render("pagination", { scaleFit: false });
-    expect(off).not.toContain(`var RW=${PAGINATION_FIT.refW}`);
-  });
-
-  test("接口模式：统一取数骨架 + uid 作用域（不再全局 querySelectorAll）", () => {
-    const html = render("pagination", { dataMode: "api", apiUrl: "https://x/y", authEnabled: true });
-    expect(html).toContain("getNestedValue");
-    expect(html).toContain("setInterval(doFetch, apiInterval * 1000)");
-    expect(html).toContain("var authEnabled = true");
-    // 所有选择器都锚定在自身 wrap 容器内
-    expect(html).not.toMatch(/document\.querySelectorAll\('\.pg-/);
-    expect(html).toContain(`document.querySelector('.pg-`);
-  });
-});
-
 describe("日历：发布端 == resolveCalendarStyle 输出（逐值）", () => {
   test("样式常量逐个透传到运行时", () => {
     const config = { weekStartsOn: 1, cellSize: "large", borderEnabled: true, weekStartsOn_dup: 1 };
@@ -196,14 +137,51 @@ describe("日历：发布端 == resolveCalendarStyle 输出（逐值）", () => 
     expect(html).toContain(`var CELL_H = ${s.cellHeight}`);
     expect(html).toContain(`var STARTS_ON = 1`);
     expect(html).toContain(`var SELECTED_BG = ${JSON.stringify(s.selectedBg)}`);
-    expect(html).toContain(`var GRID_LINE = ${JSON.stringify(`1px solid ${s.gridLineColor}`)}`);
+    // GRID_COLOR 只注入裸颜色（运行时统一拼 '1px solid '+颜色；注入完整 border 值会双拼成非法样式）
+    expect(html).toContain(`var GRID_COLOR = ${JSON.stringify(s.gridLineColor)}`);
+  });
+
+  test("组件外框：缺省 1px 可见外框；显式 0 = 无框；边框随圆角且 border-box", () => {
+    // 缺省（老实例 config 里没有 borderWidth 键）：靠解析器缺省也必须有可见外框
+    const legacy = render("calendar", {});
+    expect(resolveCalendarStyle({}).borderWidth).toBe(1);
+    expect(legacy).toMatch(/border:1px solid rgba\(255,255,255,0\.15\)/);
+    expect(legacy).not.toContain("border:none");
+
+    // 显式关掉：真的没有边框
+    const off = render("calendar", { borderWidth: 0 });
+    expect(off).toContain("border:none");
+
+    // 边框随圆角/颜色走同一口径
+    const cfg = { borderWidth: 2, borderColor: "#FF9800", borderRadius: 10 };
+    const s = resolveCalendarStyle(cfg);
+    const framed = render("calendar", cfg);
+    expect(s.borderWidth).toBe(2);
+    expect(framed).toContain("border:2px solid #FF9800");
+    expect(framed).toContain("border-radius:10px");
+    // 100% 宽高 + 边框必须 border-box，否则发布端比设计尺寸大 2×borderWidth
+    expect(framed).toContain("box-sizing:border-box");
   });
 
   test("周起始为周一时星期栏标签轮转（发布端数组同口径）", () => {
     const html = render("calendar", { weekStartsOn: 1 });
     expect(html).toContain('var STARTS_ON = 1');
-    expect(html).toContain('var WEEKDAYS = ["日","一","二","三","四","五","六"]');
-    expect(html).toContain("WEEKDAYS.slice(1).concat([WEEKDAYS[0]])");
+    expect(html).toContain('var LOCALE = "zh"');
+    // 现在按 locale + weekStartsOn **编译期**排好序注入，运行时不再自己 slice（两端只有一份排序逻辑）
+    expect(html).toContain('var WEEK_LABELS = ["一","二","三","四","五","六","日"]');
+    expect(html).not.toContain("WEEKDAYS");
+    // 周日起始（默认）不轮转
+    expect(render("calendar", { weekStartsOn: 0 })).toContain('var WEEK_LABELS = ["日","一","二","三","四","五","六"]');
+  });
+
+  test("英文本案整体烘进产物（面向海外客户）", () => {
+    const html = render("calendar", { locale: "en", weekStartsOn: 1 });
+    expect(html).toContain('var LOCALE = "en"');
+    expect(html).toContain('var WEEK_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]');
+    expect(html).toContain('var MONTH_LABELS = ["January","February","March","April","May","June","July","August","September","October","November","December"]');
+    expect(html).toContain('var TODAY_TEXT = "Today"');
+    // 节日名走同一份 locale 表（函数被 toString() 内联进产物）
+    expect(html).toContain("internationalDayInfo");
   });
 
   test("静态标记被索引进运行时 marks 表", () => {
@@ -236,19 +214,66 @@ describe("描述列表：发布端 == resolveDescriptionsStyle 输出（逐值�
     const html = render("descriptions", { columns: 3, items: "a: 1" });
     const padded = padDescriptionItems(resolveDescriptionItems({ config: { items: "a: 1" } }), 3);
     expect(padded).toHaveLength(3);
+    // 1 条数据 → 补到 3 条 → 展开成 6 格 = 3 组 × 2 轨
+    const cells = (html.match(/padding:6px 10px/g) || []).length;
+    expect(cells, "3 列 = 6 轨，1 条数据应铺满 6 格").toBe(6);
     expect(html).toContain("border-right");
   });
 
-  test("垂直布局走 flex 换行分支", () => {
-    const html = render("descriptions", { layout: "vertical", columns: 2, items: "a: 1" });
-    expect(html).toContain("display:flex;flex-wrap:wrap");
-    expect(html).not.toContain("display:grid");
+  /**
+   * 产物级锁：格子数必须铺满网格轨道，且标签/值对位正确。
+   *
+   * 【这次修的 bug】`padDescriptionItems` 按 `columns` 补齐，但水平网格是
+   * `repeat(N, 标签列 值列)` = N 组 × 2 轨 → 格子数填不满轨道：
+   *   2 列 + 2 条数据 → 只渲染 2 格 → 第 1 行被占满，
+   *   **第 2 条数据的标签落到下一行标签列、值列空着** → 用户看到「作者的值不见了」。
+   *
+   * ⚠️ 判据必须数**产物里实际的格子数**并比对其文本顺序 ——
+   * 只锁 `padDescriptionItems` 的长度不够：发布端运行时还另有一份 `pad()`
+   * （接口模式用），两边都得对。
+   */
+  test("产物：格子数铺满「列数 × 2」轨道，标签与值对位", () => {
+    const items = [
+      { label: "产品名称", value: "WebCraft" },
+      { label: "作者", value: "文超" },
+    ];
+    const html = render("descriptions", { columns: 2, items: JSON.stringify(items) });
+    // 数网格里渲染了几个格子（每格都是 padding:6px 10px 的水平单元格）
+    const cells = (html.match(/padding:6px 10px/g) || []).length;
+    expect(cells, "2 列 = 4 条轨道，2 条数据必须补到 4 格").toBe(4);
+    // 对位：标签1 | 值1 | 标签2 | 值2 —— 关键是「作者」后面必须跟着「文超」
+    // ⚠️ 判据要**按格子切分**再取文本，不能用宽泛的 `>([^<>]+)</div>` ——
+    // 外层容器也是 div，会把整段一起匹配掉（实测踩过：作者/文超 根本匹配不到）。
+    const order = [...html.matchAll(/<div style="padding:6px 10px[^"]*">([^<]*)<\/div>/g)].map((m) => m[1]);
+    expect(order, "应能切出 4 个水平格子").toHaveLength(4);
+    // 偶数索引 = 标签列，奇数 = 值列
+    expect(order[0], "第 1 格是标签").toBe("产品名称");
+    expect(order[1], "第 2 格是它的值").toBe("WebCraft");
+    expect(order[2], "第 3 格是第 2 条的标签").toBe("作者");
+    expect(order[3], "第 4 格必须是「文超」—— 曾经这里被吞成「—」").toBe("文超");
   });
 
-  test("接口模式：统一取数骨架 + 认证三态", () => {
-    const html = render("descriptions", { dataMode: "api", apiUrl: "https://x/y" });
-    expect(html).toContain("var authEnabled = null");
-    expect(html).toContain("render(collect(data));");
+  test("发布端运行时也做「每条展开两格」（接口模式同样不能错位）", () => {
+    const SRC = fs.readFileSync(
+      path.resolve(__dirname, "../components/descriptions.ts"),
+      "utf8",
+    );
+    // 编译期 + 运行时两处都要有「每条 → [标签格, 值格]」的展开动作
+    const expansions = (SRC.match(/isLabel: (true|false)/g) || []).length;
+    expect(
+      expansions,
+      "编译期与运行时各 2 处 isLabel（每条推两个格子）",
+    ).toBeGreaterThanOrEqual(4);
+    // 旧写法（用 i%2 判断列，遍历的却是「每条一个对象」的数组）必须绝迹。
+    // 只查代码行：修复说明的注释里故意引用了那个写法来解释坑点，整段 not.toMatch 会误报自己。
+    const codeLines = SRC.split("\n").filter(
+      (l) => !l.trim().startsWith("*") && !l.trim().startsWith("//"),
+    );
+    expect(
+      codeLines.filter((l) => l.includes("i % 2 === 0")),
+      "代码里不该再用 i%2 判断标签/值列",
+    ).toEqual([]);
+    expect(codeLines.filter((l) => l.includes("isLabelCol")), "不该再有 isLabelCol").toEqual([]);
   });
 });
 
@@ -299,9 +324,6 @@ describe("表格组：状态切换属性不得由 JS 直接写 inline", () => {
   const cases: Array<[string, string, Record<string, unknown>]> = [
     ["table", "静态", { headers: "a", rows: "1\n2" }],
     ["table", "接口", { dataMode: "api", apiUrl: "https://x/y" }],
-    ["pagination", "静态", { current: 3, total: 100 }],
-    ["pagination", "接口", { dataMode: "api", apiUrl: "https://x/y" }],
-    ["pagination", "可跳转", { showQuickJumper: true }],
     ["calendar", "静态", { marks: '[{"date":"2026-09-20"}]' }],
     ["calendar", "接口", { dataMode: "api", apiUrl: "https://x/y" }],
     ["descriptions", "接口", { dataMode: "api", apiUrl: "https://x/y" }],
@@ -325,8 +347,8 @@ describe("表格组：状态切换属性不得由 JS 直接写 inline", () => {
   }
 
   test("有交互的组件用 classList 切换状态（而非改 inline）", () => {
-    expect(render("pagination", { current: 3, total: 100 })).toContain("classList");
     expect(render("tree", { data: '[{"label":"r","children":[{"label":"k"}]}]' })).toContain("classList");
+    // 表格分页栏不走 classList：bindPager 是整段重写 innerHTML（状态码在 style 里），故不在此列
   });
 
   test("table 的行悬浮由 CSS 类规则给出（不是 inline）", () => {
@@ -335,13 +357,21 @@ describe("表格组：状态切换属性不得由 JS 直接写 inline", () => {
     expect(html).toContain(`tbody tr:hover td{background-color:${s.hoverBg};}`);
   });
 
-  test("pagination 的选中/悬浮/禁用由类规则给出", () => {
-    const html = render("pagination", {});
-    const s = resolvePaginationStyle({});
+  test("表格内置分页栏：选中/禁用态走类规则（不再内联写色）", () => {
+    // 分页栏按钮 HTML 由注入脚本（ctx.pageScripts）里的 buildPagerHtml 生成，
+    // 模块级 render 只取静态产物、不带注入脚本，这里拼上 pageScripts 看"完整产物"。
+    const sink = { pageScripts: [] as string[], pageStyles: [] as string[] };
+    const html = getCodegen("table")!(mk("table", { showPagination: true, current: 3, total: 100, headers: "a", rows: "1" }), sink as never)
+      + sink.pageScripts.join("\n");
+    expect(html).toContain("data-pg=");
+    // 选中/禁用态由类规则承载（修复：状态切换属性只能由类规则给，inline 会压制类规则）。
+    // 独立分页器的 .is-active / .is-disabled 类规则随组件删除后表格没接上，现已补进发布端 styleTag。
     expect(html).toContain(".is-active{");
-    expect(html).toContain(`background-color:${s.activeBgColor}`);
-    expect(html).toContain(`:hover{background-color:${s.hoverBg};}`);
-    expect(html).toContain(".is-disabled{opacity:0.4;pointer-events:none;}");
+    expect(html).toContain(".is-disabled{");
+    // 类规则里带上了选中底色（取自 resolveTablePagerStyle，默认 #2196F3，非写死）
+    expect(html).toMatch(/is-active\{[^}]*background-color:#2196F3/);
+    // 按钮 inline 不再内联背景色 —— 否则会压制类规则，选中色失效
+    expect(html).not.toMatch(/<button[^>]*style="[^"]*background-color/);
   });
 
   test("tree 的展开态由 is-open 类规则给出（箭头旋转也走类规则）", () => {
@@ -362,7 +392,6 @@ describe("表格组渲染器：只读共享解析器，不再自带默认值字�
   const root = process.cwd();
   const files: Array<[string, string[]]> = [
     ["TableRenderer.tsx", ["../data/tableData", "../data/tableStyle"]],
-    ["PaginationRenderer.tsx", ["../data/tableData", "../data/tableStyle"]],
     ["CalendarRenderer.tsx", ["../data/tableData", "../data/tableStyle"]],
     ["DescriptionsRenderer.tsx", ["../data/tableData", "../data/tableStyle"]],
     ["TreeRenderer.tsx", ["../data/tableData", "../data/tableStyle"]],

@@ -3,11 +3,12 @@ import {
   renderCellHtml,
   renderRowDetail,
   tableRowSearchText,
+  visibleColumnDefs,
   type ColumnDef,
   type TableModel,
   type TableRow,
 } from "../../../editor/data/tableData";
-import { cssText, type TableStyle } from "../../../editor/data/tableStyle";
+import { cssText, type TablePagerStyle, type TableStyle } from "../../../editor/data/tableStyle";
 
 /** 静态模式表头/表体/工具栏 HTML 构建所需的编译期上下文。 */
 export interface StaticHtmlContext {
@@ -29,6 +30,7 @@ export interface StaticHtmlContext {
   showSearch: boolean;
   showExportCsv: boolean;
   showPagination: boolean;
+  pagerStyle: TablePagerStyle;
   searchPlaceholder: string;
   hoverRule: string;
   rowSelectedRule: string;
@@ -65,7 +67,11 @@ function buildHeaderHTML(ctx: StaticHtmlContext, columns: ColumnDef[]): string {
     const resizer = resizableColumns
       ? `<span data-col-resizer="${ci}" style="position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;z-index:2" title="拖拽调整列宽"></span>`
       : "";
-    return `<th data-col-index="${ci}" style="${thStyle}${relativeExtra}${extra}${alignExtra}">${escapeHTML(col.header || col.field)}${resizer}</th>`;
+    // thStyle / baseStyle 走 cssText() —— 序列化**末尾不带分号**，后面还要接 extra / alignExtra 时
+    // 必须在交界补一个完整 ";"，否则粘成 `white-space:nowraptext-align:left` → 整条声明作废。
+    // 无条件补（relativeExtra 自带尾部分号时会出现 ";;"，style 属性完全合法），
+    // 比"判断 relativeExtra 是否为空"更不容易漏。
+    return `<th data-col-index="${ci}" style="${thStyle};${relativeExtra}${extra}${alignExtra}">${escapeHTML(col.header || col.field)}${resizer}</th>`;
   });
   return `<thead><tr>${selHeaderCell}${expandHeaderCell}${cells.join("")}</tr></thead>`;
 }
@@ -113,13 +119,15 @@ function buildBodyHTML(
           extra += `padding:${colSt.padY ?? s.padY}px ${colSt.padX ?? s.padX}px;`;
         }
         const cellContent = renderCellHtml(row, col);
-        return `<td data-col-index="${ci}" style="${cssText(baseStyle)}${extra}">${cellContent}</td>`;
+        // baseStyle 末尾不带分号（cssText 约定），后面接额外声明时必须补一整个 ";"，
+        // 否则粘成 `white-space:nowraptext-align:center` → 声明作废、该单元格对齐/宽高全丢。
+        return `<td data-col-index="${ci}" style="${cssText(baseStyle)};${extra}">${cellContent}</td>`;
       }).join("");
       const searchText = escapeHTML(buildRowSearchText(row, columns));
       // 展开列：详情内容非空才渲染箭头（renderRowDetail 口径两端同源）
       const detail = showRowExpand ? renderRowDetail(row[detailField]) : "";
       const expandCell = showRowExpand
-        ? `<td style="${cssText(s.td(ri))}width:36px;text-align:center">${detail ? `<button type="button" data-expand="${ri}" style="${expandBtnStyle}">▸</button>` : ""}</td>`
+        ? `<td style="${cssText(s.td(ri))};width:36px;text-align:center">${detail ? `<button type="button" data-expand="${ri}" style="${expandBtnStyle}">▸</button>` : ""}</td>`
         : "";
       const detailRow = detail
         ? `<tr data-detail-row="${ri}" class="${uid}-detail-hidden"><td colspan="${spanAll}" style="${detailTdStyle}">${escapeHTML(detail)}</td></tr>`
@@ -147,6 +155,7 @@ export function buildStaticHtml(ctx: StaticHtmlContext): StaticHtmlResult {
     showSearch,
     showExportCsv,
     showPagination,
+    pagerStyle,
     searchPlaceholder,
     hoverRule,
     rowSelectedRule,
@@ -155,8 +164,12 @@ export function buildStaticHtml(ctx: StaticHtmlContext): StaticHtmlResult {
     staticModel,
   } = ctx;
 
-  const staticHeaderHTML = !isApi ? buildHeaderHTML(ctx, staticColumns) : "";
-  const staticBodyHTML = !isApi ? buildBodyHTML(ctx, staticColumns, staticModel.data ?? [], staticModel.rows) : "";
+  // bake 渲染列 = 列定义去掉 visible:false（面板勾选口径；与编辑区 visibleColumnDefs、
+  // mountScript renderTable 内过滤三端同源）。此前 bake 不消费 visible → 静态产物中
+  // 取消勾选的列照样渲染。
+  const renderColumns = visibleColumnDefs(staticColumns);
+  const staticHeaderHTML = !isApi ? buildHeaderHTML(ctx, renderColumns) : "";
+  const staticBodyHTML = !isApi ? buildBodyHTML(ctx, renderColumns, staticModel.data ?? [], staticModel.rows) : "";
 
   // 虚拟滚动：容器布局（table/thead/tbody 块级流 + tbody 滚动区）随骨架内联，
   // 避免运行时书写 .style.display（状态切换仍全部走类规则）
@@ -179,12 +192,20 @@ export function buildStaticHtml(ctx: StaticHtmlContext): StaticHtmlResult {
     ? (virtualTableHTML || `<table style="width:100%;border-collapse:collapse"><thead id="${uid}-head"></thead><tbody id="${uid}-body"></tbody></table>`)
     : `<table style="width:100%;border-collapse:collapse">${staticHeaderHTML}${staticBodyHTML}</table>`;
 
-  const styleTag = (hoverRule || rowSelectedRule || showSearch || showPagination || showRowExpand)
-    ? `<style>${hoverRule}${rowSelectedRule}${showSearch || showPagination ? `.${uid}-row-hidden{display:none!important;}` : ""}${showPagination ? `.${uid}-pager-hidden{display:none!important;}` : ""}${showRowExpand ? `.${uid}-detail-hidden{display:none!important;}` : ""}${showRowExpand ? `.${uid}-row-hidden + tr[data-detail-row]{display:none!important;}` : ""}</style>`
+  // 分页按钮状态色走类规则（修复：状态切换属性只能由类规则给，inline 会压制类规则）。
+  // 独立分页器的 .is-active / .is-disabled 类规则随组件删除后，表格分页栏一直没接上 —— 这里补上。
+  const pagerRule = showPagination
+    ? `#${uid}-pager .wc-pg-btn{background-color:${pagerStyle.bgColor};color:${pagerStyle.textColor};}`
+      + `#${uid}-pager .wc-pg-btn.is-active{background-color:${pagerStyle.color};color:${pagerStyle.activeTextColor};}`
+      + `#${uid}-pager .wc-pg-btn.is-disabled{opacity:.4;cursor:not-allowed;}`
+    : "";
+
+  const styleTag = (hoverRule || rowSelectedRule || showSearch || showPagination || showRowExpand || pagerRule)
+    ? `<style>${hoverRule}${rowSelectedRule}${showSearch || showPagination ? `.${uid}-row-hidden{display:none!important;}` : ""}${showRowExpand ? `.${uid}-detail-hidden{display:none!important;}` : ""}${showRowExpand ? `.${uid}-row-hidden + tr[data-detail-row]{display:none!important;}` : ""}${pagerRule}</style>`
     : "";
 
   const pagerHTML = showPagination
-    ? `<div id="${uid}-pager" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;padding:4px 8px;border-top:1px solid rgba(255,255,255,0.08);flex-wrap:wrap"></div>`
+    ? `<div id="${uid}-pager" style="display:flex;align-items:center;justify-content:${pagerStyle.justify};gap:${pagerStyle.gap}px;padding:${pagerStyle.padY}px ${pagerStyle.padX}px;border-top:${pagerStyle.borderTop};flex-wrap:wrap"></div>`
     : "";
 
   const outer = `<div class="${uid}" style="${cssText(s.outer)}">${searchHTML}${csvToolbarHTML}${tableHTML}${pagerHTML}</div>`;
